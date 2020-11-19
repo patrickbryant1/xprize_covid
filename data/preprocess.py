@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(description = '''Preprocess data for training.'
 parser.add_argument('--oxford_file', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to oxford data file.')
 
-ser.add_argument('--outdir', nargs=1, type= str,
+parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
