@@ -57,10 +57,10 @@ def identify_case_death_lag(cases,deaths,region,manual_adjust_necessary):
     identify when these overlap.
     '''
 
-    delay_adjustments = {'BEN':7, 'BRA':5, 'COD':21, 'DEU':14, 'ECU':7, 'GAB':0, 'UK_ENG':14, 'ITA':7, 'KWT':7,
-                          'MOZ':7, 'MRT':0, 'PRI':0, 'RWA':0, 'SYR':0, 'THA':0, 'TJK':0, 'TUR':0, 'USA':14, 'US_AL':14,
-                          'US_AZ':0, 'US_CA':0, 'US_CO':0, 'US_GA':0, 'US_HI':0, 'US_IL':0, 'US_MA':0, 'US_MD':0,
-                          'US_MI':0, 'US_MO':0, 'US_OH':0, 'US_PA':0, 'US_SC':0, 'US_TN':0, 'US_VA':0}
+    delay_adjustments = {'BEN':7, 'BRA':4,'CAN':7, 'COD':21, 'DEU':14, 'ECU':7, 'GAB':0, 'UK_ENG':17, 'ITA':7, 'KWT':7,
+                          'MOZ':7, 'MRT':0, 'PRI':10, 'RWA':0, 'SYR':7, 'THA':14, 'TJK':0, 'TUR':7, 'USA':16, 'US_AL':10,
+                          'US_AZ':21, 'US_CA':17, 'US_CO':17, 'US_GA':19, 'US_HI':17, 'US_IL':17, 'US_MA':17, 'US_MD':17,
+                          'US_MI':17, 'US_MO':17, 'US_OH':17, 'US_PA':17, 'US_SC':17, 'US_TN':21, 'US_VA':17}
 
 
     case_maxi = np.where(cases==max(cases[-100:]))[0][-1]
@@ -113,6 +113,7 @@ def parse_regions(oxford_data):
     oxford_data['Country_index']=0
     oxford_data['Region_index']=0
     country_codes = oxford_data['CountryCode'].unique()
+    no_adjust_regions = ['COD',]#No adjust regions
     manual_adjust_necessary = [] #Save the regions requiring manual adjustment
     ci = 0 #Country index
     for cc in country_codes:
