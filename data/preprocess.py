@@ -52,6 +52,18 @@ def smooth_cases_and_deaths(cases,deaths):
     noise=0.01
     return sm_cases+noise, sm_deaths+noise
 
+def identify_case_death_lag(cases,deaths):
+    '''Find the time lag between deaths and cases
+    I do this by comparing the deaths and cases surrounding the peaks and working backwards to
+    identify when these overlap.
+    '''
+    case_maxi = np.where(cases==max(cases))[0][-1]
+    death_maxi = np.where(deaths==max(deaths))[0][-1]
+    delay = death_maxi-case_maxi
+    return death_maxi,case_maxi,delay
+
+
+
 def parse_regions(oxford_data):
     '''Parse and encode all regions
     The ConfirmedCases column reports the total number of cases since
@@ -79,9 +91,13 @@ def parse_regions(oxford_data):
         whole_country_data = country_data[country_data['RegionCode'].isna()]
         #Smooth cases and deaths
         cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
+        #Identify time lag between deaths and cases
+        death_maxi,case_maxi,delay = identify_case_death_lag(cases,deaths)
         #Plot
         plt.plot(np.arange(cases.shape[0]),cases,color='r',label='cases')
         plt.plot(np.arange(deaths.shape[0]),deaths,color='k',label='deaths')
+        plt.axvline(case_maxi,0,max(cases),color='r',linestyle='-')
+        plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='-')
         #Get regions
         regions = country_data['RegionCode'].dropna().unique()
         #Check if regions
@@ -109,7 +125,7 @@ def parse_regions(oxford_data):
         plt.savefig(outdir+'plots/'+cc+'.png', format='png', dpi=300)
         plt.close()
 
-    pdb.set_trace()
+        pdb.set_trace()
 
 #####MAIN#####
 args = parser.parse_args()
