@@ -111,7 +111,7 @@ def parse_regions(oxford_data):
     oxford_data['Region_index']=0
     oxford_data['rescaled_cases']=0
     country_codes = oxford_data['CountryCode'].unique()
-    no_adjust_regions = ['AFG','CAF','CHN','CIV','COD','COG','GAB','DZA','LSO','MDG','MOZ','MWI','NAM','OMN','RWA','SAU','SEN','SMR','THA','TZA','YEM', 'US_VI', 'VNM', 'ZAF']#No adjust regions
+    no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','GAB','DZA','LSO','MDG','MOZ','MWI','NAM','OMN','RWA','SAU','SEN','SMR','THA','TZA','YEM', 'US_VI', 'VNM', 'ZAF']#No adjust regions
     manual_adjust_necessary = [] #Save the regions requiring manual adjustment
     ci = 0 #Country index
     for cc in country_codes:
@@ -150,12 +150,15 @@ def parse_regions(oxford_data):
         #If no deaths are observed the rescaled cases are simply the cases
         if max(deaths)<1:
             rescaled_cases=cases
-        #Save the rescaled cases
-        if cc in no_adjust_regions:
-            rescaled_cases=cases
-        oxford_data.at[whole_country_data.index,'rescaled_cases']=rescaled_cases
+
+        if cc in no_adjust_regions: #check if the cases should be adjusted or not
+            #Save the rescaled cases
+            oxford_data.at[whole_country_data.index,'rescaled_cases']=cases
+        else:
+            #Save the rescaled cases
+            oxford_data.at[whole_country_data.index,'rescaled_cases']=rescaled_cases
         #Plot
-        plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
+        plt.plot(np.arange(rescaled_cases.shape[0]),np.array(oxford_data.at[whole_country_data.index,'rescaled_cases'])+noise,color='b')
         plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
         plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
 
@@ -184,8 +187,8 @@ def parse_regions(oxford_data):
                 #Icrease ri
                 ri+=1
                 #Plot
-                plt.plot(np.arange(cases.shape[0]),cases+noise,color='r',alpha=0.2, linewidth=1)
-                plt.plot(np.arange(deaths.shape[0]),deaths+noise,color='k',alpha=0.2, linewidth=1)
+                plt.plot(np.arange(cases.shape[0]),cases+noise,color='r',linewidth=1)
+                plt.plot(np.arange(deaths.shape[0]),deaths+noise,color='k', linewidth=1)
 
                 if max(deaths)<1:
                     print('Less than 1 death for',cc,region)
@@ -202,6 +205,8 @@ def parse_regions(oxford_data):
                 else:
                     rescaled_cases[:-delay]=deaths[delay:]*scaling
 
+                if region in no_adjust_regions:
+                    rescaled_cases=cases
                 #Save rescaled cases
                 oxford_data.at[country_region_data.index,'rescaled_cases']=rescaled_cases
                 plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
@@ -210,7 +215,7 @@ def parse_regions(oxford_data):
 
                 #plt.yscale('log')
                 plt.xlabel('day')
-                plt.title(region+'|'+str(delay))
+                plt.title(cc+'_'+region+'|'+str(delay))
                 plt.ylabel('Count')
                 plt.tight_layout()
                 plt.savefig(outdir+'plots/'+cc+'_'+region+'.png', format='png', dpi=300)
