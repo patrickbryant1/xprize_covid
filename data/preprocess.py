@@ -57,8 +57,8 @@ def identify_case_death_lag(cases,deaths,region,manual_adjust_necessary):
     identify when these overlap.
     '''
 
-    delay_adjustments = {'BEN':7, 'BRA':4,'CAN':7, 'COD':21, 'DEU':14, 'ECU':7, 'GAB':0, 'UK_ENG':17, 'ITA':7, 'KWT':7,
-                          'MOZ':7, 'MRT':0, 'PRI':10, 'RWA':0, 'SYR':7, 'THA':14, 'TJK':0, 'TUR':7, 'USA':16, 'US_AL':10,
+    delay_adjustments = {BEN':7, 'BRA':4,'CAN':7, 'COD':21, 'DEU':14, 'ECU':7, 'GAB':0, 'UK_ENG':17, 'ITA':7, 'KWT':7,
+                          'MOZ':7, 'MRT':0, 'PRI':10, 'ROU':7,'RWA':0, 'SYR':7, 'THA':14, 'TJK':0, 'TUR':7, 'USA':16, 'US_AL':10,
                           'US_AZ':21, 'US_CA':17, 'US_CO':17, 'US_GA':19, 'US_HI':17, 'US_IL':17, 'US_MA':17, 'US_MD':17,
                           'US_MI':17, 'US_MO':17, 'US_OH':17, 'US_PA':17, 'US_SC':17, 'US_TN':21, 'US_VA':17}
 
@@ -106,14 +106,12 @@ def parse_regions(oxford_data):
     From this number we can compute the daily change in confirmed cases.
     '''
 
-    oxford_data["DailyChangeConfirmedCases"] = oxford_data.groupby(["CountryName", "RegionName"]).ConfirmedCases.diff().fillna(0)
-    oxford_data["DailyChangeConfirmedDeaths"] = oxford_data.groupby(["CountryName", "RegionName"]).ConfirmedDeaths.diff().fillna(0)
-
     #Define country and regional indices
     oxford_data['Country_index']=0
     oxford_data['Region_index']=0
+    oxford_data['rescaled_cases']=0
     country_codes = oxford_data['CountryCode'].unique()
-    no_adjust_regions = ['COD',]#No adjust regions
+    no_adjust_regions = ['COD','THA','SAU', 'TZA']#No adjust regions
     manual_adjust_necessary = [] #Save the regions requiring manual adjustment
     ci = 0 #Country index
     for cc in country_codes:
@@ -152,8 +150,10 @@ def parse_regions(oxford_data):
         #If no deaths are observed the rescaled cases are simply the cases
         if max(deaths)<1:
             rescaled_cases=cases
+        #Save the rescaled cases
+        oxford_data.at[whole_country_data.index,'rescaled_cases']=rescaled_cases
+        #Plot
         plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
-
         plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
         plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
 
@@ -163,8 +163,8 @@ def parse_regions(oxford_data):
         plt.ylabel('Count')
         plt.tight_layout()
         plt.savefig(outdir+'plots/'+cc+'.png', format='png', dpi=300)
-        if cc in manual_adjust_necessary:
-            plt.show()
+        # if cc in manual_adjust_necessary:
+        #     plt.show()
         plt.close()
 
         #Get regions
@@ -199,6 +199,10 @@ def parse_regions(oxford_data):
                     rescaled_cases=deaths*scaling
                 else:
                     rescaled_cases[:-delay]=deaths[delay:]*scaling
+
+                #Save rescaled cases
+                oxford_data.at[country_region_data.index,'rescaled_cases']=rescaled_cases
+                pdb.set_trace()
                 plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
                 plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
                 plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
@@ -209,8 +213,8 @@ def parse_regions(oxford_data):
                 plt.ylabel('Count')
                 plt.tight_layout()
                 plt.savefig(outdir+'plots/'+cc+'_'+region+'.png', format='png', dpi=300)
-                if region in manual_adjust_necessary:
-                    plt.show()
+                # if region in manual_adjust_necessary:
+                #     plt.show()
                 plt.close()
 
 
