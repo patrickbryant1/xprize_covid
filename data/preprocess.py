@@ -50,7 +50,7 @@ def smooth_cases_and_deaths(cases,deaths):
 
     return sm_cases, sm_deaths
 
-def identify_case_death_lag(cases,deaths):
+def identify_case_death_lag(cases,deaths,region):
     '''Find the time lag between deaths and cases
     I do this by comparing the deaths and cases surrounding the peaks and working backwards to
     identify when these overlap.
@@ -74,6 +74,11 @@ def identify_case_death_lag(cases,deaths):
 
 
     scaling = cases[-1]/deaths[-delay-1]
+    if delay<0:
+        print('Delay only', delay, 'for',region)
+        print('Setting delay to 0')
+        delay=0
+
     return death_maxi,case_maxi,delay,scaling
 
 
@@ -114,28 +119,38 @@ def parse_regions(oxford_data):
         if max(deaths)<1:
             print('Less than 1 death for',cc)
             delay = 0
+            scaling= deaths[-1]/cases[-1]
         else:
             #Identify time lag between deaths and cases
-            death_maxi,case_maxi,delay,scaling = identify_case_death_lag(cases,deaths)
+            death_maxi,case_maxi,delay,scaling = identify_case_death_lag(cases,deaths,cc)
 
-            #Recaled cases
-            rescaled_cases = cases
-            if delay<0:
-                print('Delay only', delay, 'for',cc)
-            else:
-                if delay ==0:
-                    rescaled_cases=deaths*scaling
-                else:
-                    rescaled_cases[:-delay]=deaths[delay:]*scaling
-                plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases,color='b')
+        #Recale
+        #Recaled cases
+        rescaled_cases = cases
+        if delay ==0:
+            rescaled_cases=deaths*scaling
+        else:
+            rescaled_cases[:-delay]=deaths[delay:]*scaling
+        plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases,color='b')
 
-                plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
-                plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
+        plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
+        plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
+
+        plt.yscale('log')
+        plt.xlabel('day')
+        plt.title(cc+'|'+str(delay))
+        plt.ylabel('Count')
+        plt.tight_layout()
+        plt.savefig(outdir+'plots/'+cc+'.png', format='png', dpi=300)
+        plt.close()
+
         #Get regions
         regions = country_data['RegionCode'].dropna().unique()
         #Check if regions
         if regions.shape[0]>0:
             for region in regions:
+                #Create fig for vis
+                fig,ax = plt.subplots(figsize=(6/2.54,4.5/2.54))
                 country_region_data = country_data[country_data['RegionCode']==region]
                 #Smooth cases and deaths
                 cases,deaths = smooth_cases_and_deaths(np.array(country_region_data['ConfirmedCases']),np.array(country_region_data['ConfirmedDeaths']))
@@ -147,18 +162,36 @@ def parse_regions(oxford_data):
                 plt.plot(np.arange(cases.shape[0]),cases+noise,color='r',alpha=0.2, linewidth=1)
                 plt.plot(np.arange(deaths.shape[0]),deaths+noise,color='k',alpha=0.2, linewidth=1)
 
+                if max(deaths)<1:
+                    print('Less than 1 death for',cc,region)
+                    delay = 0
+                    scaling= deaths[-1]/cases[-1]
+                else:
+                    #Identify time lag between deaths and cases
+                    death_maxi,case_maxi,delay,scaling = identify_case_death_lag(cases,deaths,region)
+
+                #Recaled cases
+                rescaled_cases = cases
+                if delay ==0:
+                    rescaled_cases=deaths*scaling
+                else:
+                    rescaled_cases[:-delay]=deaths[delay:]*scaling
+                plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases,color='b')
+
+                plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
+                plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
+
+                plt.yscale('log')
+                plt.xlabel('day')
+                plt.title(region+'|'+str(delay))
+                plt.ylabel('Count')
+                plt.tight_layout()
+                plt.savefig(outdir+'plots/'+cc+'_'+region+'.png', format='png', dpi=300)
+                plt.close()
+
+
         #Increase ci
         ci+=1
-
-        plt.yscale('log')
-        plt.xlabel('day')
-        plt.title(cc+'|'+str(delay))
-        plt.ylabel('Count')
-        plt.tight_layout()
-        plt.savefig(outdir+'plots/'+cc+'.png', format='png', dpi=300)
-        plt.close()
-
-
 
 #####MAIN#####
 args = parser.parse_args()
