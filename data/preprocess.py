@@ -7,6 +7,7 @@ import sys
 import os
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 
 
@@ -50,11 +51,18 @@ def smooth_cases_and_deaths(cases,deaths):
 
     return sm_cases, sm_deaths
 
-def identify_case_death_lag(cases,deaths,region):
+def identify_case_death_lag(cases,deaths,region,manual_adjust_necessary):
     '''Find the time lag between deaths and cases
     I do this by comparing the deaths and cases surrounding the peaks and working backwards to
     identify when these overlap.
     '''
+
+    delay_adjustments = {'BEN':7, 'BRA':5, 'COD':21, 'DEU':14, 'ECU':7, 'GAB':0, 'UK_ENG':14, 'ITA':7, 'KWT':7,
+                          'MOZ':7, 'MRT':0, 'PRI':0, 'RWA':0, 'SYR':0, 'THA':0, 'TJK':0, 'TUR':0, 'USA':14, 'US_AL':14,
+                          'US_AZ':0, 'US_CA':0, 'US_CO':0, 'US_GA':0, 'US_HI':0, 'US_IL':0, 'US_MA':0, 'US_MD':0,
+                          'US_MI':0, 'US_MO':0, 'US_OH':0, 'US_PA':0, 'US_SC':0, 'US_TN':0, 'US_VA':0}
+
+
     case_maxi = np.where(cases==max(cases[-100:]))[0][-1]
     death_maxi = np.where(deaths==max(deaths[-100:]))[0][-1]
     delay = death_maxi-case_maxi
@@ -73,13 +81,21 @@ def identify_case_death_lag(cases,deaths,region):
         delay = death_maxi-case_maxi
 
 
-    scaling = cases[-1]/deaths[-delay-1]
+
     if delay<0:
         print('Delay only', delay, 'for',region)
         print('Setting delay to 0')
         delay=0
 
-    return death_maxi,case_maxi,delay,scaling
+    if delay > 35:
+        manual_adjust_necessary.append(region)
+        delay=0
+    if region in [*delay_adjustments.keys()]:
+        delay = delay_adjustments[region]
+    #Scale index
+    si = max(np.where(deaths>0)[0])
+    scaling = cases[si-delay-1]/deaths[si]
+    return death_maxi,case_maxi,delay,scaling,manual_adjust_necessary
 
 
 
@@ -97,6 +113,7 @@ def parse_regions(oxford_data):
     oxford_data['Country_index']=0
     oxford_data['Region_index']=0
     country_codes = oxford_data['CountryCode'].unique()
+    manual_adjust_necessary = [] #Save the regions requiring manual adjustment
     ci = 0 #Country index
     for cc in country_codes:
         #Create fig for vis
@@ -119,10 +136,10 @@ def parse_regions(oxford_data):
         if max(deaths)<1:
             print('Less than 1 death for',cc)
             delay = 0
-            scaling= deaths[-1]/cases[-1]
+            scaling=0
         else:
             #Identify time lag between deaths and cases
-            death_maxi,case_maxi,delay,scaling = identify_case_death_lag(cases,deaths,cc)
+            death_maxi,case_maxi,delay,scaling,manual_adjust_necessary = identify_case_death_lag(cases,deaths,cc,manual_adjust_necessary)
 
         #Recale
         #Recaled cases
@@ -131,7 +148,10 @@ def parse_regions(oxford_data):
             rescaled_cases=deaths*scaling
         else:
             rescaled_cases[:-delay]=deaths[delay:]*scaling
-        plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases,color='b')
+        #If no deaths are observed the rescaled cases are simply the cases
+        if max(deaths)<1:
+            rescaled_cases=cases
+        plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
 
         plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
         plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
@@ -142,6 +162,8 @@ def parse_regions(oxford_data):
         plt.ylabel('Count')
         plt.tight_layout()
         plt.savefig(outdir+'plots/'+cc+'.png', format='png', dpi=300)
+        if cc in manual_adjust_necessary:
+            plt.show()
         plt.close()
 
         #Get regions
@@ -168,7 +190,7 @@ def parse_regions(oxford_data):
                     scaling= deaths[-1]/cases[-1]
                 else:
                     #Identify time lag between deaths and cases
-                    death_maxi,case_maxi,delay,scaling = identify_case_death_lag(cases,deaths,region)
+                    death_maxi,case_maxi,delay,scaling,manual_adjust_necessary = identify_case_death_lag(cases,deaths,region,manual_adjust_necessary)
 
                 #Recaled cases
                 rescaled_cases = cases
@@ -176,8 +198,7 @@ def parse_regions(oxford_data):
                     rescaled_cases=deaths*scaling
                 else:
                     rescaled_cases[:-delay]=deaths[delay:]*scaling
-                plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases,color='b')
-
+                plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
                 plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
                 plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
 
@@ -187,13 +208,17 @@ def parse_regions(oxford_data):
                 plt.ylabel('Count')
                 plt.tight_layout()
                 plt.savefig(outdir+'plots/'+cc+'_'+region+'.png', format='png', dpi=300)
+                if region in manual_adjust_necessary:
+                    plt.show()
                 plt.close()
 
 
         #Increase ci
         ci+=1
-
+    pdb.set_trace()
 #####MAIN#####
+#Set font size
+matplotlib.rcParams.update({'font.size': 7})
 args = parser.parse_args()
 oxford_data = pd.read_csv(args.oxford_file[0],
                  parse_dates=['Date'],
