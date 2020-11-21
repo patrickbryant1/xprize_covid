@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-
+from sklearn.linear_model import LinearRegression
 
 import pdb
 #Arguments for argparse module:
@@ -100,4 +100,8 @@ except:
     #Save
     np.save(outdir+'X.npy',X)
     np.save(outdir+'y.npy',y)
+
+X = X.reshape(2484,21*18)
+reg = LinearRegression().fit(X, y)
+reg.score(X, y)
 pdb.set_trace()
