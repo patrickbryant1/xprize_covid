@@ -65,9 +65,7 @@ def split_for_training(sel):
             country_region_data = country_region_data.reset_index()
             country_region_data = country_region_data.drop(columns={'index'})
             #Loop through and get the first 21 days of data
-            num_intervals = int(len(country_region_data)/21)
-            si = len(country_region_data)-(num_intervals*21)
-            for di in range(si,len(country_region_data)-40,21):
+            for di in range(len(country_region_data)-41):
                 X.append(np.array(country_region_data.loc[di:di+20]))
                 y.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
 
@@ -101,56 +99,18 @@ except:
     np.save(outdir+'X.npy',X)
     np.save(outdir+'y.npy',y)
 
-X = X.reshape(2484,21*18)
+X = X.reshape(X.shape[0],21*18)
 for i in range(y.shape[1]):
     reg = LinearRegression().fit(X, y[:,i])
     print(i,'score',reg.score(X, y[:,i]))
     pred = reg.predict(X)
     print('Error',np.average(np.absolute(pred-y[:,i])))
+    plt.scatter(pred,y[:,i],s=1)
+    plt.title(i)
+    plt.savefig(outdir+str(i)+'.png',format='png')
 
 '''
-0 score 0.9965171788217608
-Error 147.78195791300166
-1 score 0.9949542110641254
-Error 206.08417628527968
-2 score 0.9897367636403386
-Error 276.7196593242943
-3 score 0.9873922778339044
-Error 339.158323434575
-4 score 0.9847872123800475
-Error 394.95115831275984
-5 score 0.981069738265629
-Error 469.7773836967885
-6 score 0.9744316083264396
-Error 557.6283516452773
-7 score 0.947937381427988
-Error 774.5702332042024
-8 score 0.9441666150737268
-Error 813.4767450540144
-9 score 0.942670262333997
-Error 871.8416423164643
-10 score 0.9344825469470066
-Error 906.2068726931925
-11 score 0.9292333514259635
-Error 948.3720027828836
-12 score 0.9177213373217287
-Error 1011.4914917987213
-13 score 0.9096159991180524
-Error 1059.8138823386162
-14 score 0.8996099700099277
-Error 1116.0641028345824
-15 score 0.885236913538402
-Error 1185.2559903209649
-16 score 0.8769550184409123
-Error 1203.1393877270386
-17 score 0.8635154292387932
-Error 1237.9869729096108
-18 score 0.8465172716323872
-Error 1290.7524965051505
-19 score 0.8364763832557539
-Error 1328.2139686056391
-20 score 0.8256932714137826
-Error 1343.3106562059213
+
 
 '''
 pdb.set_trace()
