@@ -108,6 +108,7 @@ for i in range(y.shape[1]):
     plt.scatter(pred,y[:,i],s=1)
     plt.title(i)
     plt.savefig(outdir+str(i)+'.png',format='png')
+    plt.close()
 
 '''
 
