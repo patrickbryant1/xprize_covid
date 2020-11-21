@@ -131,6 +131,7 @@ def parse_regions(oxford_data):
     oxford_data['Country_index']=0
     oxford_data['Region_index']=0
     oxford_data['rescaled_cases']=0
+    oxford_data['cumulative_rescaled_cases']=0
     oxford_data['death_to_case_scale']=0
     oxford_data['case_death_delay']=0
     country_codes = oxford_data['CountryCode'].unique()
@@ -181,6 +182,8 @@ def parse_regions(oxford_data):
             rescaled_cases = cases
         #Save the rescaled cases
         oxford_data.at[whole_country_data.index,'rescaled_cases']=rescaled_cases
+        #Save cumulative rescaled cases
+        oxford_data.at[whole_country_data.index,'cumulative_rescaled_cases']=np.cumsum(rescaled_cases)
         #Save the scaling
         oxford_data.at[whole_country_data.index,'death_to_case_scale']=scaling
         #Save the delay
@@ -230,6 +233,8 @@ def parse_regions(oxford_data):
                     rescaled_cases = cases
                 #Save rescaled cases
                 oxford_data.at[country_region_data.index,'rescaled_cases']=rescaled_cases
+                #Save cumulative rescaled cases
+                oxford_data.at[country_region_data.index,'cumulative_rescaled_cases']=np.cumsum(rescaled_cases)
                 #Save the scaling
                 oxford_data.at[whole_country_data.index,'death_to_case_scale']=scaling
                 #Save the delay
