@@ -57,8 +57,8 @@ def identify_case_death_lag(cases,deaths,region,manual_adjust_necessary):
     identify when these overlap.
     '''
 
-    delay_adjustments = {'BEN':7, 'BRA':4,'CAN':7, 'COD':21, 'DEU':14, 'ECU':7, 'GAB':0, 'UK_ENG':17, 'ITA':7, 'JPN':7,'KWT':7,
-                          'MOZ':7, 'MRT':0, 'PRI':10, 'ROU':7,'RWA':0, 'SYR':7, 'THA':14, 'TJK':0, 'TUR':7, 'USA':16, 'US_AL':10,
+    delay_adjustments = {'BEN':7, 'BGD':11 ,'BRA':4,'CAN':7, 'COD':21, 'DEU':14, 'ECU':7,'EGY':7, 'EST':10,'GAB':0, 'UK_ENG':17, 'ITA':7, 'JPN':14,'KWT':7,
+                          'MOZ':7, 'MRT':0, 'PAN':7,'PRI':10, 'QAT':14, 'ROU':7,'RWA':0, 'SSD':7,'SYR':7, 'THA':14, 'TJK':0, 'TUR':7, 'USA':16, 'US_AL':10,
                           'US_AZ':21, 'US_CA':17, 'US_CO':17, 'US_GA':19, 'US_HI':17, 'US_IL':17, 'US_MA':17, 'US_MD':17,
                           'US_MI':17, 'US_MO':17, 'US_NV':17, 'US_OH':21, 'US_OR':17 ,'US_PA':17, 'US_SC':17, 'US_TN':21, 'US_TX':17, 'US_UT':17,'US_VA':17}
 
@@ -111,7 +111,8 @@ def parse_regions(oxford_data):
     oxford_data['Region_index']=0
     oxford_data['rescaled_cases']=0
     country_codes = oxford_data['CountryCode'].unique()
-    no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA','LSO','MDG','MOZ','MWI','NAM','OMN','RWA','SAU','SEN','SMR','THA','TZA','YEM', 'US_VI', 'VNM', 'ZAF']#No adjust regions
+    no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA','LSO','MDG','MOZ','MWI','NAM','OMN','RWA','SAU','SEN','SMR','THA',
+                            'TLS','TZA','YEM', 'US_VI', 'VNM', 'ZAF']#No adjust regions
     manual_adjust_necessary = [] #Save the regions requiring manual adjustment
     ci = 0 #Country index
     for cc in country_codes:
@@ -148,6 +149,10 @@ def parse_regions(oxford_data):
                 rescaled_cases=deaths*scaling
             else:
                 rescaled_cases[:-delay]=deaths[delay:]*scaling
+
+        #If the rescaled cases are smaller than the cases, set to cases
+        if max(rescaled_cases) < max(cases):
+            rescaled_cases = cases
         #Save the rescaled cases
         oxford_data.at[whole_country_data.index,'rescaled_cases']=rescaled_cases
         #Plot
@@ -201,6 +206,9 @@ def parse_regions(oxford_data):
                 if region in no_adjust_regions:
                     rescaled_cases=cases
 
+                #If the rescaled cases are smaller than the cases, set to cases
+                if max(rescaled_cases) < max(cases):
+                    rescaled_cases = cases
                 #Save rescaled cases
                 oxford_data.at[country_region_data.index,'rescaled_cases']=rescaled_cases
                 plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
