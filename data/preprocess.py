@@ -73,14 +73,11 @@ def identify_case_death_lag(cases,deaths,region,manual_adjust_necessary):
         death_mini = np.where(deaths==min(deaths[-200:]))[0][0]
         delay = death_mini-case_mini
 
-
-    #If the delay is still smaller than 7, the first 200 days of the curve are used
+    #If the delay is still smaller than 7, the first 100 days of the curve are used
     if delay <7:
         case_maxi = np.where(cases==max(cases[0:100]))[0][0]
         death_maxi = np.where(deaths==max(deaths[0:100]))[0][0]
         delay = death_maxi-case_maxi
-
-
 
     if delay<0:
         print('Delay only', delay, 'for',region)
@@ -90,6 +87,7 @@ def identify_case_death_lag(cases,deaths,region,manual_adjust_necessary):
     if delay > 35:
         manual_adjust_necessary.append(region)
         delay=0
+    #Some adjustments are done manually
     if region in [*delay_adjustments.keys()]:
         delay = delay_adjustments[region]
     #Scale index
@@ -98,6 +96,29 @@ def identify_case_death_lag(cases,deaths,region,manual_adjust_necessary):
     return death_maxi,case_maxi,delay,scaling,manual_adjust_necessary
 
 
+def format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,scale,outname):
+    '''Plot and format the plot
+    '''
+    #Create fig for vis
+    fig,ax = plt.subplots(figsize=(6/2.54,4.5/2.54))
+
+    #Add some noise to make log possible
+    noise=0.01
+    plt.plot(np.arange(cases.shape[0]),cases+noise,color='r',label='cases')
+    plt.plot(np.arange(deaths.shape[0]),deaths+noise,color='k',label='deaths')
+
+    plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
+    plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
+    plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
+
+    if scale=='log':
+        plt.yscale('log')
+    plt.xlabel('day')
+    plt.title(region+'|'+str(delay))
+    plt.ylabel('Count')
+    plt.tight_layout()
+    plt.savefig(outname, format='png', dpi=300)
+    plt.close()
 
 def parse_regions(oxford_data):
     '''Parse and encode all regions
@@ -110,14 +131,21 @@ def parse_regions(oxford_data):
     oxford_data['Country_index']=0
     oxford_data['Region_index']=0
     oxford_data['rescaled_cases']=0
+    oxford_data['death_to_case_scale']=0
+    oxford_data['case_death_delay']=0
     country_codes = oxford_data['CountryCode'].unique()
-    no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA','LSO','MDG','MOZ','MWI','NAM','OMN','RWA','SAU','SEN','SMR','THA',
-                            'TLS','TZA','YEM', 'US_VI', 'VNM', 'ZAF']#No adjust regions
+    no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
+                        'LSO','MDG','MOZ','MWI','NAM','OMN','RWA','SAU','SEN','SMR',
+                        'THA','TLS','TZA','YEM', 'US_VI', 'VNM', 'ZAF']#No adjust regions
     manual_adjust_necessary = [] #Save the regions requiring manual adjustment
+    manual_scaling = {'SWE':280} #took max(cases[-100:])/max(deaths[-100:])
     ci = 0 #Country index
+
+
+
+
     for cc in country_codes:
-        #Create fig for vis
-        fig,ax = plt.subplots(figsize=(6/2.54,4.5/2.54))
+
         ri = 0 #Region index
         country_data = oxford_data[oxford_data['CountryCode']==cc]
         #Set index
@@ -127,11 +155,6 @@ def parse_regions(oxford_data):
         whole_country_data = country_data[country_data['RegionCode'].isna()]
         #Smooth cases and deaths
         cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
-        #Plot
-        #Add some noise to make log possible
-        noise=0.01
-        plt.plot(np.arange(cases.shape[0]),cases+noise,color='r',label='cases')
-        plt.plot(np.arange(deaths.shape[0]),deaths+noise,color='k',label='deaths')
 
         if max(deaths)<1:
             print('Less than 1 death for',cc)
@@ -143,10 +166,13 @@ def parse_regions(oxford_data):
 
         #Recale
         #Recaled cases
-        rescaled_cases = cases
+        rescaled_cases = np.zeros(cases.shape) #Need to create a new array, otherwise the cases are also overwritten (?)
+        rescaled_cases[:]=cases[:]
         if cc not in no_adjust_regions:
+            if cc in [*manual_scaling.keys()]:
+                scaling = manual_scaling[cc]
             if delay ==0:
-                rescaled_cases=deaths*scaling
+                rescaled_cases[:-50]=deaths[:-50]*scaling
             else:
                 rescaled_cases[:-delay]=deaths[delay:]*scaling
 
@@ -155,21 +181,14 @@ def parse_regions(oxford_data):
             rescaled_cases = cases
         #Save the rescaled cases
         oxford_data.at[whole_country_data.index,'rescaled_cases']=rescaled_cases
+        #Save the scaling
+        oxford_data.at[whole_country_data.index,'death_to_case_scale']=scaling
+        #Save the delay
+        oxford_data.at[whole_country_data.index,'case_death_delay']=delay
+
         #Plot
-        plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
-        plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
-        plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
-
-        #plt.yscale('log')
-        plt.xlabel('day')
-        plt.title(cc+'|'+str(delay))
-        plt.ylabel('Count')
-        plt.tight_layout()
-        plt.savefig(outdir+'plots/'+cc+'.png', format='png', dpi=300)
-        # if cc in manual_adjust_necessary:
-        #     plt.show()
-        plt.close()
-
+        format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'normal',outdir+'plots/'+cc+'.png')
+        format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_log.png')
         #Get regions
         regions = country_data['RegionCode'].dropna().unique()
         #Check if regions
@@ -184,9 +203,7 @@ def parse_regions(oxford_data):
                 oxford_data.at[country_region_data.index,'Country_index']=ri
                 #Icrease ri
                 ri+=1
-                #Plot
-                plt.plot(np.arange(cases.shape[0]),cases+noise,color='r',linewidth=1)
-                plt.plot(np.arange(deaths.shape[0]),deaths+noise,color='k', linewidth=1)
+
 
                 if max(deaths)<1:
                     print('Less than 1 death for',cc,region)
@@ -198,8 +215,10 @@ def parse_regions(oxford_data):
 
                 #Recaled cases
                 rescaled_cases = cases
+                if cc in [*manual_scaling.keys()]:
+                    scaling = manual_scaling[cc]
                 if delay ==0:
-                    rescaled_cases=deaths*scaling
+                    rescaled_cases[:-50]=deaths[:-50]*scaling
                 else:
                     rescaled_cases[:-delay]=deaths[delay:]*scaling
 
@@ -211,26 +230,20 @@ def parse_regions(oxford_data):
                     rescaled_cases = cases
                 #Save rescaled cases
                 oxford_data.at[country_region_data.index,'rescaled_cases']=rescaled_cases
-                plt.plot(np.arange(rescaled_cases.shape[0]),rescaled_cases+noise,color='b')
-                plt.axvline(case_maxi,0,max(cases),color='r',linestyle='--', linewidth=1)
-                plt.axvline(death_maxi,0,max(deaths),color='k',linestyle='--', linewidth=1)
-
-                #plt.yscale('log')
-                plt.xlabel('day')
-                plt.title(cc+'_'+region+'|'+str(delay))
-                plt.ylabel('Count')
-                plt.tight_layout()
-                plt.savefig(outdir+'plots/'+cc+'_'+region+'.png', format='png', dpi=300)
-                # if region in manual_adjust_necessary:
-                #     plt.show()
-                plt.close()
-
+                #Save the scaling
+                oxford_data.at[whole_country_data.index,'death_to_case_scale']=scaling
+                #Save the delay
+                oxford_data.at[whole_country_data.index,'case_death_delay']=delay
+                #Plot
+                format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay, 'normal',outdir+'plots/'+cc+'_'+region+'.png')
+                format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_'+region+'_log.png')
 
         #Increase ci
         ci+=1
+        plt.close()
 
     return oxford_data
-    pdb.set_trace()
+
 #####MAIN#####
 #Set font size
 matplotlib.rcParams.update({'font.size': 7})
@@ -245,4 +258,6 @@ outdir = args.outdir[0]
 
 
 oxford_data = parse_regions(oxford_data)
+#Save the adjusted data
+oxford_data.to_csv(outdir+'adjusted_data.csv')
 pdb.set_trace()
