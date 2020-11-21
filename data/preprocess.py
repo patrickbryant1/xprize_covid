@@ -200,7 +200,7 @@ def parse_regions(oxford_data):
                 #Smooth cases and deaths
                 cases,deaths = smooth_cases_and_deaths(np.array(country_region_data['ConfirmedCases']),np.array(country_region_data['ConfirmedDeaths']))
                 #Set regional index
-                oxford_data.at[country_region_data.index,'Country_index']=ri
+                oxford_data.at[country_region_data.index,'Region_index']=ri
                 #Icrease ri
                 ri+=1
 
@@ -275,6 +275,16 @@ The flags just tells the presence, while the features tell the strength?
        'H4_Emergency investment in healthcare', 'H5_Investment in vaccines',
        'H6_Facial Coverings', 'H6_Flag', 'M1_Wildcard', 'ConfirmedCases',
        'ConfirmedDeaths']
+
+       Ij,t = [100*vj,t-0.5(Fj-fj,t)]/Nj
+       Nj=max policy value
+       vj=policy value
+       Fj=Flag
+       fj,t=recorded binary flag for that indicator
+
+       The prescriptor will not have the flags as inputs however
+
+
 
 Some indicators – C1-C7, E1, H1 and H6 – have an additional binary flag variable that
 can be either 0 or 1. For C1-C7, H1 and H6 this corresponds to the geographic scope of the policy.
