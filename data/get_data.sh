@@ -5,5 +5,6 @@
 ###Preprocess
 OXFORD_FILE=./OxCGRT_latest.csv
 STATE_POPS=./us_state_populations.csv
+COUNTRY_POPS=./country_populations.csv
 OUTDIR=./
-./preprocess.py --oxford_file $OXFORD_FILE --us_state_populations $STATE_POPS --outdir $OUTDIR
+./preprocess.py --oxford_file $OXFORD_FILE --us_state_populations $STATE_POPS --country_populations $COUNTRY_POPS --outdir $OUTDIR
