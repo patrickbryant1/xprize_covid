@@ -260,4 +260,35 @@ outdir = args.outdir[0]
 oxford_data = parse_regions(oxford_data)
 #Save the adjusted data
 oxford_data.to_csv(outdir+'adjusted_data.csv')
+#Get the dates for training
+'''
+The flags just tells the presence, while the features tell the strength?
+['C1_School closing', 'C1_Flag', 'C2_Workplace closing', 'C2_Flag',
+       'C3_Cancel public events', 'C3_Flag', 'C4_Restrictions on gatherings',
+       'C4_Flag', 'C5_Close public transport', 'C5_Flag',
+       'C6_Stay at home requirements', 'C6_Flag',
+       'C7_Restrictions on internal movement', 'C7_Flag',
+       'C8_International travel controls', 'E1_Income support', 'E1_Flag',
+       'E2_Debt/contract relief', 'E3_Fiscal measures',
+       'E4_International support', 'H1_Public information campaigns',
+       'H1_Flag', 'H2_Testing policy', 'H3_Contact tracing',
+       'H4_Emergency investment in healthcare', 'H5_Investment in vaccines',
+       'H6_Facial Coverings', 'H6_Flag', 'M1_Wildcard', 'ConfirmedCases',
+       'ConfirmedDeaths']
+
+Some indicators – C1-C7, E1, H1 and H6 – have an additional binary flag variable that
+can be either 0 or 1. For C1-C7, H1 and H6 this corresponds to the geographic scope of the policy.
+For E1, this flag variable corresponds to the sectoral scope of income support.
+
+    ['StringencyIndex', 'StringencyIndexForDisplay',
+       'StringencyLegacyIndex', 'StringencyLegacyIndexForDisplay',
+       'GovernmentResponseIndex', 'GovernmentResponseIndexForDisplay',
+       'ContainmentHealthIndex', 'ContainmentHealthIndexForDisplay',
+       'EconomicSupportIndex', 'EconomicSupportIndexForDisplay']
+Further, we produce two versions of each index. One with the raw calculated index values,
+plus we produce a "display" version which will "smooth" over gaps in the last seven days,
+populating each date with the last available "good" data point.
+
+I should thus use the display indices.
+'''
 pdb.set_trace()
