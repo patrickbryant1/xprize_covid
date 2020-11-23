@@ -66,6 +66,8 @@ def split_for_training(sel):
             country_region_data = country_data[country_data['Region_index']==ri]
             country_region_data = country_region_data[country_region_data['cumulative_rescaled_cases']>0]
             country_region_data = country_region_data.reset_index()
+            #Check that data are avilable
+            
 
             try:
                 country_index = country_region_data.loc[0,'Country_index']
@@ -76,8 +78,8 @@ def split_for_training(sel):
                 country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'population'})
 
                 #Normalize the cases by 100'000 population
-                country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/population
-                country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/population
+                country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+                country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             except:
                 pdb.set_trace()
             #Loop through and get the first 21 days of data
