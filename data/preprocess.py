@@ -150,8 +150,7 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     oxford_data['Month']=oxford_data['Date'].dt.month
     oxford_data['monthly_temperature']=0
     temp_keys = {'Jan Average':1,'Feb Average':2,'Mar Average':3,'Apr Average':4,'May Average':5,'Jun Average':6,
-                'Jul Average':7,'Aug Average':8,'Sep Average':9,'Oct Average':10,'Nov Average':11, 'Dec Average':12
-
+                'Jul Average':7,'Aug Average':8,'Sep Average':9,'Oct Average':10,'Nov Average':11, 'Dec Average':12}
     oxford_data['population']=0
     country_codes = oxford_data['CountryCode'].unique()
     no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
@@ -181,7 +180,9 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         oxford_data.at[country_data.index,'population_density']=country_pop_density
         #Get monthly_temperature
         country_temp= monthly_temperature[monthly_temperature['ISO3']==' '+cc]
-        pdb.set_trace()
+        for tkey in temp_keys:
+            month_av = country_temp[country_temp['Statistics']==tkey]
+            pdb.set_trace()
         oxford_data.at[country_data.index,'monthly_temperature']=country_temp
 
         #Get country total
