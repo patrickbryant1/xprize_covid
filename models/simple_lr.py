@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression,Ridge,ElasticNet
 from scipy.stats import pearsonr
 
 import pdb
@@ -47,6 +47,7 @@ def get_features(adjusted_data):
                         'case_death_delay',
                         'gross_net_income',
                         'population_density',
+                        'monthly_temperature',
                         'population']
 
     sel = adjusted_data[selected_features]
@@ -82,7 +83,7 @@ def split_for_training(sel):
             gross_net_income = country_region_data.loc[0,'gross_net_income']
             population_density = country_region_data.loc[0,'population_density']
             population = country_region_data.loc[0,'population']
-            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'gross_net_income','population'})
+            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','population'})
 
             #Normalize the cases by 100'000 population
             country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
@@ -139,6 +140,7 @@ corrs = []
 errors = []
 stds = []
 preds = []
+coefs = []
 for i in range(y_train.shape[1]):
     reg = LinearRegression().fit(X_train, y_train[:,i])
     pred = reg.predict(X_test)
@@ -151,23 +153,51 @@ for i in range(y_train.shape[1]):
     corrs.append(R)
     errors.append(av_er)
     stds.append(std)
+    coefs.append(reg.coef_)
+    #Plot
     plt.scatter(pred,y_test[:,i],s=1)
     plt.title(str(i))
     plt.xlabel('Predicted')
     plt.xlabel('True')
-    #plt.xlim([0,140])
-    #plt.ylim([0,140])
     plt.savefig(outdir+str(i)+'.png',format='png')
     plt.close()
 
-#Plot a test case
-preds = np.array(preds)
 
+preds = np.array(preds)
+#Plot a test case
 plt.plot(range(1,22),preds[:,0],label='pred')
 plt.plot(range(1,22),y_test[0,:],label='true')
 plt.savefig(outdir+'pred_and_true_sel.png',format='png')
 plt.close()
 
+#Look at coefs ((21, 343))
+coefs = np.array(coefs)
+#The first are repeats 21 times, then these 7 follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
+#--> get the last 7, then divide into 21 portions
+last7=coefs[:,-7:]
+last7_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','population']
+plt.imshow(last7)
+plt.yticks(range(21))
+plt.xticks(range(7),labels=last7_names,rotation='vertical')
+plt.colorbar()
+plt.savefig(outdir+'last7.png',format='png',dpi=300)
+plt.close()
+remainder=coefs[:,:-7]
+remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind,features
+remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
+'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings'
+'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature']
+for i in range(remainder.shape[2]):
+    plt.imshow(remainder[:,:,i])
+    plt.xlabel('Previous day')
+    plt.ylabel('Future day')
+    plt.colorbar()
+    plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
+    plt.close()
+
+
+
+pdb.set_trace()
 #Plot average error per day with std
 errors = np.array(errors)
 std = np.array(stds)
