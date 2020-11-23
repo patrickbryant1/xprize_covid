@@ -23,6 +23,8 @@ parser.add_argument('--regional_populations', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to other regional populations (UK).')
 parser.add_argument('--country_populations', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to country populations.')
+parser.add_argument('--gross_net_income', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to country gross_net_income.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -125,7 +127,7 @@ def format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,s
     plt.savefig(outname, format='png', dpi=300)
     plt.close()
 
-def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations):
+def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations, gross_net_income):
     '''Parse and encode all regions
     The ConfirmedCases column reports the total number of cases since
     the beginning of the epidemic for each country,region and day.
@@ -139,6 +141,7 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     oxford_data['cumulative_rescaled_cases']=0
     oxford_data['death_to_case_scale']=0
     oxford_data['case_death_delay']=0
+    oxford_data['gross_net_income']=0
     oxford_data['population']=0
     country_codes = oxford_data['CountryCode'].unique()
     no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
@@ -160,6 +163,8 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         #Get population
         population = country_populations[country_populations['Country Code']==cc]['2018'].values[0]
         oxford_data.at[country_data.index,'population']=population
+        #Get income group
+        country_gni = gross_net_income[gross_net_income['Country Code']==cc]['GNI per capita 2019 (USD)'].values[0]
 
         #Plot total
         whole_country_data = country_data[country_data['RegionCode'].isna()]
@@ -196,8 +201,8 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         oxford_data.at[whole_country_data.index,'case_death_delay']=delay
 
         #Plot
-        format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'normal',outdir+'plots/'+cc+'.png')
-        format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_log.png')
+        #format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'normal',outdir+'plots/'+cc+'.png')
+        #format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_log.png')
         #Get regions
         regions = country_data['RegionCode'].dropna().unique()
         #Check if regions
@@ -254,8 +259,8 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
 
                 #if country_region_data['RegionName'] in us_state_populations
                 #Plot
-                format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay, 'normal',outdir+'plots/'+cc+'_'+region+'.png')
-                format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_'+region+'_log.png')
+                #format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay, 'normal',outdir+'plots/'+cc+'_'+region+'.png')
+                #format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_'+region+'_log.png')
 
         #Increase ci
         ci+=1
@@ -276,13 +281,11 @@ oxford_data = pd.read_csv(args.oxford_file[0],
 us_state_populations = pd.read_csv(args.us_state_populations[0])
 regional_populations = pd.read_csv(args.regional_populations[0])
 country_populations = pd.read_csv(args.country_populations[0])
+gross_net_income = pd.read_csv(args.gross_net_income[0])
 outdir = args.outdir[0]
 
 
-#Need populations for regions: UK_ENG', 'UK_NIR', 'UK_SCO', 'UK_WAL'
-#and countries ['Anguilla', 'Falkland Islands', 'Montserrat', 'Pitcairn Islands', 'Kosovo']
-
-oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations)
+oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,gross_net_income)
 #Save the adjusted data
 oxford_data.to_csv(outdir+'adjusted_data.csv')
 #Get the dates for training

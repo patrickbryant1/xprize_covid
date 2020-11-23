@@ -7,5 +7,6 @@ OXFORD_FILE=./OxCGRT_latest.csv
 STATE_POPS=./populations/us_state_populations.csv
 REGIONAL_POPS=./populations/regional_populations.csv
 COUNTRY_POPS=./populations/country_populations.csv
+GNI=./gni_per_capita_2019.csv
 OUTDIR=./
-./preprocess.py --oxford_file $OXFORD_FILE --us_state_populations $STATE_POPS --regional_populations $REGIONAL_POPS --country_populations $COUNTRY_POPS --outdir $OUTDIR
+./preprocess.py --oxford_file $OXFORD_FILE --us_state_populations $STATE_POPS --regional_populations $REGIONAL_POPS --country_populations $COUNTRY_POPS --gross_net_income $GNI --outdir $OUTDIR

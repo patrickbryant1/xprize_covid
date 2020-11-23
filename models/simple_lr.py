@@ -45,6 +45,7 @@ def get_features(adjusted_data):
                         'cumulative_rescaled_cases',
                         'death_to_case_scale',
                         'case_death_delay',
+                        'gross_net_income',
                         'population']
 
     sel = adjusted_data[selected_features]
@@ -77,8 +78,9 @@ def split_for_training(sel):
             region_index = country_region_data.loc[0,'Region_index']
             death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
             case_death_delay = country_region_data.loc[0,'case_death_delay']
+            gross_net_income = country_region_data.loc[0,'gross_net_income']
             population = country_region_data.loc[0,'population']
-            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'population'})
+            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'gross_net_income','population'})
 
             #Normalize the cases by 100'000 population
             country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
