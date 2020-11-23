@@ -120,42 +120,55 @@ try:
     y_train = np.load(outdir+'y_train.npy', allow_pickle=True)
     X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
     y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
+    populations = np.load(outdir+'populations.npy', allow_pickle=True)
 except:
     sel=get_features(adjusted_data)
-    X_train,y_train,X_test,y_test = split_for_training(sel)
+    X_train,y_train,X_test,y_test,populations = split_for_training(sel)
     #Save
     np.save(outdir+'X_train.npy',X_train)
     np.save(outdir+'y_train.npy',y_train)
     np.save(outdir+'X_test.npy',X_test)
     np.save(outdir+'y_test.npy',y_test)
+    np.save(outdir+'populations.npy',populations)
 
 corrs = []
 errors = []
 stds = []
+preds = []
 for i in range(y_train.shape[1]):
     reg = LinearRegression().fit(X_train, y_train[:,i])
     pred = reg.predict(X_test)
-    av_er = np.average(np.absolute(pred-y_test[:,i]))
-    std = np.std(np.absolute(pred-y_test[:,i]))
+    preds.append(pred)
+    av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
+    std = np.std(np.absolute(pred-y_test[:,i])/populations)
     print('Error',av_er, 'Std',std)
-
     R,p = pearsonr(pred,y_test[:,i])
     #Save
     corrs.append(R)
     errors.append(av_er)
     stds.append(std)
-    plt.scatter(pred+0.0001,y_test[:,i]+0.0001,s=1)
+    plt.scatter(pred,y_test[:,i],s=1)
     plt.title(str(i))
-    plt.xlim([0,140])
-    plt.ylim([0,140])
+    plt.xlabel('Predicted')
+    plt.xlabel('True')
+    #plt.xlim([0,140])
+    #plt.ylim([0,140])
     plt.savefig(outdir+str(i)+'.png',format='png')
     plt.close()
+
+#Plot a test case
+preds = np.array(preds)
+
+plt.plot(range(1,22),preds[:,0],label='pred')
+plt.plot(range(1,22),y_test[0,:],label='true')
+plt.savefig(outdir+'pred_and_true_sel.png',format='png')
+plt.close()
 
 #Plot average error per day with std
 errors = np.array(errors)
 std = np.array(stds)
 plt.plot(range(1,22),errors,color='b')
-plt.fill_between(range(21),errors-stds,errors+stds,color='b',alpha=0.5)
+plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
 plt.title('Average error with std')
 plt.xlabel('Days in the future')
 plt.ylabel('Error per 100000')
