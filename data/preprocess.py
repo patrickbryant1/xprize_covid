@@ -131,7 +131,7 @@ def format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,s
     plt.savefig(outname, format='png', dpi=300)
     plt.close()
 
-def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations, gross_net_income,population_density):
+def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations, gross_net_income,population_density,monthly_temperature):
     '''Parse and encode all regions
     The ConfirmedCases column reports the total number of cases since
     the beginning of the epidemic for each country,region and day.
@@ -147,6 +147,11 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     oxford_data['case_death_delay']=0
     oxford_data['gross_net_income']=0
     oxford_data['population_density']=0
+    oxford_data['Month']=oxford_data['Date'].dt.month
+    oxford_data['monthly_temperature']=0
+    temp_keys = {'Jan Average':1,'Feb Average':2,'Mar Average':3,'Apr Average':4,'May Average':5,'Jun Average':6,
+                'Jul Average':7,'Aug Average':8,'Sep Average':9,'Oct Average':10,'Nov Average':11, 'Dec Average':12
+
     oxford_data['population']=0
     country_codes = oxford_data['CountryCode'].unique()
     no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
@@ -172,13 +177,13 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         country_gni = gross_net_income[gross_net_income['Country Code']==cc]['GNI per capita 2019 (USD)'].values[0]
         oxford_data.at[country_data.index,'gross_net_income']=country_gni
         #Get population density
-        try:
-            country_pop_density= population_density[population_density['Country Code']==cc]['Population density 2018'].values[0]
-            oxford_data.at[country_data.index,'population_density']=country_pop_density
-        except:
-            print(cc)
-            print(country_data)
-            pdb.set_trace()
+        country_pop_density= population_density[population_density['Country Code']==cc]['Population density 2018'].values[0]
+        oxford_data.at[country_data.index,'population_density']=country_pop_density
+        #Get monthly_temperature
+        country_temp= monthly_temperature[monthly_temperature['ISO3']==' '+cc]
+        pdb.set_trace()
+        oxford_data.at[country_data.index,'monthly_temperature']=country_temp
+
         #Get country total
         whole_country_data = country_data[country_data['RegionCode'].isna()]
         #Smooth cases and deaths
@@ -300,7 +305,7 @@ monthly_temperature = pd.read_csv(args.monthly_temperature[0])
 outdir = args.outdir[0]
 
 
-oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,gross_net_income,population_density)
+oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,gross_net_income,population_density,monthly_temperature)
 #Save the adjusted data
 oxford_data.to_csv(outdir+'adjusted_data.csv')
 #Get the dates for training
