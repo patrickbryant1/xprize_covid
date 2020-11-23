@@ -125,7 +125,7 @@ def format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,s
     plt.savefig(outname, format='png', dpi=300)
     plt.close()
 
-def parse_regions(oxford_data):
+def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations):
     '''Parse and encode all regions
     The ConfirmedCases column reports the total number of cases since
     the beginning of the epidemic for each country,region and day.
@@ -139,6 +139,7 @@ def parse_regions(oxford_data):
     oxford_data['cumulative_rescaled_cases']=0
     oxford_data['death_to_case_scale']=0
     oxford_data['case_death_delay']=0
+    oxford_data['population']=0
     country_codes = oxford_data['CountryCode'].unique()
     no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
                         'LSO','MDG','MOZ','MWI','NAM','OMN','RWA','SAU','SEN','SMR',
@@ -156,13 +157,16 @@ def parse_regions(oxford_data):
         country_data = oxford_data[oxford_data['CountryCode']==cc]
         #Set index
         oxford_data.at[country_data.index,'Country_index']=ci
+        #Get population
+        population = country_populations[country_populations['Country Code']==cc]['2018'].values[0]
+        oxford_data.at[country_data.index,'population']=population
 
         #Plot total
         whole_country_data = country_data[country_data['RegionCode'].isna()]
         #Smooth cases and deaths
         cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
 
-        if max(deaths)<1:
+        if max(deaths)<0.1:
             print('Less than 1 death for',cc)
             delay = 0
             scaling=0
@@ -195,8 +199,8 @@ def parse_regions(oxford_data):
         oxford_data.at[whole_country_data.index,'case_death_delay']=delay
 
         #Plot
-        format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'normal',outdir+'plots/'+cc+'.png')
-        format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_log.png')
+        #format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'normal',outdir+'plots/'+cc+'.png')
+        #format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_log.png')
         #Get regions
         regions = country_data['RegionCode'].dropna().unique()
         #Check if regions
@@ -241,12 +245,23 @@ def parse_regions(oxford_data):
                 #Save cumulative rescaled cases
                 oxford_data.at[country_region_data.index,'cumulative_rescaled_cases']=np.cumsum(rescaled_cases)
                 #Save the scaling
-                oxford_data.at[whole_country_data.index,'death_to_case_scale']=scaling
+                oxford_data.at[country_region_data.index,'death_to_case_scale']=scaling
                 #Save the delay
-                oxford_data.at[whole_country_data.index,'case_death_delay']=delay
+                oxford_data.at[country_region_data.index,'case_death_delay']=delay
+                #Get population
+                if region in regional_populations['Region Code'].values:
+                    oxford_data.at[country_region_data.index,'population']=regional_populations[regional_populations['Region Code']==region]['2019 population'].values[0]
+                else:
+                    region_name = country_region_data['RegionName'].unique()[0]
+                    try:
+                        oxford_data.at[country_region_data.index,'population']=us_state_populations[us_state_populations['State']==region_name]['Population'].values[0]
+                    except:
+                        pdb.set_trace()
+
+                #if country_region_data['RegionName'] in us_state_populations
                 #Plot
-                format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay, 'normal',outdir+'plots/'+cc+'_'+region+'.png')
-                format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_'+region+'_log.png')
+                #format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay, 'normal',outdir+'plots/'+cc+'_'+region+'.png')
+                #format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_'+region+'_log.png')
 
         #Increase ci
         ci+=1
@@ -265,21 +280,15 @@ oxford_data = pd.read_csv(args.oxford_file[0],
                         "RegionCode": str},
                  error_bad_lines=False)
 us_state_populations = pd.read_csv(args.us_state_populations[0])
+regional_populations = pd.read_csv(args.regional_populations[0])
 country_populations = pd.read_csv(args.country_populations[0])
 outdir = args.outdir[0]
-#Get state populations
-oxford_data=pd.merge(oxford_data,us_state_populations,left_on='RegionName',right_on='State', how='left')
-oxford_data = oxford_data.drop(columns={'State'})
-#Get country populations
-oxford_data=pd.merge(oxford_data,country_populations,left_on='CountryCode',right_on='Country Code', how='left')
-oxford_data = oxford_data.drop(columns={'Country Code'})
-pdb.set_trace()
 
 
 #Need populations for regions: UK_ENG', 'UK_NIR', 'UK_SCO', 'UK_WAL'
 #and countries ['Anguilla', 'Falkland Islands', 'Montserrat', 'Pitcairn Islands', 'Kosovo']
 
-oxford_data = parse_regions(oxford_data)
+oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations)
 #Save the adjusted data
 oxford_data.to_csv(outdir+'adjusted_data.csv')
 #Get the dates for training
