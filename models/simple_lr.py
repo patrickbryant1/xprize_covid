@@ -172,6 +172,7 @@ plt.close()
 
 #Look at coefs ((21, 343))
 coefs = np.array(coefs)
+
 #The first are repeats 21 times, then these 7 follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
 #--> get the last 7, then divide into 21 portions
 last7=coefs[:,-7:]
@@ -180,20 +181,25 @@ plt.imshow(last7)
 plt.yticks(range(21))
 plt.xticks(range(7),labels=last7_names,rotation='vertical')
 plt.colorbar()
+plt.tight_layout()
 plt.savefig(outdir+'last7.png',format='png',dpi=300)
 plt.close()
 remainder=coefs[:,:-7]
 remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind,features
 remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
-'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings'
+'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
 'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature']
+
 for i in range(remainder.shape[2]):
     plt.imshow(remainder[:,:,i])
     plt.xlabel('Previous day')
     plt.ylabel('Future day')
     plt.colorbar()
+    plt.title(remainder_names[i])
+    plt.tight_layout()
     plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
     plt.close()
+
 
 
 
@@ -206,5 +212,5 @@ plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
 plt.title('Average error with std')
 plt.xlabel('Days in the future')
 plt.ylabel('Error per 100000')
-plt.savefig(outdir+'av_error.png',format='png')
+plt.savefig(outdir+'lr_av_error.png',format='png')
 plt.close()
