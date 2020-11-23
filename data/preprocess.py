@@ -149,8 +149,8 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     oxford_data['population_density']=0
     oxford_data['Month']=oxford_data['Date'].dt.month
     oxford_data['monthly_temperature']=0
-    temp_keys = {'Jan Average':1,'Feb Average':2,'Mar Average':3,'Apr Average':4,'May Average':5,'Jun Average':6,
-                'Jul Average':7,'Aug Average':8,'Sep Average':9,'Oct Average':10,'Nov Average':11, 'Dec Average':12}
+    temp_keys = {' Jan Average':1,' Feb Average':2,' Mar Average':3,' Apr Average':4,' May Average':5,' Jun Average':6,
+                ' Jul Average':7,' Aug Average':8,' Sep Average':9,' Oct Average':10,' Nov Average':11, ' Dec Average':12}
     oxford_data['population']=0
     country_codes = oxford_data['CountryCode'].unique()
     no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
@@ -179,11 +179,18 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         country_pop_density= population_density[population_density['Country Code']==cc]['Population density 2018'].values[0]
         oxford_data.at[country_data.index,'population_density']=country_pop_density
         #Get monthly_temperature
+
         country_temp= monthly_temperature[monthly_temperature['ISO3']==' '+cc]
-        for tkey in temp_keys:
-            month_av = country_temp[country_temp['Statistics']==tkey]
+        if len(country_temp)<1:
+            print(cc)
+            print(country_data)
             pdb.set_trace()
-        oxford_data.at[country_data.index,'monthly_temperature']=country_temp
+            continue
+        for tkey in temp_keys:
+            month_av =  np.average(country_temp[country_temp['Statistics']==tkey]['Temperature - (Celsius)'])
+            oxford_data.at[country_data[country_data['Month']==temp_keys[tkey]].index,'monthly_temperature']=month_av
+
+
 
         #Get country total
         whole_country_data = country_data[country_data['RegionCode'].isna()]
