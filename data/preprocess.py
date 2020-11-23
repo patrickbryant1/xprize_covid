@@ -264,15 +264,15 @@ oxford_data = pd.read_csv(args.oxford_file[0],
                  error_bad_lines=False)
 us_state_populations = pd.read_csv(args.us_state_populations[0])
 country_populations = pd.read_csv(args.country_populations[0])
-
+outdir = args.outdir[0]
 #Get state populations
 oxford_data=pd.merge(oxford_data,us_state_populations,left_on='RegionName',right_on='State', how='left')
 oxford_data = oxford_data.drop(columns={'State'})
 #Get country populations
 oxford_data=pd.merge(oxford_data,country_populations,left_on='CountryCode',right_on='Country Code', how='left')
 oxford_data = oxford_data.drop(columns={'Country Code'})
+pdb.set_trace()
 
-outdir = args.outdir[0]
 
 #Need populations for regions: UK_ENG', 'UK_NIR', 'UK_SCO', 'UK_WAL'
 #and countries ['Anguilla', 'Falkland Islands', 'Montserrat', 'Pitcairn Islands', 'Kosovo']
