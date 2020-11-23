@@ -1,4 +1,4 @@
-Country Name,Country Code,Indicator Name,2018
+Country Name,Country Code,Indicator Name,Population density 2018
 Aruba,ABW,Population density (people per sq. km of land area),588.027777777778
 Afghanistan,AFG,Population density (people per sq. km of land area),56.937760009803
 Angola,AGO,Population density (people per sq. km of land area),24.7130520574316
@@ -263,3 +263,9 @@ Kosovo,XKX,Population density (people per sq. km of land area),
 South Africa,ZAF,Population density (people per sq. km of land area),47.6301197767684
 Zambia,ZMB,Population density (people per sq. km of land area),23.3414789007116
 Zimbabwe,ZWE,Population density (people per sq. km of land area),37.3245909267158
+Anguilla,AIA,Population density (people per sq. km of land area),165
+Falkland Islands,FLK,Population density (people per sq. km of land area),0
+Montserrat,MSR,Population density (people per sq. km of land area),50
+Pitcairn Islands,PCN,Population density (people per sq. km of land area),1
+Kosovo,RKS,Population density (people per sq. km of land area),165
+Taiwan,TWN,Population density (people per sq. km of land area),670

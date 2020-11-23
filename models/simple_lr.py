@@ -46,6 +46,7 @@ def get_features(adjusted_data):
                         'death_to_case_scale',
                         'case_death_delay',
                         'gross_net_income',
+                        'population_density',
                         'population']
 
     sel = adjusted_data[selected_features]
@@ -79,6 +80,7 @@ def split_for_training(sel):
             death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
             case_death_delay = country_region_data.loc[0,'case_death_delay']
             gross_net_income = country_region_data.loc[0,'gross_net_income']
+            population_density = country_region_data.loc[0,'population_density']
             population = country_region_data.loc[0,'population']
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'gross_net_income','population'})
 
@@ -89,7 +91,7 @@ def split_for_training(sel):
             #Loop through and get the first 21 days of data
             for di in range(len(country_region_data)-41):
                 xi = np.array(country_region_data.loc[di:di+20]).flatten()
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,population]))
+                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]))
                 y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
 
             #Get the last 3 weeks as test
