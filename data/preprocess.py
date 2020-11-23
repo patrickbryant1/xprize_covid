@@ -62,7 +62,7 @@ def identify_case_death_lag(cases,deaths,region,manual_adjust_necessary):
     identify when these overlap.
     '''
 
-    delay_adjustments = {'BEN':7, 'BGD':11 ,'BRA':4,'CAN':7, 'COD':21, 'DEU':14, 'ECU':7,'EGY':7, 'EST':10,'GAB':0, 'UK_ENG':17, 'ITA':7, 'JPN':14,'KWT':7,
+    delay_adjustments = {'BEN':7, 'BGD':11 ,'BRA':4,'CAN':7, 'COD':21, 'DEU':14, 'ECU':7,'EGY':7, 'ESP':11 ,'EST':10,'GAB':0, 'UK_ENG':17, 'ITA':7, 'JPN':14,'KWT':7,
                           'MOZ':7, 'MRT':0, 'PAN':7,'PRI':10, 'QAT':14, 'ROU':7,'RWA':0, 'SSD':7,'SYR':7, 'THA':14, 'TJK':0, 'TUR':7, 'USA':16, 'US_AL':10,
                           'US_AZ':21, 'US_CA':17, 'US_CO':17, 'US_GA':19, 'US_HI':17, 'US_IL':17, 'US_MA':17, 'US_MD':17,
                           'US_MI':17, 'US_MO':17, 'US_NV':17, 'US_OH':21, 'US_OR':17 ,'US_PA':17, 'US_SC':17, 'US_TN':21, 'US_TX':17, 'US_UT':17,'US_VA':17}
@@ -199,8 +199,8 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         oxford_data.at[whole_country_data.index,'case_death_delay']=delay
 
         #Plot
-        #format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'normal',outdir+'plots/'+cc+'.png')
-        #format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_log.png')
+        format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'normal',outdir+'plots/'+cc+'.png')
+        format_plot(cc,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_log.png')
         #Get regions
         regions = country_data['RegionCode'].dropna().unique()
         #Check if regions
@@ -260,8 +260,8 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
 
                 #if country_region_data['RegionName'] in us_state_populations
                 #Plot
-                #format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay, 'normal',outdir+'plots/'+cc+'_'+region+'.png')
-                #format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_'+region+'_log.png')
+                format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay, 'normal',outdir+'plots/'+cc+'_'+region+'.png')
+                format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,'log',outdir+'plots/log/'+cc+'_'+region+'_log.png')
 
         #Increase ci
         ci+=1
