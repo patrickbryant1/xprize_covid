@@ -19,6 +19,8 @@ parser.add_argument('--oxford_file', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to oxford data file.')
 parser.add_argument('--us_state_populations', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to us_state_populations.')
+parser.add_argument('--regional_populations', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to other regional populations (UK).')
 parser.add_argument('--country_populations', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to country populations.')
 parser.add_argument('--outdir', nargs=1, type= str,
