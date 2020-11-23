@@ -151,6 +151,7 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     oxford_data['monthly_temperature']=0
     temp_keys = {' Jan Average':1,' Feb Average':2,' Mar Average':3,' Apr Average':4,' May Average':5,' Jun Average':6,
                 ' Jul Average':7,' Aug Average':8,' Sep Average':9,' Oct Average':10,' Nov Average':11, ' Dec Average':12}
+
     oxford_data['population']=0
     country_codes = oxford_data['CountryCode'].unique()
     no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
@@ -179,15 +180,17 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         country_pop_density= population_density[population_density['Country Code']==cc]['Population density 2018'].values[0]
         oxford_data.at[country_data.index,'population_density']=country_pop_density
         #Get monthly_temperature
+        #Regions not available - where a nearby region was used instead
+        temp_conv_regions = {'ABW':'VEN','AIA':'PRI','BHS':'CUB','BMU':'CUB','CYM':'CUB','FLK':'ARG','GIB':'ESP',
+                                'GMB':'GNB','GUM':'PHL','HKG':'CHN','KOR':'JPN','MAC':'CHN', 'MSR':'PRI','PCN':'NZL',
+                                'PSE':'ISR','RKS':'SRB','SMR':'ITA','TCA':'CUB','TWN':'JPN','VGB':'DOM','VIR':'DOM'}
+        if cc in [*temp_conv_regions.keys()]:
+            country_temp= monthly_temperature[monthly_temperature['ISO3']==' '+temp_conv_regions[cc]]
+        else:
+            country_temp= monthly_temperature[monthly_temperature['ISO3']==' '+cc]
 
-        country_temp= monthly_temperature[monthly_temperature['ISO3']==' '+cc]
-        if len(country_temp)<1:
-            print(cc)
-            print(country_data)
-            pdb.set_trace()
-            continue
         for tkey in temp_keys:
-            month_av =  np.average(country_temp[country_temp['Statistics']==tkey]['Temperature - (Celsius)'])
+            month_av =  np.round(np.average(country_temp[country_temp['Statistics']==tkey]['Temperature - (Celsius)']),1)
             oxford_data.at[country_data[country_data['Month']==temp_keys[tkey]].index,'monthly_temperature']=month_av
 
 
