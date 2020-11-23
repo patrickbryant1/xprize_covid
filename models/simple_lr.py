@@ -43,7 +43,8 @@ def get_features(adjusted_data):
                         'rescaled_cases',
                         'cumulative_rescaled_cases',
                         'death_to_case_scale',
-                        'case_death_delay']
+                        'case_death_delay',
+                        'population']
 
     sel = adjusted_data[selected_features]
 
@@ -52,8 +53,10 @@ def get_features(adjusted_data):
 def split_for_training(sel):
     '''Split the data for training and testing
     '''
-    X = [] #Inputs
-    y = [] #Targets
+    X_train = [] #Inputs
+    y_train = [] #Targets
+    X_test = [] #Inputs
+    y_test = [] #Targets
     countries = sel['Country_index'].unique()
     for ci in countries:
         country_data = sel[sel['Country_index']==ci]
@@ -63,13 +66,31 @@ def split_for_training(sel):
             country_region_data = country_data[country_data['Region_index']==ri]
             country_region_data = country_region_data[country_region_data['cumulative_rescaled_cases']>0]
             country_region_data = country_region_data.reset_index()
-            country_region_data = country_region_data.drop(columns={'index'})
+
+            try:
+                country_index = country_region_data.loc[0,'Country_index']
+                region_index = country_region_data.loc[0,'Region_index']
+                death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
+                case_death_delay = country_region_data.loc[0,'case_death_delay']
+                population = country_region_data.loc[0,'population']
+                country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'population'})
+
+                #Normalize the cases by 100'000 population
+                country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/population
+                country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/population
+            except:
+                pdb.set_trace()
             #Loop through and get the first 21 days of data
             for di in range(len(country_region_data)-41):
-                X.append(np.array(country_region_data.loc[di:di+20]))
-                y.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
+                xi = np.array(country_region_data.loc[di:di+20]).flatten()
+                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,population]))
+                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
 
-    return np.array(X), np.array(y)
+            #Get the last 3 weeks as test
+            X_test.append(X_train.pop())
+            y_test.append(y_train.pop())
+
+    return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test)
 
 
 #####MAIN#####
@@ -87,19 +108,22 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
 adjusted_data = adjusted_data.fillna(0)
 outdir = args.outdir[0]
 
-
 #Get features
 try:
-    X = np.load(outdir+'X.npy', allow_pickle=True)
-    y = np.load(outdir+'y.npy', allow_pickle=True)
+    X_train = np.load(outdir+'X_train.npy', allow_pickle=True)
+    y_train = np.load(outdir+'y_train.npy', allow_pickle=True)
+    X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
+    y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
 except:
     sel=get_features(adjusted_data)
-    X,y = split_for_training(sel)
+    X_train,y_train,X_test,y_test = split_for_training(sel)
     #Save
-    np.save(outdir+'X.npy',X)
-    np.save(outdir+'y.npy',y)
+    np.save(outdir+'X_train.npy',X_train)
+    np.save(outdir+'y_train.npy',y_train)
+    np.save(outdir+'X_test.npy',X_test)
+    np.save(outdir+'y_test.npy',y_test)
 
-X = X.reshape(X.shape[0],21*18)
+pdb.set_trace()
 for i in range(y.shape[1]):
     reg = LinearRegression().fit(X, y[:,i])
     print(i,'score',reg.score(X, y[:,i]))
@@ -114,4 +138,3 @@ for i in range(y.shape[1]):
 
 
 '''
-pdb.set_trace()
