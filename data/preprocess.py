@@ -181,10 +181,7 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         if cc not in no_adjust_regions:
             if cc in [*manual_scaling.keys()]:
                 scaling = manual_scaling[cc]
-            if delay ==0:
-                rescaled_cases[:-50]=deaths[:-50]*scaling
-            else:
-                rescaled_cases[:-delay]=deaths[delay:]*scaling
+            rescaled_cases[:200-delay]=deaths[delay:200]*scaling
 
         #If the rescaled cases are smaller than the cases, set to cases
         if max(rescaled_cases) < max(cases):
@@ -229,10 +226,7 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
                 rescaled_cases = cases
                 if cc in [*manual_scaling.keys()]:
                     scaling = manual_scaling[cc]
-                if delay ==0:
-                    rescaled_cases[:-50]=deaths[:-50]*scaling
-                else:
-                    rescaled_cases[:-delay]=deaths[delay:]*scaling
+                rescaled_cases[:200-delay]=deaths[delay:200]*scaling
 
                 if region in no_adjust_regions:
                     rescaled_cases=cases

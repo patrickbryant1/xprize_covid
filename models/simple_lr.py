@@ -10,6 +10,7 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
+from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
@@ -58,6 +59,7 @@ def split_for_training(sel):
     X_test = [] #Inputs
     y_test = [] #Targets
     countries = sel['Country_index'].unique()
+    populations = []
     for ci in countries:
         country_data = sel[sel['Country_index']==ci]
         #Check regions
@@ -79,8 +81,8 @@ def split_for_training(sel):
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'population'})
 
             #Normalize the cases by 100'000 population
-            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
-            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']#/(population/100000)
 
             #Loop through and get the first 21 days of data
             for di in range(len(country_region_data)-41):
@@ -91,8 +93,10 @@ def split_for_training(sel):
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())
             y_test.append(y_train.pop())
+            #Save population
+            populations.append(population)
 
-    return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test)
+    return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations)
 
 
 #####MAIN#####
@@ -125,18 +129,35 @@ except:
     np.save(outdir+'X_test.npy',X_test)
     np.save(outdir+'y_test.npy',y_test)
 
-pdb.set_trace()
-for i in range(y.shape[1]):
-    reg = LinearRegression().fit(X, y[:,i])
-    print(i,'score',reg.score(X, y[:,i]))
-    pred = reg.predict(X)
-    print('Error',np.average(np.absolute(pred-y[:,i])))
-    plt.scatter(pred,y[:,i],s=1)
-    plt.title(i)
+corrs = []
+errors = []
+stds = []
+for i in range(y_train.shape[1]):
+    reg = LinearRegression().fit(X_train, y_train[:,i])
+    pred = reg.predict(X_test)
+    av_er = np.average(np.absolute(pred-y_test[:,i]))
+    std = np.std(np.absolute(pred-y_test[:,i]))
+    print('Error',av_er, 'Std',std)
+
+    R,p = pearsonr(pred,y_test[:,i])
+    #Save
+    corrs.append(R)
+    errors.append(av_er)
+    stds.append(std)
+    plt.scatter(pred+0.0001,y_test[:,i]+0.0001,s=1)
+    plt.title(str(i))
+    plt.xlim([0,140])
+    plt.ylim([0,140])
     plt.savefig(outdir+str(i)+'.png',format='png')
     plt.close()
 
-'''
-
-
-'''
+#Plot average error per day with std
+errors = np.array(errors)
+std = np.array(stds)
+plt.plot(range(1,22),errors,color='b')
+plt.fill_between(range(21),errors-stds,errors+stds,color='b',alpha=0.5)
+plt.title('Average error with std')
+plt.xlabel('Days in the future')
+plt.ylabel('Error per 100000')
+plt.savefig(outdir+'av_error.png',format='png')
+plt.close()
