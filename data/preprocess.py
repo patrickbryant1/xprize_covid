@@ -136,11 +136,18 @@ def smooth_mobility(sel_mobility,whole_country_data):
 
     #Join on date
     joined = pd.merge(whole_country_data,sel_mobility,left_on='Date',right_on='date',how='left')
+    mob_start = min(sel_mobility['date'])
+    mob_end = max(sel_mobility['date'])
     #Replace the nan with the closest available data
+    before_mob = joined[joined['Date']<mob_start].index
+    after_mob = joined[joined['Date']>mob_end].index
     for sector in mobility_sectors:
-        data = np.array(joined[sector])
-        pdb.set_trace()
-    return sel_mobility
+        #Before mob data
+        joined.at[before_mob,sector]=joined[joined['Date']==mob_start][sector].values[0]
+        #After mob data
+        joined.at[after_mob,sector]=joined[joined['Date']==mob_end][sector].values[0]
+
+    return joined
 
 def format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,scale,outname):
     '''Plot and format the plot
@@ -184,9 +191,15 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     oxford_data['population_density']=0
     oxford_data['Month']=oxford_data['Date'].dt.month
     oxford_data['monthly_temperature']=0
+
     temp_keys = {' Jan Average':1,' Feb Average':2,' Mar Average':3,' Apr Average':4,' May Average':5,' Jun Average':6,
                 ' Jul Average':7,' Aug Average':8,' Sep Average':9,' Oct Average':10,' Nov Average':11, ' Dec Average':12}
-
+    #Mobility sectors
+    mobility_sectors = ['retail_and_recreation_percent_change_from_baseline', 'grocery_and_pharmacy_percent_change_from_baseline', 'parks_percent_change_from_baseline',
+                        'transit_stations_percent_change_from_baseline', 'workplaces_percent_change_from_baseline', 'residential_percent_change_from_baseline']
+    #Add sector
+    for sector in mobility_sectors:
+        oxford_data[sector]=0
     oxford_data['population']=0
     country_codes = oxford_data['CountryCode'].unique()
     no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
@@ -233,6 +246,10 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         whole_country_mobility = country_mobility[country_mobility['sub_region_1'].isna()] #Select whole country
         #Smooth mobility
         smoothed_mobility = smooth_mobility(whole_country_mobility,whole_country_data)
+        #Add mobility
+        for sector in mobility_sectors:
+            oxford_data.at[whole_country_data.index,sector]=smoothed_mobility[sector]
+        pdb.set_trace()
         #Smooth cases and deaths
         cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
 
