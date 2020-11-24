@@ -189,7 +189,8 @@ def format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,s
     plt.savefig(outname, format='png', dpi=300)
     plt.close()
 
-def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations, gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors):
+def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,
+                gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors):
     '''Parse and encode all regions
     The ConfirmedCases column reports the total number of cases since
     the beginning of the epidemic for each country,region and day.
@@ -284,14 +285,13 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
                 oxford_data.at[whole_country_data.index,sector]=np.array(smoothed_mobility.loc[smoothed_mobility.index,sector+'_percent_change_from_baseline'])
 
         #Get cultural descriptors
-        if cc in cultural_descriptors['ctr']:
-            country_cultural_descriptor_index = cultural_descriptors[cultural_descriptors['ctr']==cc].index
-            pdb.set_trace()
+        if cc in cultural_descriptors['ctr'].values:
+            country_cultural_descriptors = cultural_descriptors[cultural_descriptors['ctr']==cc]
             for cult_key in cultural_keys:
-                oxford_data.at[country_data.index,cult_key]=cultural_descriptors.loc[country_cultural_descriptor_index,cult_key]
-            pdb.set_trace()
+                oxford_data.at[country_data.index,cult_key]=int(country_cultural_descriptors[cult_key].values[0])
         else:
             print('No cultural descriptors for',cc)
+
         #Smooth cases and deaths
         cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
 
@@ -430,10 +430,13 @@ population_density = pd.read_csv(args.population_density[0])
 monthly_temperature = pd.read_csv(args.monthly_temperature[0])
 mobility_data = pd.read_csv(args.mobility_data[0],parse_dates=['date'])
 cultural_descriptors = pd.read_csv(args.cultural_descriptors[0],sep=';')
+#Replace the #NULL! with 0
+cultural_descriptors=cultural_descriptors.replace('#NULL!',0)
 outdir = args.outdir[0]
 
 #Parse the data
-oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors)
+oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,
+                            gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors)
 #Save the adjusted data
 oxford_data.to_csv(outdir+'adjusted_data.csv')
 #Get the dates for training
