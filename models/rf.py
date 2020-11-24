@@ -9,12 +9,12 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression,Ridge,ElasticNet
+from sklearn.ensemble import RandomForestRegressor
 from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''Simple linear regression model.''')
+parser = argparse.ArgumentParser(description = '''Simple random forest model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -142,7 +142,7 @@ stds = []
 preds = []
 coefs = []
 for i in range(y_train.shape[1]):
-    reg = LinearRegression().fit(X_train, y_train[:,i])
+    reg = RandomForestRegressor(max_depth=2, random_state=0).fit(X_train, y_train[:,i])
     pred = reg.predict(X_test)
     preds.append(pred)
     av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
@@ -153,7 +153,8 @@ for i in range(y_train.shape[1]):
     corrs.append(R)
     errors.append(av_er)
     stds.append(std)
-    coefs.append(reg.coef_)
+    pdb.set_trace()
+    coefs.append(reg.feature_importances_)
     #Plot
     plt.scatter(pred,y_test[:,i],s=1)
     plt.title(str(i))
@@ -161,7 +162,7 @@ for i in range(y_train.shape[1]):
     plt.xlabel('True')
     plt.savefig(outdir+str(i)+'.png',format='png')
     plt.close()
-    pdb.set_trace()
+
 
 
 preds = np.array(preds)
@@ -171,7 +172,7 @@ plt.plot(range(1,22),y_test[0,:],label='true')
 plt.savefig(outdir+'pred_and_true_sel.png',format='png')
 plt.close()
 
-#Look at coefs
+#Look at coefs ((21, 343))
 coefs = np.array(coefs)
 
 #The first are repeats 21 times, then these 7 follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
