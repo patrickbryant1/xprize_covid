@@ -161,6 +161,7 @@ for i in range(y_train.shape[1]):
     plt.xlabel('True')
     plt.savefig(outdir+str(i)+'.png',format='png')
     plt.close()
+    pdb.set_trace()
 
 
 preds = np.array(preds)
@@ -178,7 +179,7 @@ coefs = np.array(coefs)
 last7=coefs[:,-7:]
 last7_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','population']
 plt.imshow(last7)
-plt.yticks(range(21))
+plt.yticks(range(21),labels=range(1,22))
 plt.xticks(range(7),labels=last7_names,rotation='vertical')
 plt.colorbar()
 plt.tight_layout()
@@ -194,6 +195,8 @@ for i in range(remainder.shape[2]):
     plt.imshow(remainder[:,:,i])
     plt.xlabel('Previous day')
     plt.ylabel('Future day')
+    plt.xticks(range(21),labels=range(1,22))
+    plt.yticks(range(21),labels=range(1,22))
     plt.colorbar()
     plt.title(remainder_names[i])
     plt.tight_layout()
