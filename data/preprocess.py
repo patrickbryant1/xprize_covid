@@ -31,6 +31,8 @@ parser.add_argument('--monthly_temperature', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to country monthly_temperature.')
 parser.add_argument('--mobility_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to Google mobility data.')
+parser.add_argument('--cultural_descriptors', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to Hofstede cultural descriptors.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -187,7 +189,7 @@ def format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,s
     plt.savefig(outname, format='png', dpi=300)
     plt.close()
 
-def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations, gross_net_income,population_density,monthly_temperature,mobility_data):
+def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations, gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors):
     '''Parse and encode all regions
     The ConfirmedCases column reports the total number of cases since
     the beginning of the epidemic for each country,region and day.
@@ -215,11 +217,20 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     for sector in mobility_sectors:
         oxford_data[sector]=0
 
+    #Cultural descriptors
+    cultural_keys = ['pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr']
+    for cult_key in cultural_keys:
+        oxford_data[cult_key]=0
+
+    #Population
     oxford_data['population']=0
+    #Unique countries
     country_codes = oxford_data['CountryCode'].unique()
+    #No adjust regions
     no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
                         'LSO','MDG','MOZ','MWI','NAM','OMN','RWA','SAU','SEN','SMR',
-                        'THA','TLS','TZA','YEM', 'US_VI', 'VNM', 'ZAF']#No adjust regions
+                        'THA','TLS','TZA','YEM', 'US_VI', 'VNM', 'ZAF']
+
     manual_adjust_necessary = [] #Save the regions requiring manual adjustment
     manual_scaling = {'SWE':280} #took max(cases[-100:])/max(deaths[-100:])
     ci = 0 #Country index
@@ -272,8 +283,17 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
                 #Duplicates have to be dropped since sometimes double dates are added
                 oxford_data.at[whole_country_data.index,sector]=np.array(smoothed_mobility.loc[smoothed_mobility.index,sector+'_percent_change_from_baseline'])
 
-            #Smooth cases and deaths
-            cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
+        #Get cultural descriptors
+        if cc in cultural_descriptors['ctr']:
+            country_cultural_descriptor_index = cultural_descriptors[cultural_descriptors['ctr']==cc].index
+            pdb.set_trace()
+            for cult_key in cultural_keys:
+                oxford_data.at[country_data.index,cult_key]=cultural_descriptors.loc[country_cultural_descriptor_index,cult_key]
+            pdb.set_trace()
+        else:
+            print('No cultural descriptors for',cc)
+        #Smooth cases and deaths
+        cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
 
         if max(deaths)<0.1:
             print('Less than 1 death for',cc)
@@ -409,9 +429,11 @@ gross_net_income = pd.read_csv(args.gross_net_income[0])
 population_density = pd.read_csv(args.population_density[0])
 monthly_temperature = pd.read_csv(args.monthly_temperature[0])
 mobility_data = pd.read_csv(args.mobility_data[0],parse_dates=['date'])
+cultural_descriptors = pd.read_csv(args.cultural_descriptors[0],sep=';')
 outdir = args.outdir[0]
 
-oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,gross_net_income,population_density,monthly_temperature,mobility_data)
+#Parse the data
+oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors)
 #Save the adjusted data
 oxford_data.to_csv(outdir+'adjusted_data.csv')
 #Get the dates for training

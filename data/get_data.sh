@@ -11,5 +11,6 @@ GNI=./gni_per_capita_2019.csv
 POP_DENSITY=./population_density.csv
 MONTHLY_TEMP=./temp_1991_2016.csv
 MOBILITY_DATA=/home/patrick/data/COVID19/xprize/Global_Mobility_Report.csv
+CULTURAL_DESCRIPTORS=./cultural_descriptors-2015-08-16.csv
 OUTDIR=./
-./preprocess.py --oxford_file $OXFORD_FILE --us_state_populations $STATE_POPS --regional_populations $REGIONAL_POPS --country_populations $COUNTRY_POPS --gross_net_income $GNI --population_density $POP_DENSITY --monthly_temperature $MONTHLY_TEMP --mobility_data $MOBILITY_DATA --outdir $OUTDIR
+./preprocess.py --oxford_file $OXFORD_FILE --us_state_populations $STATE_POPS --regional_populations $REGIONAL_POPS --country_populations $COUNTRY_POPS --gross_net_income $GNI --population_density $POP_DENSITY --monthly_temperature $MONTHLY_TEMP --mobility_data $MOBILITY_DATA --cultural_descriptors $CULTURAL_DESCRIPTORS --outdir $OUTDIR
