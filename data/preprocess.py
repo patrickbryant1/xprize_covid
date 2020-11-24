@@ -29,6 +29,8 @@ parser.add_argument('--population_density', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to country population_density.')
 parser.add_argument('--monthly_temperature', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to country monthly_temperature.')
+parser.add_argument('--mobility_data', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to Google mobility data.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -106,6 +108,39 @@ def identify_case_death_lag(cases,deaths,region,manual_adjust_necessary):
     scaling = cases[si-delay-1]/deaths[si]
     return death_maxi,case_maxi,delay,scaling,manual_adjust_necessary
 
+def smooth_mobility(sel_mobility,whole_country_data):
+    '''Smooth the mobility data
+    '''
+    #Mobility sectors
+    mobility_sectors = ['retail_and_recreation_percent_change_from_baseline',
+   'grocery_and_pharmacy_percent_change_from_baseline',
+   'parks_percent_change_from_baseline',
+   'transit_stations_percent_change_from_baseline',
+   'workplaces_percent_change_from_baseline',
+   'residential_percent_change_from_baseline']
+    #Construct a 1-week sliding average to smooth the mobility data
+    for sector in mobility_sectors:
+        data = np.array(sel_mobility[sector])
+        y = np.zeros(len(sel_mobility))
+        for i in range(7,len(data)+1):
+            #Check that there are no NaNs
+            if np.isnan(data[i-7:i]).any():
+                #If there are NaNs, loop through and replace with value from prev date
+                for i_nan in range(i-7,i):
+                    if np.isnan(data[i_nan]):
+                        data[i_nan]=data[i_nan-1]
+            y[i-1]=np.average(data[i-7:i])
+        y[0:6] = y[6]
+        sel_mobility[sector]=y
+
+
+    #Join on date
+    joined = pd.merge(whole_country_data,sel_mobility,left_on='Date',right_on='date',how='left')
+    #Replace the nan with the closest available data
+    for sector in mobility_sectors:
+        data = np.array(joined[sector])
+        pdb.set_trace()
+    return sel_mobility
 
 def format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,scale,outname):
     '''Plot and format the plot
@@ -131,7 +166,7 @@ def format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay,s
     plt.savefig(outname, format='png', dpi=300)
     plt.close()
 
-def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations, gross_net_income,population_density,monthly_temperature):
+def parse_regions(oxford_data, us_state_populations, regional_populations, country_populations, gross_net_income,population_density,monthly_temperature,mobility_data):
     '''Parse and encode all regions
     The ConfirmedCases column reports the total number of cases since
     the beginning of the epidemic for each country,region and day.
@@ -162,12 +197,12 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     ci = 0 #Country index
 
 
-
-
+    #Go through all countries and sub regions
     for cc in country_codes:
-
         ri = 0 #Region index
         country_data = oxford_data[oxford_data['CountryCode']==cc]
+        #Get country total
+        whole_country_data = country_data[country_data['RegionCode'].isna()]
         #Set index
         oxford_data.at[country_data.index,'Country_index']=ci
         #Get population
@@ -193,10 +228,11 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
             month_av =  np.round(np.average(country_temp[country_temp['Statistics']==tkey]['Temperature - (Celsius)']),1)
             oxford_data.at[country_data[country_data['Month']==temp_keys[tkey]].index,'monthly_temperature']=month_av
 
-
-
-        #Get country total
-        whole_country_data = country_data[country_data['RegionCode'].isna()]
+        #Get mobility
+        country_mobility = mobility_data[mobility_data['country_region']==country_data['CountryName'].unique()[0]]
+        whole_country_mobility = country_mobility[country_mobility['sub_region_1'].isna()] #Select whole country
+        #Smooth mobility
+        smoothed_mobility = smooth_mobility(whole_country_mobility,whole_country_data)
         #Smooth cases and deaths
         cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
 
@@ -313,10 +349,10 @@ country_populations = pd.read_csv(args.country_populations[0])
 gross_net_income = pd.read_csv(args.gross_net_income[0])
 population_density = pd.read_csv(args.population_density[0])
 monthly_temperature = pd.read_csv(args.monthly_temperature[0])
+mobility_data = pd.read_csv(args.mobility_data[0],parse_dates=['date'])
 outdir = args.outdir[0]
 
-
-oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,gross_net_income,population_density,monthly_temperature)
+oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,gross_net_income,population_density,monthly_temperature,mobility_data)
 #Save the adjusted data
 oxford_data.to_csv(outdir+'adjusted_data.csv')
 #Get the dates for training

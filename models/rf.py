@@ -153,7 +153,6 @@ for i in range(y_train.shape[1]):
     corrs.append(R)
     errors.append(av_er)
     stds.append(std)
-    pdb.set_trace()
     coefs.append(reg.feature_importances_)
     #Plot
     plt.scatter(pred,y_test[:,i],s=1)
@@ -187,7 +186,7 @@ plt.tight_layout()
 plt.savefig(outdir+'last7.png',format='png',dpi=300)
 plt.close()
 remainder=coefs[:,:-7]
-remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind,features
+remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind - this goes from -21 to 1,features
 remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
 'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
 'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature']
@@ -197,7 +196,7 @@ for i in range(remainder.shape[2]):
     plt.xlabel('Previous day')
     plt.ylabel('Future day')
     plt.xticks(range(21),labels=range(1,22))
-    plt.yticks(range(21),labels=range(1,22))
+    plt.yticks(range(21),labels=range(-21,0,1))
     plt.colorbar()
     plt.title(remainder_names[i])
     plt.tight_layout()
