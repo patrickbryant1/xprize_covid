@@ -6,6 +6,7 @@ import argparse
 import sys
 import os
 import numpy as np
+import random
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
@@ -23,10 +24,16 @@ parser = argparse.ArgumentParser(description = '''A multiple Quantile regression
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
-
+#parser.add_argument('--param_combo', nargs=1, type= int, default=sys.stdin, help = 'Parameter combo.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
+#######FUNCTIONS#######
+def seed_everything(seed=2020):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
 
 def get_features(adjusted_data):
     '''Get the selected features
@@ -124,10 +131,45 @@ def split_for_training(sel):
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations)
 
+#####LOSSES AND SCORES#####
+def score(y_true, y_pred):
+    tf.dtypes.cast(y_true, tf.float32)
+    tf.dtypes.cast(y_pred, tf.float32)
+    sigma = y_pred[:, 2] - y_pred[:, 0]
+    #Make sure all y-pred are non-negative
+    delta = tf.abs(y_true[:, 0] - y_pred[:, 1])
 
-def build_net():
+    return K.mean(delta)
+#============================#
+def qloss(y_true, y_pred):
+    # Pinball loss for multiple quantiles
+    qs = [0.2, 0.50, 0.8]
+    q = tf.constant(np.array([qs]), dtype=tf.float32)
+    e = y_true - y_pred
+    v = tf.maximum(q*e, (q-1)*e)
+    return K.mean(v)
+#=============================#
+def mloss(_lambda):
+    def loss(y_true, y_pred):
+        return _lambda * qloss(y_true, y_pred) + (1 - _lambda)*score(y_true, y_pred)
+    return loss
+
+#####BUILD NET#####
+def build_net(n1,n2,input_dim):
     '''Build the net using Keras
     '''
+    z = L.Input((input_dim,), name="Patient")
+    x = L.Dense(n1, activation="relu", name="d1")(z)
+    x = L.Dense(n2, activation="relu", name="d2")(x)
+    p1 = L.Dense(3, activation="linear", name="p1")(x)
+    p2 = L.Dense(3, activation="relu", name="p2")(x)
+    preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
+                     name="preds")([p1, p2])
+
+    model = M.Model(z, preds, name="CNN")
+    model.compile(loss=mloss(0.8), optimizer=tf.keras.optimizers.Adam(lr=0.1, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False), metrics=[score])
+    return model
+
 #####MAIN#####
 #Set font size
 matplotlib.rcParams.update({'font.size': 7})
@@ -150,7 +192,6 @@ try:
     X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
     y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
     populations = np.load(outdir+'populations.npy', allow_pickle=True)
-    pdb.set_trace()
 except:
     sel=get_features(adjusted_data)
     X_train,y_train,X_test,y_test,populations = split_for_training(sel)
@@ -161,94 +202,11 @@ except:
     np.save(outdir+'y_test.npy',y_test)
     np.save(outdir+'populations.npy',populations)
 
-corrs = []
-errors = []
-stds = []
-preds = []
-coefs = []
-for i in range(y_train.shape[1]):
-    reg = LinearRegression().fit(X_train, y_train[:,i])
-    pred = reg.predict(X_test)
-    #No negative predictions are allowed
-    pred[pred<0]=0
-    preds.append(pred)
-    av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
-    std = np.std(np.absolute(pred-y_test[:,i])/populations)
-    print('Error',av_er, 'Std',std)
-    R,p = pearsonr(pred,y_test[:,i])
-    #Save
-    corrs.append(R)
-    errors.append(av_er)
-    stds.append(std)
-    coefs.append(reg.coef_)
-    #Plot
-    plt.scatter(pred,y_test[:,i],s=1)
-    plt.title(str(i))
-    plt.xlabel('Predicted')
-    plt.xlabel('True')
-    plt.savefig(outdir+str(i)+'.png',format='png')
-    plt.close()
+#Seed
+seed_everything(42) #The answer it is
 
+#Make net
 
-
-preds = np.array(preds)
-#Plot a test case
-plt.plot(range(1,22),preds[:,0],label='pred')
-plt.plot(range(1,22),y_test[0,:],label='true')
-plt.savefig(outdir+'pred_and_true_sel.png',format='png')
-plt.close()
-
-#Look at coefs
-coefs = np.array(coefs)
-
-#The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
-#--> get the last features, then divide into 21 portions
-
-single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
-single_features=coefs[:,-len(single_feature_names):]
-plt.imshow(single_features)
-plt.yticks(range(21),labels=range(1,22))
-plt.xticks(range(len(single_feature_names)),labels=single_feature_names,rotation='vertical')
-plt.colorbar()
-plt.tight_layout()
-plt.savefig(outdir+'single_features.png',format='png',dpi=300)
-plt.close()
-remainder=coefs[:,:-len(single_feature_names)]
-remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind - this goes from -21 to 1,features
-remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
-'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
-'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
-
-for i in range(remainder.shape[2]):
-    plt.imshow(remainder[:,:,i])
-    #The first axis will end up horizontal, the second vertical
-    plt.xlabel('Future day')
-    plt.ylabel('Previous day')
-
-    plt.xticks(range(21),labels=range(1,22))
-    plt.yticks(range(21),labels=range(-21,0,1))
-    plt.colorbar()
-    plt.title('Days ahead',remainder_names[i]+1)
-    plt.tight_layout()
-    plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
-    plt.close()
-
-#Plot average error per day with std
-errors = np.array(errors)
-std = np.array(stds)
-plt.plot(range(1,22),errors,color='b')
-plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
-plt.title('Average error with std')
-plt.xlabel('Days in the future')
-plt.ylabel('Error per 100000')
-plt.savefig(outdir+'lr_av_error.png',format='png')
-plt.close()
-
-#Plot correlation
-corrs = np.array(corrs )
-plt.plot(range(1,22),corrs ,color='b')
-plt.title('Pearson R')
-plt.xlabel('Days in the future')
-plt.ylabel('PCC')
-plt.savefig(outdir+'PCC.png',format='png')
-plt.close()
+net = build_net(100,10,X_train.shape[1])
+print(net.summary())
+pdb.set_trace()
