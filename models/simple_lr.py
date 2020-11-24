@@ -48,11 +48,12 @@ def get_features(adjusted_data):
                         'gross_net_income',
                         'population_density',
                         'monthly_temperature',
-                        'retail_and_recreation_percent_change_from_baseline',
-                        'grocery_and_pharmacy_percent_change_from_baseline',
-                        'transit_stations_percent_change_from_baseline',
-                        'workplaces_percent_change_from_baseline',
-                        'residential_percent_change_from_baseline'
+                        'retail_and_recreation',
+                        'grocery_and_pharmacy',
+                        'parks',
+                        'transit_stations',
+                        'workplaces',
+                        'residential',
                         'population']
 
     sel = adjusted_data[selected_features]
@@ -96,8 +97,11 @@ def split_for_training(sel):
 
             #Loop through and get the first 21 days of data
             for di in range(len(country_region_data)-41):
+                #Get change over the past 21 days
                 xi = np.array(country_region_data.loc[di:di+20]).flatten()
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]))
+                change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
+                #Add
+                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,population]))
                 y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
 
             #Get the last 3 weeks as test
@@ -149,6 +153,8 @@ coefs = []
 for i in range(y_train.shape[1]):
     reg = LinearRegression().fit(X_train, y_train[:,i])
     pred = reg.predict(X_test)
+    #No negative predictions are allowed
+    pred[pred<0]=0
     preds.append(pred)
     av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
     std = np.std(np.absolute(pred-y_test[:,i])/populations)
@@ -179,23 +185,22 @@ plt.close()
 #Look at coefs
 coefs = np.array(coefs)
 
-#The first are repeats 21 times, then these 7 follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
-#--> get the last 7, then divide into 21 portions
-last7=coefs[:,-7:]
-last7_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','population']
-plt.imshow(last7)
+#The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
+#--> get the last features, then divide into 21 portions
+single_features=coefs[:,-8:]
+single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','population']
+plt.imshow(single_features)
 plt.yticks(range(21),labels=range(1,22))
-plt.xticks(range(7),labels=last7_names,rotation='vertical')
+plt.xticks(range(8),labels=single_feature_names,rotation='vertical')
 plt.colorbar()
 plt.tight_layout()
-plt.savefig(outdir+'last7.png',format='png',dpi=300)
+plt.savefig(outdir+'single_features.png',format='png',dpi=300)
 plt.close()
-remainder=coefs[:,:-7]
+remainder=coefs[:,:-8]
 remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind - this goes from -21 to 1,features
 remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
 'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
-'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature','retail_and_recreation_percent_change_from_baseline','grocery_and_pharmacy_percent_change_from_baseline',
-'transit_stations_percent_change_from_baseline', 'workplaces_percent_change_from_baseline', 'residential_percent_change_from_baseline']
+'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
 
 for i in range(remainder.shape[2]):
     plt.imshow(remainder[:,:,i])
@@ -211,10 +216,6 @@ for i in range(remainder.shape[2]):
     plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
     plt.close()
 
-
-
-
-pdb.set_trace()
 #Plot average error per day with std
 errors = np.array(errors)
 std = np.array(stds)
@@ -224,4 +225,13 @@ plt.title('Average error with std')
 plt.xlabel('Days in the future')
 plt.ylabel('Error per 100000')
 plt.savefig(outdir+'lr_av_error.png',format='png')
+plt.close()
+
+#Plot correlation
+corrs = np.array(corrs )
+plt.plot(range(1,22),corrs ,color='b')
+plt.title('Pearson R')
+plt.xlabel('Days in the future')
+plt.ylabel('PCC')
+plt.savefig(outdir+'PCC.png',format='png')
 plt.close()
