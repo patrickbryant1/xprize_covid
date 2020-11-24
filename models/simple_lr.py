@@ -48,6 +48,11 @@ def get_features(adjusted_data):
                         'gross_net_income',
                         'population_density',
                         'monthly_temperature',
+                        'retail_and_recreation_percent_change_from_baseline',
+                        'grocery_and_pharmacy_percent_change_from_baseline',
+                        'transit_stations_percent_change_from_baseline',
+                        'workplaces_percent_change_from_baseline',
+                        'residential_percent_change_from_baseline'
                         'population']
 
     sel = adjusted_data[selected_features]
@@ -189,7 +194,8 @@ remainder=coefs[:,:-7]
 remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind - this goes from -21 to 1,features
 remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
 'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
-'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature']
+'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature','retail_and_recreation_percent_change_from_baseline','grocery_and_pharmacy_percent_change_from_baseline',
+'transit_stations_percent_change_from_baseline', 'workplaces_percent_change_from_baseline', 'residential_percent_change_from_baseline']
 
 for i in range(remainder.shape[2]):
     plt.imshow(remainder[:,:,i])
