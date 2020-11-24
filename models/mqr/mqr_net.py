@@ -11,6 +11,8 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 
+from sklearn.model_selection import KFold
+
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
@@ -205,8 +207,27 @@ except:
 #Seed
 seed_everything(42) #The answer it is
 
+#Get net parameters
+BATCH_SIZE=32
+EPOCHS=200
 #Make net
-
 net = build_net(100,10,X_train.shape[1])
 print(net.summary())
+#KFOLD
+NFOLD = 5
+kf = KFold(n_splits=NFOLD)
+fold=0
+
+days_ahead = np.array([list(np.arange(1,22))*X_train.shape[0]]).T
+X_train = np.repeat(X_train,[21],axis=0)
+X_train=np.append(X_train,days_ahead,axis=1)
+y_train=y_train.flatten()
+for tr_idx, val_idx in kf.split(X_train):
+    fold+=1
+    print("FOLD", fold)
+    net = build_net(100,10,X_train.shape[1])
+    pdb.set_trace()
+    net.fit(X_train[tr_idx], y_train[tr_idx], batch_size=BATCH_SIZE, epochs=EPOCHS,
+            validation_data=(X_train[val_idx], y_train[val_idx]), verbose=1)
+    pdb.set_trace()
 pdb.set_trace()
