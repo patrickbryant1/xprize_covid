@@ -131,11 +131,8 @@ def smooth_mobility(sel_mobility,whole_country_data):
                         data[i_nan]=data[i_nan-1]
             y[i-1]=np.average(data[i-7:i])
         y[0:6] = y[6]
-        try:
-            sel_mobility.loc[sel_mobility.index,sector]=y
-        except:
-            print('line 137')
-            pdb.set_trace
+        sel_mobility.loc[sel_mobility.index,sector]=y
+
 
 
     #Join on date
@@ -153,7 +150,16 @@ def smooth_mobility(sel_mobility,whole_country_data):
         joined.at[before_mob,sector]=joined[joined['Date']==mob_start][sector].values[0]
         #After mob data
         joined.at[after_mob,sector]=joined[joined['Date']==mob_end][sector].values[0]
-
+        #Check if still NaNs
+        if len(joined[joined[sector].isna()])>1:
+            nan_ind = joined[joined[sector].isna()].index
+            min_nan = min(nan_ind)
+            max_nan = max(nan_ind)
+            mid_point = int(min_nan+(max_nan-min_nan)/2)
+            #Set first half
+            joined.at[min_nan:mid_point,sector] = joined.loc[min_nan-1,sector]
+            #Set second half
+            joined.at[mid_point:max_nan,sector] = joined.loc[max_nan+1,sector]
 
     return joined
 
@@ -383,7 +389,7 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
 
     #See what countries lack mobility data
     print('These regions lack mobility data\n',oxford_data[oxford_data['residential'].isna()]['CountryName'].unique())
-    pdb.set_trace()
+
     return oxford_data
 
 #####MAIN#####
