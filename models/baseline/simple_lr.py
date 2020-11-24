@@ -142,6 +142,7 @@ try:
     X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
     y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
     populations = np.load(outdir+'populations.npy', allow_pickle=True)
+    pdb.set_trace()
 except:
     sel=get_features(adjusted_data)
     X_train,y_train,X_test,y_test,populations = split_for_training(sel)
@@ -204,7 +205,7 @@ plt.colorbar()
 plt.tight_layout()
 plt.savefig(outdir+'single_features.png',format='png',dpi=300)
 plt.close()
-remainder=coefs[:,:-8]
+remainder=coefs[:,:-len(single_feature_names)]
 remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind - this goes from -21 to 1,features
 remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
 'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
@@ -219,7 +220,7 @@ for i in range(remainder.shape[2]):
     plt.xticks(range(21),labels=range(1,22))
     plt.yticks(range(21),labels=range(-21,0,1))
     plt.colorbar()
-    plt.title(remainder_names[i])
+    plt.title('Days ahead',remainder_names[i]+1)
     plt.tight_layout()
     plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
     plt.close()
