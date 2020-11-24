@@ -142,10 +142,13 @@ def smooth_mobility(sel_mobility,whole_country_data):
     before_mob = joined[joined['Date']<mob_start].index
     after_mob = joined[joined['Date']>mob_end].index
     for sector in mobility_sectors:
-        #Before mob data
-        joined.at[before_mob,sector]=joined[joined['Date']==mob_start][sector].values[0]
-        #After mob data
-        joined.at[after_mob,sector]=joined[joined['Date']==mob_end][sector].values[0]
+        try:
+            #Before mob data
+            joined.at[before_mob,sector]=joined[joined['Date']==mob_start][sector].values[0]
+            #After mob data
+            joined.at[after_mob,sector]=joined[joined['Date']==mob_end][sector].values[0]
+        except:
+            pdb.set_trace()
 
     return joined
 
@@ -195,11 +198,12 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     temp_keys = {' Jan Average':1,' Feb Average':2,' Mar Average':3,' Apr Average':4,' May Average':5,' Jun Average':6,
                 ' Jul Average':7,' Aug Average':8,' Sep Average':9,' Oct Average':10,' Nov Average':11, ' Dec Average':12}
     #Mobility sectors
-    mobility_sectors = ['retail_and_recreation_percent_change_from_baseline', 'grocery_and_pharmacy_percent_change_from_baseline', 'parks_percent_change_from_baseline',
-                        'transit_stations_percent_change_from_baseline', 'workplaces_percent_change_from_baseline', 'residential_percent_change_from_baseline']
+    mobility_sectors = ['retail_and_recreation', 'grocery_and_pharmacy', 'parks',
+                        'transit_stations', 'workplaces', 'residential']
     #Add sector
     for sector in mobility_sectors:
         oxford_data[sector]=0
+
     oxford_data['population']=0
     country_codes = oxford_data['CountryCode'].unique()
     no_adjust_regions = ['AFG','CAF','CHN','CHL','CIV','COD','COG','COM','GAB','DZA',
@@ -248,8 +252,8 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         smoothed_mobility = smooth_mobility(whole_country_mobility,whole_country_data)
         #Add mobility
         for sector in mobility_sectors:
-            oxford_data.at[whole_country_data.index,sector]=smoothed_mobility[sector]
-        pdb.set_trace()
+            oxford_data.at[whole_country_data.index,sector]=smoothed_mobility[sector+'_percent_change_from_baseline']
+        
         #Smooth cases and deaths
         cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
 
