@@ -131,24 +131,29 @@ def smooth_mobility(sel_mobility,whole_country_data):
                         data[i_nan]=data[i_nan-1]
             y[i-1]=np.average(data[i-7:i])
         y[0:6] = y[6]
-        sel_mobility[sector]=y
+        try:
+            sel_mobility.loc[sel_mobility.index,sector]=y
+        except:
+            print('line 137')
+            pdb.set_trace
 
 
     #Join on date
     joined = pd.merge(whole_country_data,sel_mobility,left_on='Date',right_on='date',how='left')
+    #Check that shape remains. There are problems with date joining
+    if len(joined)!=len(whole_country_data):
+        pdb.set_trace()
     mob_start = min(sel_mobility['date'])
     mob_end = max(sel_mobility['date'])
     #Replace the nan with the closest available data
     before_mob = joined[joined['Date']<mob_start].index
     after_mob = joined[joined['Date']>mob_end].index
     for sector in mobility_sectors:
-        try:
-            #Before mob data
-            joined.at[before_mob,sector]=joined[joined['Date']==mob_start][sector].values[0]
-            #After mob data
-            joined.at[after_mob,sector]=joined[joined['Date']==mob_end][sector].values[0]
-        except:
-            pdb.set_trace()
+        #Before mob data
+        joined.at[before_mob,sector]=joined[joined['Date']==mob_start][sector].values[0]
+        #After mob data
+        joined.at[after_mob,sector]=joined[joined['Date']==mob_end][sector].values[0]
+
 
     return joined
 
@@ -248,14 +253,21 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         #Get mobility
         country_mobility = mobility_data[mobility_data['country_region']==country_data['CountryName'].unique()[0]]
         whole_country_mobility = country_mobility[country_mobility['sub_region_1'].isna()] #Select whole country
-        #Smooth mobility
-        smoothed_mobility = smooth_mobility(whole_country_mobility,whole_country_data)
-        #Add mobility
-        for sector in mobility_sectors:
-            oxford_data.at[whole_country_data.index,sector]=smoothed_mobility[sector+'_percent_change_from_baseline']
-        
-        #Smooth cases and deaths
-        cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
+        #For some countries the data is duplicated
+        whole_country_mobility=whole_country_mobility.loc[whole_country_mobility['date'].drop_duplicates().index]
+
+        if len(whole_country_mobility)<1:
+            print('No mobility for', country_data['CountryName'].unique()[0])
+        else:
+            #Smooth mobility
+            smoothed_mobility = smooth_mobility(whole_country_mobility,whole_country_data)
+            #Add mobility
+            for sector in mobility_sectors:
+                #Duplicates have to be dropped since sometimes double dates are added
+                oxford_data.at[whole_country_data.index,sector]=np.array(smoothed_mobility.loc[smoothed_mobility.index,sector+'_percent_change_from_baseline'])
+
+            #Smooth cases and deaths
+            cases,deaths = smooth_cases_and_deaths(np.array(whole_country_data['ConfirmedCases']),np.array(whole_country_data['ConfirmedDeaths']))
 
         if max(deaths)<0.1:
             print('Less than 1 death for',cc)
@@ -338,11 +350,27 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
                     oxford_data.at[country_region_data.index,'population']=regional_populations[regional_populations['Region Code']==region]['2019 population'].values[0]
                 else:
                     region_name = country_region_data['RegionName'].unique()[0]
-                    try:
-                        oxford_data.at[country_region_data.index,'population']=us_state_populations[us_state_populations['State']==region_name]['Population'].values[0]
-                    except:
-                        pdb.set_trace()
+                    oxford_data.at[country_region_data.index,'population']=us_state_populations[us_state_populations['State']==region_name]['Population'].values[0]
 
+
+                #Get mobility for subregion
+                country_region_mobility = country_mobility[(country_mobility['sub_region_1']==country_region_data['RegionName'].unique()[0]) & (country_mobility['sub_region_2'].isna())] #Select country region
+                if len(country_region_mobility)<1:
+                    print('No mobility for', country_region_data['RegionName'].unique()[0])
+                    print('Setting regional mobility to country mobility')
+                    #Smooth mobility
+                    smoothed_mobility = smooth_mobility(whole_country_mobility,country_region_data)
+                    for sector in mobility_sectors:
+                        oxford_data.at[country_region_data.index,sector]=np.array(smoothed_mobility[sector+'_percent_change_from_baseline'])
+                else:
+                    #Smooth mobility
+                    smoothed_mobility = smooth_mobility(country_region_mobility,country_region_data)
+                    #Add mobility
+                    for sector in mobility_sectors:
+                        try:
+                            oxford_data.at[country_region_data.index,sector]=np.array(smoothed_mobility[sector+'_percent_change_from_baseline'])
+                        except:
+                            pdb.set_trace()
                 #if country_region_data['RegionName'] in us_state_populations
                 #Plot
                 #format_plot(region,rescaled_cases, case_maxi,cases,death_maxi,deaths,delay, 'normal',outdir+'plots/'+cc+'_'+region+'.png')
@@ -352,6 +380,10 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         ci+=1
         plt.close()
 
+
+    #See what countries lack mobility data
+    print('These regions lack mobility data\n',oxford_data[oxford_data['residential'].isna()]['CountryName'].unique())
+    pdb.set_trace()
     return oxford_data
 
 #####MAIN#####
