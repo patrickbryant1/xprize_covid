@@ -406,10 +406,6 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         ci+=1
         plt.close()
 
-
-    #See what countries lack mobility data
-    print('These regions lack mobility data\n',oxford_data[oxford_data['residential'].isna()]['CountryName'].unique())
-
     return oxford_data
 
 #####MAIN#####

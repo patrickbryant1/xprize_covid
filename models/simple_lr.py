@@ -54,6 +54,7 @@ def get_features(adjusted_data):
                         'transit_stations',
                         'workplaces',
                         'residential',
+                        'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
                         'population']
 
     sel = adjusted_data[selected_features]
@@ -88,8 +89,14 @@ def split_for_training(sel):
             case_death_delay = country_region_data.loc[0,'case_death_delay']
             gross_net_income = country_region_data.loc[0,'gross_net_income']
             population_density = country_region_data.loc[0,'population_density']
+            pdi = country_region_data.loc[0,'pdi'] #Power distance
+            idv = country_region_data.loc[0, 'idv'] #Individualism
+            mas = country_region_data.loc[0,'mas'] #Masculinity
+            uai = country_region_data.loc[0,'uai'] #Uncertainty
+            ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
+            ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
             population = country_region_data.loc[0,'population']
-            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','population'})
+            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population'})
 
             #Normalize the cases by 100'000 population
             country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
@@ -101,7 +108,7 @@ def split_for_training(sel):
                 xi = np.array(country_region_data.loc[di:di+20]).flatten()
                 change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,population]))
+                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
                 y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
 
             #Get the last 3 weeks as test
@@ -187,11 +194,12 @@ coefs = np.array(coefs)
 
 #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
 #--> get the last features, then divide into 21 portions
-single_features=coefs[:,-8:]
-single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','population']
+
+single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
+single_features=coefs[:,-len(single_feature_names):]
 plt.imshow(single_features)
 plt.yticks(range(21),labels=range(1,22))
-plt.xticks(range(8),labels=single_feature_names,rotation='vertical')
+plt.xticks(range(len(single_feature_names)),labels=single_feature_names,rotation='vertical')
 plt.colorbar()
 plt.tight_layout()
 plt.savefig(outdir+'single_features.png',format='png',dpi=300)
