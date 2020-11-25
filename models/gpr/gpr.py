@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-from sklearn import gaussian_process
-from sklearn.gaussian_process.kernels import Matern, WhiteKernel, ConstantKernel
+import pymc3 as pm
+import theano.tensor as tt
 from scipy.stats import pearsonr
 from scipy import stats
 import numpy as np
@@ -141,6 +141,111 @@ def split_for_training(sel):
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
 
+def evaluate():
+    '''Evaluate the model
+    '''
+    #Evaluate the test cases
+    for ri in range(len(regions)):
+        #Plot
+        region_error = np.average(preds[:,ri]-y_test[ri,:])
+        region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
+        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
+        plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nError:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
+        plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
+        plt.legend()
+        plt.close()
+        print(regions[i],region_corr)
+
+    pdb.set_trace()
+
+    #Look at coefs
+    coefs = np.array(coefs)
+
+    #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
+    #--> get the last features, then divide into 21 portions
+
+    single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
+    single_features=coefs[:,-len(single_feature_names):]
+    plt.imshow(single_features)
+    plt.yticks(range(21),labels=range(1,22))
+    plt.xticks(range(len(single_feature_names)),labels=single_feature_names,rotation='vertical')
+    plt.colorbar()
+    plt.tight_layout()
+    plt.savefig(outdir+'single_features.png',format='png',dpi=300)
+    plt.close()
+    remainder=coefs[:,:-len(single_feature_names)]
+    remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind - this goes from -21 to 1,features
+    remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
+    'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
+    'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
+
+    for i in range(remainder.shape[2]):
+        plt.imshow(remainder[:,:,i])
+        #The first axis will end up horizontal, the second vertical
+        plt.xlabel('Future day')
+        plt.ylabel('Previous day')
+
+        plt.xticks(range(21),labels=range(1,22))
+        plt.yticks(range(21),labels=range(-21,0,1))
+        plt.colorbar()
+        plt.title('Days ahead',remainder_names[i]+1)
+        plt.tight_layout()
+        plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
+        plt.close()
+
+    #Plot average error per day with std
+    errors = np.array(errors)
+    std = np.array(stds)
+    plt.plot(range(1,22),errors,color='b')
+    plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
+    plt.title('Average error with std')
+    plt.xlabel('Days in the future')
+    plt.ylabel('Error per 100000')
+    plt.savefig(outdir+'lr_av_error.png',format='png')
+    plt.close()
+
+    #Plot correlation
+    corrs = np.array(corrs )
+    plt.plot(range(1,22),corrs ,color='b')
+    plt.title('Pearson R')
+    plt.xlabel('Days in the future')
+    plt.ylabel('PCC')
+    plt.savefig(outdir+'PCC.png',format='png')
+    plt.close()
+
+def get_gpr_model(X_train,y_train):
+    '''Create a GPR model in pymc3
+    '''
+
+    with pm.Model() as gp_fit:
+        ρ = pm.Gamma('ρ', 1, 1)
+        η = pm.Gamma('η', 1, 1)
+        K = η * pm.gp.cov.Matern32(1, ρ)
+
+    with gp_fit:
+        M = pm.gp.mean.Zero()
+        σ = pm.HalfCauchy('σ', 2.5)
+    '''
+    The Gaussian process model is encapsulated within the GP class,
+    parameterized by the mean function, covariance function, and observation
+    error specified above. Since the outcomes of the GP have been observed, we
+    provide that data to the instance of GP in the observed argument as a dictionary.
+    These are fed to the underlying multivariate normal likelihood.
+    '''
+    with gp_fit:
+        pred = pm.gp.GP('y_obs', mean_func=M, cov_func=K, sigma=σ, observed={'X':X_train, 'Y':y_train})
+
+    '''
+    The sample function called inside the Model context fits the model using MCMC sampling.
+    By default, PyMC3 uses an auto-tuning version of HMC called the No U-turn Sampler (NUTS)
+    that picks appropriate values for the path length and step size parameters that we saw in
+    GPflow’s sample calls. Additionally, to initialize the sampler to reasonable starting
+    parameter values, a variational inference algorithm is run before NUTS,
+    to yield approximate posterior mean values for all the parameters.
+    '''
+    pdb.set_trace()
+    return pred
 #####MAIN#####
 #Set font size
 matplotlib.rcParams.update({'font.size': 7})
@@ -183,18 +288,11 @@ preds = []
 pred_sigmas = []
 coefs = []
 for i in range(y_train.shape[1]):
-    #Define the Kernel
-    kernel = ConstantKernel() + Matern(length_scale=2, nu=3/2) + WhiteKernel(noise_level=1)
-    #GP
-    gp = gaussian_process.GaussianProcessRegressor(kernel=kernel)
-    gp.fit(X_train, y_train[:,i])
-
-    pred, sigma = gp.predict(X_test, return_std=True)
-    pdb.set_trace()
+    #Fir gpr
+    pred = get_gpr_model(X_train, y_train[:,i])
     #No negative predictions are allowed
     pred[pred<0]=0
     preds.append(pred)
-    pred_sigmas.append(sigma)
     av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
     std = np.std(np.absolute(pred-y_test[:,i])/populations)
     print('Error',av_er, 'Std',std)
@@ -204,84 +302,8 @@ for i in range(y_train.shape[1]):
     errors.append(av_er)
     stds.append(std)
     coefs.append(reg.coef_)
-    #Plot
-    plt.scatter(pred,y_test[:,i],s=1)
-    plt.title(str(i))
-    plt.xlabel('Predicted')
-    plt.xlabel('True')
-    plt.savefig(outdir+str(i)+'.png',format='png')
-    plt.close()
+
 
 
 
 preds = np.array(preds)
-
-#Evaluate the test cases
-for ri in range(len(regions)):
-    #Plot
-    region_error = np.average(preds[:,ri]-y_test[ri,:])
-    region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
-    plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-    plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-    plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nError:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
-    plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
-    plt.legend()
-    plt.close()
-    print(regions[i],region_corr)
-
-pdb.set_trace()
-
-#Look at coefs
-coefs = np.array(coefs)
-
-#The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
-#--> get the last features, then divide into 21 portions
-
-single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
-single_features=coefs[:,-len(single_feature_names):]
-plt.imshow(single_features)
-plt.yticks(range(21),labels=range(1,22))
-plt.xticks(range(len(single_feature_names)),labels=single_feature_names,rotation='vertical')
-plt.colorbar()
-plt.tight_layout()
-plt.savefig(outdir+'single_features.png',format='png',dpi=300)
-plt.close()
-remainder=coefs[:,:-len(single_feature_names)]
-remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind - this goes from -21 to 1,features
-remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
-'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
-'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
-
-for i in range(remainder.shape[2]):
-    plt.imshow(remainder[:,:,i])
-    #The first axis will end up horizontal, the second vertical
-    plt.xlabel('Future day')
-    plt.ylabel('Previous day')
-
-    plt.xticks(range(21),labels=range(1,22))
-    plt.yticks(range(21),labels=range(-21,0,1))
-    plt.colorbar()
-    plt.title('Days ahead',remainder_names[i]+1)
-    plt.tight_layout()
-    plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
-    plt.close()
-
-#Plot average error per day with std
-errors = np.array(errors)
-std = np.array(stds)
-plt.plot(range(1,22),errors,color='b')
-plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
-plt.title('Average error with std')
-plt.xlabel('Days in the future')
-plt.ylabel('Error per 100000')
-plt.savefig(outdir+'lr_av_error.png',format='png')
-plt.close()
-
-#Plot correlation
-corrs = np.array(corrs )
-plt.plot(range(1,22),corrs ,color='b')
-plt.title('Pearson R')
-plt.xlabel('Days in the future')
-plt.ylabel('PCC')
-plt.savefig(outdir+'PCC.png',format='png')
-plt.close()
