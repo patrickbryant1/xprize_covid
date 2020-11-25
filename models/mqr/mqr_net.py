@@ -95,8 +95,6 @@ def split_for_training(sel):
         for ri in country_regions:
             country_region_data = country_data[country_data['Region_index']==ri]
             #Select data 14 days before 0 cases
-
-
             try:
                 si = max(0,country_region_data[country_region_data['cumulative_rescaled_cases']>0].index[0]-14)
                 country_region_data = country_region_data.loc[si:]

@@ -41,6 +41,8 @@ def get_features(adjusted_data):
                         'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
                         'Country_index',
                         'Region_index',
+                        'CountryName',
+                        'RegionName',
                         'rescaled_cases',
                         'cumulative_rescaled_cases',
                         'death_to_case_scale',
@@ -70,13 +72,21 @@ def split_for_training(sel):
     y_test = [] #Targets
     countries = sel['Country_index'].unique()
     populations = []
+    regions = []
     for ci in countries:
         country_data = sel[sel['Country_index']==ci]
         #Check regions
         country_regions = country_data['Region_index'].unique()
         for ri in country_regions:
             country_region_data = country_data[country_data['Region_index']==ri]
-            country_region_data = country_region_data[country_region_data['cumulative_rescaled_cases']>0]
+            #Select data 14 days before 0 cases
+            try:
+                si = max(0,country_region_data[country_region_data['cumulative_rescaled_cases']>0].index[0]-14)
+                country_region_data = country_region_data.loc[si:]
+            except:
+                print(len(country_region_data[country_region_data['cumulative_rescaled_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
+                continue
+
             country_region_data = country_region_data.reset_index()
 
             #Check if data
@@ -96,7 +106,14 @@ def split_for_training(sel):
             ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
             ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
             population = country_region_data.loc[0,'population']
-            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population'})
+            if region_index!=0:
+                regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
+            else:
+                regions.append(country_region_data.loc[0,'CountryName'])
+
+            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
+            'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
+             'mas', 'uai', 'ltowvs', 'ivr','population'})
 
             #Normalize the cases by 100'000 population
             country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
@@ -117,7 +134,7 @@ def split_for_training(sel):
             #Save population
             populations.append(population)
 
-    return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations)
+    return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
 
 #####MAIN#####
@@ -142,16 +159,18 @@ try:
     X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
     y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
     populations = np.load(outdir+'populations.npy', allow_pickle=True)
-    pdb.set_trace()
+    regions = np.load(outdir+'regions.npy', allow_pickle=True)
+
 except:
     sel=get_features(adjusted_data)
-    X_train,y_train,X_test,y_test,populations = split_for_training(sel)
+    X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel)
     #Save
     np.save(outdir+'X_train.npy',X_train)
     np.save(outdir+'y_train.npy',y_train)
     np.save(outdir+'X_test.npy',X_test)
     np.save(outdir+'y_test.npy',y_test)
     np.save(outdir+'populations.npy',populations)
+    np.save(outdir+'regions.npy',regions)
 
 corrs = []
 errors = []
@@ -184,11 +203,21 @@ for i in range(y_train.shape[1]):
 
 
 preds = np.array(preds)
-#Plot a test case
-plt.plot(range(1,22),preds[:,0],label='pred')
-plt.plot(range(1,22),y_test[0,:],label='true')
-plt.savefig(outdir+'pred_and_true_sel.png',format='png')
-plt.close()
+
+#Evaluate the test cases
+for ri in range(len(regions)):
+    #Plot
+    region_error = np.average(preds[:,ri]-y_test[ri,:])
+    region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
+    plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+    plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
+    plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nError:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
+    plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
+    plt.legend()
+    plt.close()
+    print(regions[i],region_corr)
+
+pdb.set_trace()
 
 #Look at coefs
 coefs = np.array(coefs)
