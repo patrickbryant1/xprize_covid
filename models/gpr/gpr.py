@@ -17,7 +17,7 @@ import numpy as np
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''Simple linear regression model.''')
+parser = argparse.ArgumentParser(description = '''Gaussian process regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
