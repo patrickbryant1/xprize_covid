@@ -218,33 +218,14 @@ def get_gpr_model(X_train,y_train):
     '''Create a GPR model in pymc3
     '''
 
-    with pm.Model() as gp_fit:
-        ρ = pm.Gamma('ρ', 1, 1)
-        η = pm.Gamma('η', 1, 1)
-        K = η * pm.gp.cov.Matern32(1, ρ)
+    with pm.Model() as model:
+        # Specify the covariance functions for each Xi
+        cov_func1 = pm.gp.cov.ExpQuad(1, ls=0.1)  # Must accept X1 without error
+        cov_func2 = pm.gp.cov.ExpQuad(1, ls=0.3)  # Must accept X2 without error
 
-    with gp_fit:
-        M = pm.gp.mean.Zero()
-        σ = pm.HalfCauchy('σ', 2.5)
-    '''
-    The Gaussian process model is encapsulated within the GP class,
-    parameterized by the mean function, covariance function, and observation
-    error specified above. Since the outcomes of the GP have been observed, we
-    provide that data to the instance of GP in the observed argument as a dictionary.
-    These are fed to the underlying multivariate normal likelihood.
-    '''
-    with gp_fit:
-        pred = pm.gp.GP('y_obs', mean_func=M, cov_func=K, sigma=σ, observed={'X':X_train, 'Y':y_train})
+        # Specify the GP.  The default mean function is `Zero`.
+        gp = pm.gp.LatentKron(cov_funcs=[cov_func1, cov_func2])
 
-    '''
-    The sample function called inside the Model context fits the model using MCMC sampling.
-    By default, PyMC3 uses an auto-tuning version of HMC called the No U-turn Sampler (NUTS)
-    that picks appropriate values for the path length and step size parameters that we saw in
-    GPflow’s sample calls. Additionally, to initialize the sampler to reasonable starting
-    parameter values, a variational inference algorithm is run before NUTS,
-    to yield approximate posterior mean values for all the parameters.
-    '''
-    pdb.set_trace()
     return pred
 #####MAIN#####
 #Set font size
