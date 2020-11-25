@@ -133,45 +133,65 @@ def split_for_training(sel):
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
+class DataGenerator(keras.utils.Sequence):
+    '''Generates data for Keras'''
+    def __init__(self, X_train_fold, y_train_fold, batch_size=1, shuffle=True):
+        'Initialization'
+        self.X_train_fold = X_train_fold
+        self.y_train_fold = y_train_fold
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.on_epoch_end()
+
+    def __len__(self):
+        'Denotes the number of batches per epoch'
+        return int(np.floor(len(self.X_train_fold) / self.batch_size))
+
+    def __getitem__(self, index):
+        'Generate one batch of data'
+        # Generate indexes of the batch
+        batch_indices = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
+        #domain_index = np.take(range((len(self.X_train_fold))),indexes)
+
+        # Generate data
+        X_batch, y_batch = self.__data_generation(batch_indices)
+
+        return X_batch, y_batch
+
+    def on_epoch_end(self): #Will be done at epoch 0 also
+        'Updates indexes after each epoch'
+        self.indexes = np.arange(len(self.X_train_fold))
+        np.random.shuffle(self.indexes)
+
+
+    def __data_generation(self, batch_indices):
+        'Generates data containing batch_size samples'
+
+        return self.X_train_fold[batch_indices],self.y_train_fold[batch_indices]
+
 
 #####LOSSES AND SCORES#####
-def score(y_true, y_pred):
-    tf.dtypes.cast(y_true, tf.float32)
-    tf.dtypes.cast(y_pred, tf.float32)
-    sigma = y_pred[:, 2] - y_pred[:, 0]
-    #Make sure all y-pred are non-negative
-    delta = tf.abs(y_true - y_pred[:, 1])
+def bin_loss(y_true, y_pred):
 
-    return K.mean(delta)
-#============================#
-def qloss(y_true, y_pred):
-    # Pinball loss for multiple quantiles
-    qs = [0.05, 0.50, 0.95]
-    q = tf.constant(np.array([qs]), dtype=tf.float32)
-    e = y_true - y_pred
-    v = tf.maximum(q*e, (q-1)*e)
-    return K.mean(v)
-#=============================#
-def mloss(_lambda):
-    def loss(y_true, y_pred):
-        return _lambda * qloss(y_true, y_pred) + (1 - _lambda)*score(y_true, y_pred)
+    g_loss = tf.keras.losses.mean_absolute_error(y_true, y_pred) #general, compare difference
+    kl_loss = tf.keras.losses.kullback_leibler_divergence(y_true, y_pred) #better than comparing to gaussian
+    sum_kl_loss = K.sum(kl_loss, axis =0)
+    sum_g_loss = K.sum(g_loss, axis =0)
+    #sum_g_loss = sum_g_loss*10 #This is basically a loss penalty
+    loss = sum_g_loss+sum_kl_loss
     return loss
 
 #####BUILD NET#####
 def build_net(n1,n2,input_dim):
     '''Build the net using Keras
     '''
-    z = L.Input((input_dim,), name="Patient")
-    x1 = L.LSTM(n1, activation="relu", name="d1")(z)
-    x2 = L.LSTM(n2, activation="relu", name="d2")(x1)
-    p1 = L.Dense(3, activation="linear", name="p1")(x2)
-    p2 = L.Dense(3, activation="relu", name="p2")(x2)
-    preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
-                     name="preds")([p1, p2])
-    #Ensure non-negative values
-    preds = K.abs(preds)
+    z = L.Input(input_dim, name="Patient")
+    x1 = L.LSTM(n1, activation="relu", name="d1", return_sequences=True)(z)
+    x2 = L.LSTM(n2, activation="relu", name="d2", return_sequences=True)(x1)
+
+    preds = L.Dense(1, activation="relu", name="p2")(x2)
     model = M.Model(z, preds, name="CNN")
-    model.compile(loss=mloss(0.8), optimizer=tf.keras.optimizers.Adam(lr=0.1, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False), metrics=[score])
+    model.compile(loss=bin_loss, optimizer=tf.keras.optimizers.Adam(lr=0.1, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False), metrics=['mae','kullback_leibler_divergence'])
     return model
 
 def test(net, X_test,y_test,populations,regions):
@@ -181,15 +201,6 @@ def test(net, X_test,y_test,populations,regions):
         preds_i = np.zeros((21,3))
         for day in range(21):
             preds_i[day]=net.predict(np.array([np.append(X_test[xi],day)]))
-
-        fig,ax = plt.subplots(figsize=(6/2.54,4/2.54))
-        plt.plot(np.arange(1,22),y_test[xi],color='g')
-        plt.plot(np.arange(1,22),preds_i[:,1],color='grey')
-        plt.fill_between(np.arange(1,22),preds_i[:,0],preds_i[:,2],color='grey',alpha=0.5)
-        plt.title(regions[xi]+'\n'+str(np.round(populations[xi]/1000000,2))+' millions')
-        plt.tight_layout()
-        plt.savefig(outdir+regions[xi]+'.png',dpi=300,format='png')
-        plt.close()
 
 #####MAIN#####
 #Set font size
@@ -234,7 +245,8 @@ EPOCHS=100
 n1=100 #Nodes layer 1
 n2=100 #Nodes layer 2
 #Make net
-net = build_net(n1,n2,X_train.shape[1]+1)
+
+net = build_net(n1,n2,X_train.shape[1:])
 print(net.summary())
 #KFOLD
 NFOLD = 5
@@ -244,7 +256,7 @@ fold=0
 for tr_idx, val_idx in kf.split(X_train):
     fold+=1
     print("FOLD", fold)
-    net = build_net(n1,n2,X_train.shape[1]+1)
+    net = build_net(n1,n2,X_train.shape[1:])
     #Data generation
     training_generator = DataGenerator(X_train[tr_idx], y_train[tr_idx], BATCH_SIZE)
     valid_generator = DataGenerator(X_train[val_idx], y_train[val_idx], BATCH_SIZE)
