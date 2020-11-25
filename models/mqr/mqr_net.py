@@ -198,26 +198,36 @@ class DataGenerator(keras.utils.Sequence):
         return self.X_train_fold[batch_indices],self.y_train_fold[batch_indices]
 
 #####LOSSES AND SCORES#####
-def score(y_true, y_pred):
-    tf.dtypes.cast(y_true, tf.float32)
-    tf.dtypes.cast(y_pred, tf.float32)
-    sigma = y_pred[:, 2] - y_pred[:, 0]
-    #Make sure all y-pred are non-negative
-    delta = tf.abs(y_true - y_pred[:, 1])
+#Custom loss
+def correlationLoss(x,y, axis=-2):
+  """Loss function that maximizes the pearson correlation coefficient between the predicted values and the labels,
+  while trying to have the same mean and variance"""
+  x = tf.convert_to_tensor(x)
+  y = tf.cast(y, x.dtype)
+  n = tf.cast(tf.shape(x)[axis], x.dtype)
+  xsum = tf.reduce_sum(x, axis=axis)
+  ysum = tf.reduce_sum(y, axis=axis)
+  xmean = xsum / n
+  ymean = ysum / n
+  xsqsum = tf.reduce_sum( tf.math.squared_difference(x, xmean), axis=axis)
+  ysqsum = tf.reduce_sum( tf.math.squared_difference(y, ymean), axis=axis)
+  cov = tf.reduce_sum( (x - xmean) * (y - ymean), axis=axis)
+  corr = cov / tf.sqrt(xsqsum * ysqsum)
+  # absdif = tmean(tf.abs(x - y), axis=axis) / tf.sqrt(yvar)
+  sqdif = tf.reduce_sum(tf.math.squared_difference(x, y), axis=axis) / n / tf.sqrt(ysqsum / n)
+  # meandif = tf.abs(xmean - ymean) / tf.abs(ymean)
+  # vardif = tf.abs(xvar - yvar) / yvar
+  # return tf.convert_to_tensor( K.mean(tf.constant(1.0, dtype=x.dtype) - corr + (meandif * 0.01) + (vardif * 0.01)) , dtype=tf.float32 )
+  return tf.convert_to_tensor( K.mean(tf.constant(1.0, dtype=x.dtype) - corr + (0.01 * sqdif)) , dtype=tf.float32 )
 
-    return K.mean(delta)
-#============================#
-def qloss(y_true, y_pred):
-    # Pinball loss for multiple quantiles
-    qs = [0.05, 0.50, 0.95]
-    q = tf.constant(np.array([qs]), dtype=tf.float32)
-    e = y_true - y_pred
-    v = tf.maximum(q*e, (q-1)*e)
-    return K.mean(v)
-#=============================#
-def mloss(_lambda):
-    def loss(y_true, y_pred):
-        return _lambda * qloss(y_true, y_pred) + (1 - _lambda)*score(y_true, y_pred)
+def bin_loss(y_true, y_pred):
+
+    g_loss = tf.keras.losses.mean_absolute_error(y_true, y_pred) #general, compare difference
+    kl_loss = tf.keras.losses.kullback_leibler_divergence(y_true, y_pred) #better than comparing to gaussian
+    sum_kl_loss = K.sum(kl_loss, axis =0)
+    sum_g_loss = K.sum(g_loss, axis =0)
+    #sum_g_loss = sum_g_loss*10 #This is basically a loss penalty
+    loss = sum_g_loss+sum_kl_loss
     return loss
 
 #####BUILD NET#####
@@ -235,14 +245,14 @@ def build_net(n1,n2,input_dim):
     #Ensure non-negative values
     #preds = K.abs(preds)
     model = M.Model(z, preds, name="MQR")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['kullback_leibler_divergence'])
+    model.compile(loss=bin_loss, optimizer=tf.keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae','kullback_leibler_divergence'])
     return model
 
 def test(net, X_test,y_test,populations,regions):
     '''Test the net on the last 3 weeks of data
     '''
     for xi in range(X_test.shape[0]):
-        preds_i=net.predict(np.array([X_test[xi]]))[0]
+        preds_i=np.absolute(net.predict(np.array([X_test[xi]]))[0])
         R,p = pearsonr(preds_i,y_test[xi])
         print(regions[xi],R)
         # fig,ax = plt.subplots(figsize=(6/2.54,4/2.54))
@@ -294,7 +304,7 @@ seed_everything(42) #The answer it is
 #Get net parameters
 BATCH_SIZE=256
 EPOCHS=100
-n1=100 #Nodes layer 1
+n1=200 #Nodes layer 1
 n2=100 #Nodes layer 2
 #Make net
 net = build_net(n1,n2,X_train.shape[1]+1)

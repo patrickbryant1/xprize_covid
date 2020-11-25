@@ -93,8 +93,12 @@ def split_for_training(sel):
         #Check regions
         country_regions = country_data['Region_index'].unique()
         for ri in country_regions:
-            country_region_data = country_data[country_data['Region_index']==ri]
-            country_region_data = country_region_data[country_region_data['cumulative_rescaled_cases']>0]
+            try:
+                si = max(0,country_region_data[country_region_data['cumulative_rescaled_cases']>0].index[0]-14)
+                country_region_data = country_region_data.loc[si:]
+            except:
+                print(len(country_region_data[country_region_data['cumulative_rescaled_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
+                continue
             population = country_region_data.loc[0,'population']
             country_region_data = country_region_data.reset_index()
 
@@ -124,7 +128,7 @@ def split_for_training(sel):
             y_test.append(y_train.pop())
             #Save population
             populations.append(population)
-
+            pdb.set_trace()
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
 
