@@ -151,18 +151,18 @@ class DataGenerator(keras.utils.Sequence):
         'Generate one batch of data'
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-
         domain_index = np.take(range((len(self.X_train))),indexes)
 
         # Generate data
-        X, y = self.__data_generation(domain_index)
+        X_batch, y_batch = self.__data_generation(domain_index)
 
-        return X, y
+        return X_batch, y_batch
 
     def on_epoch_end(self): #Will be done at epoch 0 also
         'Updates indexes after each epoch'
         self.indexes = np.arange(len(self.X_train))
         np.random.shuffle(self.indexes)
+        pdb.set_trace()
 
     def __data_generation(self, domain_index):
         'Generates data containing batch_size samples'
@@ -257,23 +257,22 @@ EPOCHS=200
 n1=100 #Nodes layer 1
 n2=100 #Nodes layer 2
 #Make net
-net = build_net(n1,n2,(None,X_train.shape[1]+1))
+net = build_net(n1,n2,X_train.shape[1]+1)
 print(net.summary())
 #KFOLD
 NFOLD = 5
 kf = KFold(n_splits=NFOLD)
 fold=0
-pdb.set_trace()
 
 for tr_idx, val_idx in kf.split(X_train):
     fold+=1
     print("FOLD", fold)
-    net = build_net(n1,n2,(None,X_train.shape[1]+1))
+    net = build_net(n1,n2,X_train.shape[1]+1)
     #Data generation
     training_generator = DataGenerator(X_train[tr_idx], y_train[tr_idx], BATCH_SIZE)
     valid_generator = DataGenerator(y_train[val_idx], y_train[val_idx], BATCH_SIZE)
 
-    net.fit_generator(training_generator,
+    net.fit(training_generator,
             validation_data=valid_generator,
             epochs=EPOCHS
             )
