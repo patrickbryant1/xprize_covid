@@ -136,35 +136,38 @@ def split_for_training(sel):
 
 class DataGenerator(keras.utils.Sequence):
     '''Generates data for Keras'''
-    def __init__(self, X_train, y_train, batch_size=1, shuffle=True):
+    def __init__(self, X_train_fold, y_train_fold, batch_size=1, shuffle=True):
         'Initialization'
-        self.X_train = X_train
-        self.y_train = y_train
+        self.X_train_fold = X_train_fold
+        self.y_train_fold = y_train_fold
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.on_epoch_end()
+
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(np.floor(len(self.X_train) / self.batch_size))
+        return int(np.floor(len(self.X_train_fold) / self.batch_size))
 
     def __getitem__(self, index):
         'Generate one batch of data'
         # Generate indexes of the batch
-        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        domain_index = np.take(range((len(self.X_train))),indexes)
+        batch_indices = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
+        #domain_index = np.take(range((len(self.X_train_fold))),indexes)
 
         # Generate data
-        X_batch, y_batch = self.__data_generation(domain_index)
+        X_batch, y_batch = self.__data_generation(batch_indices)
 
+        if X_batch.shape[1]!=456:
+            pdb.set_trace()
         return X_batch, y_batch
 
     def on_epoch_end(self): #Will be done at epoch 0 also
         'Updates indexes after each epoch'
-        self.indexes = np.arange(len(self.X_train))
+        self.indexes = np.arange(len(self.X_train_fold))
         np.random.shuffle(self.indexes)
-        pdb.set_trace()
 
-    def __data_generation(self, domain_index):
+
+    def __data_generation(self, batch_indices):
         'Generates data containing batch_size samples'
 
         #save data
@@ -172,10 +175,10 @@ class DataGenerator(keras.utils.Sequence):
         #Generate batch_size days between 0-20 (days ahead to predict)
         batch_days = np.random.choice(21,self.batch_size)
         #Get the targets (y)
-        for i in range(len(domain_index)):
-            y_batch.append(self.y_train[domain_index[i],batch_days[i]])
+        for i in range(len(batch_indices)):
+            y_batch.append(self.y_train_fold[batch_indices[i],batch_days[i]])
 
-        return np.append(self.X_train[domain_index],np.array([batch_days]).T,axis=-1), np.array(y_batch)
+        return np.append(self.X_train_fold[batch_indices],np.array([batch_days]).T,axis=-1), np.array(y_batch)
 
 #####LOSSES AND SCORES#####
 def score(y_true, y_pred):
@@ -183,7 +186,7 @@ def score(y_true, y_pred):
     tf.dtypes.cast(y_pred, tf.float32)
     sigma = y_pred[:, 2] - y_pred[:, 0]
     #Make sure all y-pred are non-negative
-    delta = tf.abs(y_true[:, 0] - y_pred[:, 1])
+    delta = tf.abs(y_true - y_pred[:, 1])
 
     return K.mean(delta)
 #============================#
@@ -205,17 +208,31 @@ def build_net(n1,n2,input_dim):
     '''Build the net using Keras
     '''
     z = L.Input((input_dim,), name="Patient")
-    x = L.Dense(n1, activation="relu", name="d1")(z)
-    x = L.Dense(n2, activation="relu", name="d2")(x)
-    p1 = L.Dense(3, activation="linear", name="p1")(x)
-    p2 = L.Dense(3, activation="relu", name="p2")(x)
+    x1 = L.Dense(n1, activation="relu", name="d1")(z)
+    x2 = L.Dense(n2, activation="relu", name="d2")(x1)
+    p1 = L.Dense(3, activation="linear", name="p1")(x2)
+    p2 = L.Dense(3, activation="relu", name="p2")(x2)
     preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
                      name="preds")([p1, p2])
-
+    #Ensure non-negative values
+    preds = K.abs(preds)
     model = M.Model(z, preds, name="CNN")
     model.compile(loss=mloss(0.8), optimizer=tf.keras.optimizers.Adam(lr=0.1, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False), metrics=[score])
     return model
 
+def test(net, X_test,y_test,populations):
+    '''Test the net on the last 3 weeks of data
+    '''
+    for xi in range(X_test.shape[0]):
+        preds_i = np.zeros((21,3))
+        for day in range(21):
+            preds_i[day]=net.predict(np.array([np.append(X_test[0],day)]))
+
+        plt.plot(np.arange(1,22),y_test[xi],color='g')
+        plt.plot(np.arange(1,22),preds_i[:,1],color='grey')
+        plt.fill_between(np.arange(1,22),preds_i[:,0],preds_i[:,2],color='grey')
+        plt.show()
+        pdb.set_trace()
 #####MAIN#####
 #Set font size
 matplotlib.rcParams.update({'font.size': 7})
@@ -252,10 +269,10 @@ except:
 seed_everything(42) #The answer it is
 
 #Get net parameters
-BATCH_SIZE=32
-EPOCHS=200
-n1=100 #Nodes layer 1
-n2=100 #Nodes layer 2
+BATCH_SIZE=256
+EPOCHS=10
+n1=10 #Nodes layer 1
+n2=10 #Nodes layer 2
 #Make net
 net = build_net(n1,n2,X_train.shape[1]+1)
 print(net.summary())
@@ -270,12 +287,14 @@ for tr_idx, val_idx in kf.split(X_train):
     net = build_net(n1,n2,X_train.shape[1]+1)
     #Data generation
     training_generator = DataGenerator(X_train[tr_idx], y_train[tr_idx], BATCH_SIZE)
-    valid_generator = DataGenerator(y_train[val_idx], y_train[val_idx], BATCH_SIZE)
+    valid_generator = DataGenerator(X_train[val_idx], y_train[val_idx], BATCH_SIZE)
 
     net.fit(training_generator,
             validation_data=valid_generator,
             epochs=EPOCHS
             )
 
+    #Test the net
+    test(net, X_test,y_test,populations)
     pdb.set_trace()
 pdb.set_trace()
