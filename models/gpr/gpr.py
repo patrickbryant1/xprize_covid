@@ -223,11 +223,11 @@ def get_gpr_model(X_train,y_train):
         ℓ = pm.Gamma("ℓ", alpha=2, beta=1)
         η = pm.HalfCauchy("η", beta=5)
 
-        cov = η**2 * pm.gp.cov.Matern52(1, ℓ)
+        cov = η**2 * pm.gp.cov.Matern52(X_train.shape[1], ℓ)
         gp = pm.gp.Marginal(cov_func=cov)
 
         σ = pm.HalfCauchy("σ", beta=5)
-        y_ = gp.marginal_likelihood("y", X=X_train, y=y_train, noise=σ)
+        y_ = gp.marginal_likelihood("y", X=X_train[:1000], y=y_train[:1000], noise=σ)
 
         mp = pm.find_MAP()
 
