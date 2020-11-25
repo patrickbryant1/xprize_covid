@@ -174,8 +174,6 @@ class DataGenerator(keras.utils.Sequence):
         # Generate data
         X_batch, y_batch = self.__data_generation(batch_indices)
 
-        if X_batch.shape[1]!=456:
-            pdb.set_trace()
         return X_batch, y_batch
 
     def on_epoch_end(self): #Will be done at epoch 0 also
@@ -188,14 +186,16 @@ class DataGenerator(keras.utils.Sequence):
         'Generates data containing batch_size samples'
 
         #save data
-        y_batch = []
+        #y_batch = []
         #Generate batch_size days between 0-20 (days ahead to predict)
-        batch_days = np.repeat(20,self.batch_size)#np.random.choice(21,self.batch_size)
+        #np.random.choice(21,self.batch_size)
         #Get the targets (y)
-        for i in range(len(batch_indices)):
-            y_batch.append(self.y_train_fold[batch_indices[i],batch_days[i]])
+        # for i in range(len(batch_indices)):
+        #     y_batch.append(self.y_train_fold[batch_indices[i],batch_days[i]])
+        #
+        # return np.append(self.X_train_fold[batch_indices],np.array([batch_days]).T,axis=-1), np.array(y_batch)
 
-        return np.append(self.X_train_fold[batch_indices],np.array([batch_days]).T,axis=-1), np.array(y_batch)
+        return self.X_train_fold[batch_indices],self.y_train_fold[batch_indices]
 
 #####LOSSES AND SCORES#####
 def score(y_true, y_pred):
@@ -227,32 +227,32 @@ def build_net(n1,n2,input_dim):
     z = L.Input((input_dim,), name="Patient")
     x1 = L.Dense(n1, activation="relu", name="d1")(z)
     x2 = L.Dense(n2, activation="relu", name="d2")(x1)
-    p1 = L.Dense(3, activation="linear", name="p1")(x2)
-    p2 = L.Dense(3, activation="relu", name="p2")(x2)
-    preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
-                     name="preds")([p1, p2])
+    #p1 = L.Dense(3, activation="linear", name="p1")(x3)
+    #p1 = K.abs(p1)
+    preds = L.Dense(21, activation="relu", name="preds")(x2)
+    # preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
+    #                  name="preds")([p1, p2])
     #Ensure non-negative values
-    preds = K.abs(preds)
-    model = M.Model(z, preds, name="CNN")
-    model.compile(loss=mloss(0.8), optimizer=tf.keras.optimizers.Adam(lr=0.1, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False), metrics=[score])
+    #preds = K.abs(preds)
+    model = M.Model(z, preds, name="MQR")
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['kullback_leibler_divergence'])
     return model
 
 def test(net, X_test,y_test,populations,regions):
     '''Test the net on the last 3 weeks of data
     '''
     for xi in range(X_test.shape[0]):
-        preds_i = np.zeros((21,3))
-        for day in range(21):
-            preds_i[day]=net.predict(np.array([np.append(X_test[xi],day)]))
-
-        fig,ax = plt.subplots(figsize=(6/2.54,4/2.54))
-        plt.plot(np.arange(1,22),y_test[xi],color='g')
-        plt.plot(np.arange(1,22),preds_i[:,1],color='grey')
-        plt.fill_between(np.arange(1,22),preds_i[:,0],preds_i[:,2],color='grey',alpha=0.5)
-        plt.title(regions[xi]+'\n'+str(np.round(populations[xi]/1000000,2))+' millions')
-        plt.tight_layout()
-        plt.savefig(outdir+regions[xi]+'.png',dpi=300,format='png')
-        plt.close()
+        preds_i=net.predict(np.array([X_test[xi]]))[0]
+        R,p = pearsonr(preds_i,y_test[xi])
+        print(regions[xi],R)
+        # fig,ax = plt.subplots(figsize=(6/2.54,4/2.54))
+        # plt.plot(np.arange(1,22),y_test[xi],color='g')
+        # plt.plot(np.arange(1,22),preds_i[:,1],color='grey')
+        # plt.fill_between(np.arange(1,22),preds_i[:,0],preds_i[:,2],color='grey',alpha=0.5)
+        # plt.title(regions[xi]+'\n'+str(np.round(populations[xi]/1000000,2))+' millions')
+        # plt.tight_layout()
+        # plt.savefig(outdir+regions[xi]+'.png',dpi=300,format='png')
+        # plt.close()
 
 #####MAIN#####
 #Set font size
@@ -307,7 +307,7 @@ fold=0
 for tr_idx, val_idx in kf.split(X_train):
     fold+=1
     print("FOLD", fold)
-    net = build_net(n1,n2,X_train.shape[1]+1)
+    net = build_net(n1,n2,X_train.shape[1])
     #Data generation
     training_generator = DataGenerator(X_train[tr_idx], y_train[tr_idx], BATCH_SIZE)
     valid_generator = DataGenerator(X_train[val_idx], y_train[val_idx], BATCH_SIZE)
