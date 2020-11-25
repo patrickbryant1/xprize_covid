@@ -93,21 +93,23 @@ def split_for_training(sel):
         #Check regions
         country_regions = country_data['Region_index'].unique()
         for ri in country_regions:
+            country_region_data = country_data[country_data['Region_index']==ri]
             try:
                 si = max(0,country_region_data[country_region_data['cumulative_rescaled_cases']>0].index[0]-14)
                 country_region_data = country_region_data.loc[si:]
             except:
                 print(len(country_region_data[country_region_data['cumulative_rescaled_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
                 continue
-            population = country_region_data.loc[0,'population']
+
             country_region_data = country_region_data.reset_index()
+            population = country_region_data.loc[0,'population']
 
             #Check if data
             if len(country_region_data)<1:
                 continue
 
 
-            if region_index!=0:
+            if ri!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
             else:
                 regions.append(country_region_data.loc[0,'CountryName'])
@@ -120,15 +122,15 @@ def split_for_training(sel):
             #Loop through and get the first 21 days of data
             for di in range(len(country_region_data)-41):
                 #Add
-                X_train.append(country_region_data.loc[di:di+20])
+                X_train.append(np.array(country_region_data.loc[di:di+20]))
                 y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
-                pdb.set_trace()
+
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())
             y_test.append(y_train.pop())
             #Save population
             populations.append(population)
-            pdb.set_trace()
+
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
 
