@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-import pymc3 as pm
-import theano.tensor as tt
+import gpflow
+from gpflow.utilities import print_summary
 from scipy.stats import pearsonr
 from scipy import stats
 import numpy as np
@@ -217,14 +217,21 @@ def evaluate():
 def get_gpr_model(X_train,y_train):
     '''Create a GPR model in pymc3
     '''
+    pdb.set_trace()
+    k = gpflow.kernels.Matern32(variance=1, lengthscales=1.2)
+    print_summary(k)
+    m = gpflow.models.GPR(data=(X_train, y_train), kernel=k, mean_function=None)
+    print_summary(m)
+    #m.likelihood.variance.assign(0.01)
+    #m.kernel.lengthscales.assign(0.3)
+    #There are several optimizers available in GPflow. Here we use the Scipy optimizer,
+    #which by default implements the L-BFGS-B algorithm.
+    opt = gpflow.optimizers.Scipy()
+    opt_logs = opt.minimize(m.training_loss, m.trainable_variables, options=dict(maxiter=100))
+    print_summary(m)
 
-    with pm.Model() as model:
-        # Specify the covariance functions for each Xi
-        cov_func1 = pm.gp.cov.ExpQuad(1, ls=0.1)  # Must accept X1 without error
-        cov_func2 = pm.gp.cov.ExpQuad(1, ls=0.3)  # Must accept X2 without error
 
-        # Specify the GP.  The default mean function is `Zero`.
-        gp = pm.gp.LatentKron(cov_funcs=[cov_func1, cov_func2])
+    pdb.set_trace()
 
     return pred
 #####MAIN#####
