@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression,Ridge,ElasticNet
+from sklearn import gaussian_process
+from sklearn.gaussian_process.kernels import Matern, WhiteKernel, ConstantKernel
 from scipy.stats import pearsonr
 from scipy import stats
 import numpy as np
@@ -179,17 +180,21 @@ corrs = []
 errors = []
 stds = []
 preds = []
+pred_sigmas = []
 coefs = []
 for i in range(y_train.shape[1]):
-    reg = LinearRegression().fit(X_train, y_train[:,i])
+    #Define the Kernel
+    kernel = ConstantKernel() + Matern(length_scale=2, nu=3/2) + WhiteKernel(noise_level=1)
+    #GP
+    gp = gaussian_process.GaussianProcessRegressor(kernel=kernel)
+    gp.fit(X_train, y_train[:,i])
+
+    pred, sigma = gp.predict(X_test, return_std=True)
     pdb.set_trace()
-    slope, intercept, r_value, p_value, std_err = stats.linregress(X_train, y_train[:,i])
-    confidence_interval = 2.58*std_err
-    pdb.set_trace()
-    pred = reg.predict(X_test)
     #No negative predictions are allowed
     pred[pred<0]=0
     preds.append(pred)
+    pred_sigmas.append(sigma)
     av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
     std = np.std(np.absolute(pred-y_test[:,i])/populations)
     print('Error',av_er, 'Std',std)
