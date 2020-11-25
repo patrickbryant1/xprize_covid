@@ -23,7 +23,7 @@ from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''A multiple Quantile regression model.''')
+parser = argparse.ArgumentParser(description = '''A LSTM model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -94,55 +94,31 @@ def split_for_training(sel):
         country_regions = country_data['Region_index'].unique()
         for ri in country_regions:
             country_region_data = country_data[country_data['Region_index']==ri]
-            #Select data 14 days before 0 cases
-
-
-            try:
-                si = max(0,country_region_data[country_region_data['cumulative_rescaled_cases']>0].index[0]-14)
-                country_region_data = country_region_data.loc[si:]
-            except:
-                print(len(country_region_data[country_region_data['cumulative_rescaled_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
-                continue
+            country_region_data = country_region_data[country_region_data['cumulative_rescaled_cases']>0]
+            population = country_region_data.loc[0,'population']
             country_region_data = country_region_data.reset_index()
 
             #Check if data
             if len(country_region_data)<1:
                 continue
 
-            country_index = country_region_data.loc[0,'Country_index']
-            region_index = country_region_data.loc[0,'Region_index']
-            death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
-            case_death_delay = country_region_data.loc[0,'case_death_delay']
-            gross_net_income = country_region_data.loc[0,'gross_net_income']
-            population_density = country_region_data.loc[0,'population_density']
-            pdi = country_region_data.loc[0,'pdi'] #Power distance
-            idv = country_region_data.loc[0, 'idv'] #Individualism
-            mas = country_region_data.loc[0,'mas'] #Masculinity
-            uai = country_region_data.loc[0,'uai'] #Uncertainty
-            ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
-            ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-            population = country_region_data.loc[0,'population']
 
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
             else:
                 regions.append(country_region_data.loc[0,'CountryName'])
-            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
-            'RegionName','death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population'})
+            country_region_data = country_region_data.drop(columns={'index','CountryName','RegionName',})
 
-            #Normalize the cases by 100'000 population
-            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
-            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']#/(population/100000)
+            #Normalize the cases by 100'000 population?
+            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
+            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']#/(population/100000)
 
             #Loop through and get the first 21 days of data
             for di in range(len(country_region_data)-41):
-                #Get change over the past 21 days
-                xi = np.array(country_region_data.loc[di:di+20]).flatten()
-                change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                X_train.append(country_region_data.loc[di:di+20])
                 y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
-
+                pdb.set_trace()
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())
             y_test.append(y_train.pop())
@@ -151,51 +127,6 @@ def split_for_training(sel):
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
-class DataGenerator(keras.utils.Sequence):
-    '''Generates data for Keras'''
-    def __init__(self, X_train_fold, y_train_fold, batch_size=1, shuffle=True):
-        'Initialization'
-        self.X_train_fold = X_train_fold
-        self.y_train_fold = y_train_fold
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.on_epoch_end()
-
-    def __len__(self):
-        'Denotes the number of batches per epoch'
-        return int(np.floor(len(self.X_train_fold) / self.batch_size))
-
-    def __getitem__(self, index):
-        'Generate one batch of data'
-        # Generate indexes of the batch
-        batch_indices = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        #domain_index = np.take(range((len(self.X_train_fold))),indexes)
-
-        # Generate data
-        X_batch, y_batch = self.__data_generation(batch_indices)
-
-        if X_batch.shape[1]!=456:
-            pdb.set_trace()
-        return X_batch, y_batch
-
-    def on_epoch_end(self): #Will be done at epoch 0 also
-        'Updates indexes after each epoch'
-        self.indexes = np.arange(len(self.X_train_fold))
-        np.random.shuffle(self.indexes)
-
-
-    def __data_generation(self, batch_indices):
-        'Generates data containing batch_size samples'
-
-        #save data
-        y_batch = []
-        #Generate batch_size days between 0-20 (days ahead to predict)
-        batch_days = np.repeat(20,self.batch_size)#np.random.choice(21,self.batch_size)
-        #Get the targets (y)
-        for i in range(len(batch_indices)):
-            y_batch.append(self.y_train_fold[batch_indices[i],batch_days[i]])
-
-        return np.append(self.X_train_fold[batch_indices],np.array([batch_days]).T,axis=-1), np.array(y_batch)
 
 #####LOSSES AND SCORES#####
 def score(y_true, y_pred):
@@ -225,8 +156,8 @@ def build_net(n1,n2,input_dim):
     '''Build the net using Keras
     '''
     z = L.Input((input_dim,), name="Patient")
-    x1 = L.Dense(n1, activation="relu", name="d1")(z)
-    x2 = L.Dense(n2, activation="relu", name="d2")(x1)
+    x1 = L.LSTM(n1, activation="relu", name="d1")(z)
+    x2 = L.LSTM(n2, activation="relu", name="d2")(x1)
     p1 = L.Dense(3, activation="linear", name="p1")(x2)
     p2 = L.Dense(3, activation="relu", name="p2")(x2)
     preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
