@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold
 
 import tensorflow as tf
+from tensorflow import keras
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
 import tensorflow.keras.models as M
@@ -133,6 +134,49 @@ def split_for_training(sel):
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations)
 
+class DataGenerator(keras.utils.Sequence):
+    '''Generates data for Keras'''
+    def __init__(self, X_train, y_train, batch_size=1, shuffle=True):
+        'Initialization'
+        self.X_train = X_train
+        self.y_train = y_train
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.on_epoch_end()
+    def __len__(self):
+        'Denotes the number of batches per epoch'
+        return int(np.floor(len(self.X_train) / self.batch_size))
+
+    def __getitem__(self, index):
+        'Generate one batch of data'
+        # Generate indexes of the batch
+        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
+
+        domain_index = np.take(range((len(self.X_train))),indexes)
+
+        # Generate data
+        X, y = self.__data_generation(domain_index)
+
+        return X, y
+
+    def on_epoch_end(self): #Will be done at epoch 0 also
+        'Updates indexes after each epoch'
+        self.indexes = np.arange(len(self.X_train))
+        np.random.shuffle(self.indexes)
+
+    def __data_generation(self, domain_index):
+        'Generates data containing batch_size samples'
+
+        #save data
+        y_batch = []
+        #Generate batch_size days between 0-20 (days ahead to predict)
+        batch_days = np.random.choice(21,self.batch_size)
+        #Get the targets (y)
+        for i in range(len(domain_index)):
+            y_batch.append(self.y_train[domain_index[i],batch_days[i]])
+
+        return np.append(self.X_train[domain_index],np.array([batch_days]).T,axis=-1), np.array(y_batch)
+
 #####LOSSES AND SCORES#####
 def score(y_true, y_pred):
     tf.dtypes.cast(y_true, tf.float32)
@@ -210,24 +254,29 @@ seed_everything(42) #The answer it is
 #Get net parameters
 BATCH_SIZE=32
 EPOCHS=200
+n1=100 #Nodes layer 1
+n2=100 #Nodes layer 2
 #Make net
-net = build_net(100,10,X_train.shape[1])
+net = build_net(n1,n2,(None,X_train.shape[1]+1))
 print(net.summary())
 #KFOLD
 NFOLD = 5
 kf = KFold(n_splits=NFOLD)
 fold=0
+pdb.set_trace()
 
-days_ahead = np.array([list(np.arange(1,22))*X_train.shape[0]]).T
-X_train = np.repeat(X_train,[21],axis=0)
-X_train=np.append(X_train,days_ahead,axis=1)
-y_train=y_train.flatten()
 for tr_idx, val_idx in kf.split(X_train):
     fold+=1
     print("FOLD", fold)
-    net = build_net(100,10,X_train.shape[1])
-    pdb.set_trace()
-    net.fit(X_train[tr_idx], y_train[tr_idx], batch_size=BATCH_SIZE, epochs=EPOCHS,
-            validation_data=(X_train[val_idx], y_train[val_idx]), verbose=1)
+    net = build_net(n1,n2,(None,X_train.shape[1]+1))
+    #Data generation
+    training_generator = DataGenerator(X_train[tr_idx], y_train[tr_idx], BATCH_SIZE)
+    valid_generator = DataGenerator(y_train[val_idx], y_train[val_idx], BATCH_SIZE)
+
+    net.fit_generator(training_generator,
+            validation_data=valid_generator,
+            epochs=EPOCHS
+            )
+
     pdb.set_trace()
 pdb.set_trace()
