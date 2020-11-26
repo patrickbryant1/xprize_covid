@@ -180,7 +180,7 @@ def predict(X_test, coef_means, coef_stds):
 
     return pred_means, pred_stds
 
-def evaluate(preds,y_test,outdir,regions):
+def evaluate(preds,y_test,outdir,regions,populations):
     '''Evaluate the model
     '''
 
@@ -189,35 +189,38 @@ def evaluate(preds,y_test,outdir,regions):
     results_file = open(outdir+'results.txt','w')
     total_regional_cum_error = []
     total_regional_mae = []
+    total_regional_mae_per_100000 = []
     total_regional_2week_mae = []
     all_regional_corr = []
     #Evaluate the test cases
     for ri in range(len(regions)):
         #Plot
-        region_error = np.cumsum(np.absolute(pred_means[:,ri]-y_test[ri,:]))[-1]
+        region_error = np.cumsum(np.absolute(preds[:,ri]-y_test[ri,:]))[-1]
         total_regional_cum_error.append(region_error)
-        total_regional_mae.append(np.average(np.absolute(pred_means[:,ri]-y_test[ri,:])))
-        total_regional_2week_mae.append(np.average(np.absolute(pred_means[:,ri][:14]-y_test[ri,:][:14])))
-        region_corr = pearsonr(pred_means[:,ri],y_test[ri,:])[0]
+        total_regional_mae.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])))
+        total_regional_mae_per_100000.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])/(populations[ri]/100000)))
+        total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
+        region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
         all_regional_corr.append(region_corr)
-        plt.plot(range(1,22),pred_means[:,ri],label='pred',color='grey')
-        #plt.fill_between(range(1,22),pred_means[:,ri]-pred_stds[:,ri],pred_means[:,ri]+pred_stds[:,ri],color='grey',alpha=0.5)
-        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
+        #plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        #plt.fill_between(range(1,22),preds[:,ri]-pred_stds[:,ri],preds[:,ri]+pred_stds[:,ri],color='grey',alpha=0.5)
+        #plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
         plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
         plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
         plt.legend()
         plt.tight_layout()
         plt.close()
         results_file.write(regions[ri]+': '+str(region_corr)+'\n')
-    pdb.set_trace()
+
     #Convert to arrays
     total_regional_cum_error = np.array(total_regional_cum_error)
     total_regional_mae = np.array(total_regional_mae)
     all_regional_corr = np.array(all_regional_corr)
     #Calculate error
-    results_file.write('Total cumulative error: '+str(np.sum(total_regional_cum_error))+'\n')
-    results_file.write('Total mae: '+str(np.sum(total_regional_mae))+'\n')
     results_file.write('Total 2week mae: '+str(np.sum(total_regional_2week_mae))+'\n')
+    results_file.write('Total mae: '+str(np.sum(total_regional_mae))+'\n')
+    results_file.write('Total mae per 100000: '+str(np.sum(total_regional_mae_per_100000))+'\n')
+    results_file.write('Total cumulative error: '+str(np.sum(total_regional_cum_error))+'\n')
     #Evaluate all regions with at least 10 observed cases
     for t in [1,100,1000,10000]:
         results_file.write('Total normalized mae for regions with over '+str(t)+' observed cases: '+str(np.sum(total_regional_mae[np.where(np.sum(y_test,axis=1)>t)]/(np.sum(y_test[np.where(np.sum(y_test,axis=1)>t)],axis=1))))+'\n')
@@ -277,5 +280,5 @@ except:
     preds = np.array(preds)
     np.save(outdir+'preds.npy', preds)
 #Evaluate fit
-evaluate(preds,y_test,outdir,regions)
+evaluate(preds,y_test,outdir,regions,populations)
 pdb.set_trace()
