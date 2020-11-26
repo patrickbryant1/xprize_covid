@@ -18,7 +18,7 @@ import numpy as np
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''Theil-Zen regression model.''')
+parser = argparse.ArgumentParser(description = '''Huber regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -166,19 +166,19 @@ def predict(X_test, coef_means, coef_stds):
     '''Predict cases using sampled parameters
     '''
 
-    pred_means =[]
+    preds =[]
     pred_stds = []
     for day in range(coef_means.shape[0]):
         day_means = coef_means[day,:]
         day_stds = coef_stds[day,:]
-        pred_means.append(np.dot(X_test,day_means))
+        preds.append(np.dot(X_test,day_means))
         pred_stds.append(np.dot(X_test,day_stds))
     #Convert to arrays
-    pred_means = np.array(pred_means)
+    preds = np.array(preds)
     pred_stds = np.array(pred_stds)
 
 
-    return pred_means, pred_stds
+    return preds, pred_stds
 
 def evaluate(preds,y_test,outdir,regions):
     '''Evaluate the model
@@ -194,14 +194,14 @@ def evaluate(preds,y_test,outdir,regions):
     #Evaluate the test cases
     for ri in range(len(regions)):
         #Plot
-        region_error = np.cumsum(np.absolute(pred_means[:,ri]-y_test[ri,:]))[-1]
+        region_error = np.cumsum(np.absolute(preds[:,ri]-y_test[ri,:]))[-1]
         total_regional_cum_error.append(region_error)
-        total_regional_mae.append(np.average(np.absolute(pred_means[:,ri]-y_test[ri,:])))
-        total_regional_2week_mae.append(np.average(np.absolute(pred_means[:,ri][:14]-y_test[ri,:][:14])))
-        region_corr = pearsonr(pred_means[:,ri],y_test[ri,:])[0]
+        total_regional_mae.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])))
+        total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
+        region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
         all_regional_corr.append(region_corr)
-        plt.plot(range(1,22),pred_means[:,ri],label='pred',color='grey')
-        #plt.fill_between(range(1,22),pred_means[:,ri]-pred_stds[:,ri],pred_means[:,ri]+pred_stds[:,ri],color='grey',alpha=0.5)
+        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        #plt.fill_between(range(1,22),preds[:,ri]-pred_stds[:,ri],preds[:,ri]+pred_stds[:,ri],color='grey',alpha=0.5)
         plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
         plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
         plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
@@ -236,7 +236,7 @@ def fit_model(X_train,y_train,X_test):
     '''Create a GPR model in pymc3
     '''
     print('Fitting...')
-    reg =  TheilSenRegressor().fit(X_train,y_train)
+    reg =  HuberRegressor().fit(X_train,y_train)
     pred = reg.predict(X_test)
     #No negative predictions are allowed
     pred[pred<0]=0
