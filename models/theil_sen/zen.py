@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 
 from scipy.stats import pearsonr
-from scipy import stats.mstats.theilslopes
+from sklearn.linear_model import TheilSenRegressor
 import numpy as np
 
 
@@ -233,11 +233,16 @@ def evaluate(X_test,y_test, coef_means, coef_stds,outdir,regions):
 
 
 
-def fit_model(X_train,y_train):
+def fit_model(X_train,y_train,X_test,y_test):
     '''Create a GPR model in pymc3
     '''
-
-    res = theilslopes(y_train,X_train,0.9)
+    pdb.set_trace()
+    reg = TheilSenRegressor(random_state=42,n_jobs=-1).fit(X_train,y_train)
+    pred = reg.predict(X_test)
+    #No negative predictions are allowed
+    pred[pred<0]=0
+    av_er = np.average(np.absolute(pred-y_test)/populations)
+    std = np.std(np.absolute(pred-y_test)/populations)
     pdb.set_trace()
     return means,stds
 
@@ -265,7 +270,7 @@ X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,
 
 #Fit models
 for day in range(y_train.shape[1]):
-    fit_model(X_train,y_train[:,day])
+    fit_model(X_train,y_train[:,day],X_test,y_test[:,day])
 
 #Evaluate fit
 evaluate(X_test,y_test, coef_means, coef_stds,outdir,regions)

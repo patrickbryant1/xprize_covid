@@ -195,8 +195,8 @@ except:
         #No negative predictions are allowed
         pred[pred<0]=0
         preds.append(pred)
-        av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
-        std = np.std(np.absolute(pred-y_test[:,i])/populations)
+        av_er = np.average(np.absolute(pred-y_test[:,i])/(populations/100000))
+        std = np.std(np.absolute(pred-y_test[:,i])/(populations/100000))
         print('Error',av_er, 'Std',std)
         R,p = pearsonr(pred,y_test[:,i])
         #Save
@@ -263,7 +263,6 @@ for t in [1,100,1000,10000]:
 all_regional_corr[np.isnan(all_regional_corr)]=0
 results_file.write('Average correlation: '+str(np.average(all_regional_corr)))
 results_file.close()
-pdb.set_trace()
 
 #Look at coefs
 
@@ -294,7 +293,7 @@ for i in range(remainder.shape[2]):
     plt.xticks(range(21),labels=range(1,22))
     plt.yticks(range(21),labels=range(-21,0,1))
     plt.colorbar()
-    plt.title('Days ahead',remainder_names[i]+1)
+    plt.title(remainder_names[i])
     plt.tight_layout()
     plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
     plt.close()
