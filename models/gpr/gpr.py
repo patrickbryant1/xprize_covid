@@ -11,6 +11,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 import pymc3 as pm
+import theano
+import theano.tensor as tt
 
 from scipy.stats import pearsonr
 from scipy import stats
@@ -141,7 +143,6 @@ def split_for_training(sel):
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
-
 def evaluate():
     '''Evaluate the model
     '''
@@ -219,17 +220,48 @@ def get_gpr_model(X_train,y_train):
     '''Create a GPR model in pymc3
     '''
 
+    n=X_train.shape[0] #Number of data points
+    batch_size=128
+    Xy=np.append(X_train,np.array([y_train]).T,axis=1)
+    Xy = Xy
+    #Independent variables
+    batch = pm.Minibatch(Xy,batch_size)
+    #C1_batch = pm.Minibatch(data=X_train[:,0], batch_size=batch_size)
+    #C2_batch = pm.Minibatch(data=X_train[:,1], batch_size=batch_size)
+    ##Dependent variable
+    #y_batch = pm.Minibatch(data=y_train, batch_size=batch_size)
+
+
+    # Find the parameters for the relation between X and Y.
     with pm.Model() as model:
-        ℓ = pm.Gamma("ℓ", alpha=2, beta=1)
-        η = pm.HalfCauchy("η", beta=5)
+        # Prior parameters.
+        #mus = [pm.Normal(str(i), mu=0, sigma=10) for i in range(Xy.shape[1])]
 
-        cov = η**2 * pm.gp.cov.Matern52(X_train.shape[1], ℓ)
-        gp = pm.gp.Marginal(cov_func=cov)
+        alpha = pm.Normal('alpha', mu=0, sigma=10)
+        beta = pm.Normal('beta', mu=0, sigma=10,shape=X_train.shape[1])
+        # c = pm.Normal('c', mu=0, sigma=10)
 
-        σ = pm.HalfCauchy("σ", beta=5)
-        y_ = gp.marginal_likelihood("y", X=X_train[:1000], y=y_train[:1000], noise=σ)
+        sigma = pm.HalfNormal('sigma', sigma=10)
 
-        mp = pm.find_MAP()
+        # Relation between X and the mean of Y.
+        #mu = a + b * C1_batch + c * C2_batch
+        mu = alpha + pm.math.dot(batch[:,:-1],beta)
+        # Observed output Y.
+        y_obs = pm.Normal('y_obs', mu=mu, sigma=sigma,
+                      observed=batch[:,-1], total_size=n)
+
+        approx = pm.fit(100000, method='advi',obj_optimizer=pm.adagrad(learning_rate=1e-1), callbacks=[pm.callbacks.CheckParametersConvergence(tolerance=1e-4)])
+
+    #Plot
+    plt.plot(approx.hist)
+    plt.show()
+
+
+    means = approx.bij.rmap(approx.mean.eval())
+    sds = approx.bij.rmap(approx.std.eval())
+
+
+
 
     pdb.set_trace()
 
