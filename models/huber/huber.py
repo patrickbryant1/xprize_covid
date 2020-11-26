@@ -180,7 +180,7 @@ def predict(X_test, coef_means, coef_stds):
 
     return preds, pred_stds
 
-def evaluate(preds,y_test,outdir,regions):
+def evaluate(preds,y_test,outdir,regions,populations):
     '''Evaluate the model
     '''
 
@@ -189,6 +189,7 @@ def evaluate(preds,y_test,outdir,regions):
     results_file = open(outdir+'results.txt','w')
     total_regional_cum_error = []
     total_regional_mae = []
+    total_regional_mae_per_100000 = []
     total_regional_2week_mae = []
     all_regional_corr = []
     #Evaluate the test cases
@@ -201,9 +202,8 @@ def evaluate(preds,y_test,outdir,regions):
         total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
         region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
         all_regional_corr.append(region_corr)
-        #plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-        #plt.fill_between(range(1,22),preds[:,ri]-pred_stds[:,ri],preds[:,ri]+pred_stds[:,ri],color='grey',alpha=0.5)
-        #plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
+        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
         plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
         plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
         plt.legend()
@@ -279,5 +279,5 @@ except:
     preds = np.array(preds)
     np.save(outdir+'preds.npy', preds)
 #Evaluate fit
-evaluate(preds,y_test,outdir,regions)
+evaluate(preds,y_test,outdir,regions,populations)
 pdb.set_trace()

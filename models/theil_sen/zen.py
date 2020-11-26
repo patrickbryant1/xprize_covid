@@ -202,9 +202,8 @@ def evaluate(preds,y_test,outdir,regions,populations):
         total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
         region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
         all_regional_corr.append(region_corr)
-        #plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-        #plt.fill_between(range(1,22),preds[:,ri]-pred_stds[:,ri],preds[:,ri]+pred_stds[:,ri],color='grey',alpha=0.5)
-        #plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
+        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
         plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
         plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
         plt.legend()
