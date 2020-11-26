@@ -165,15 +165,29 @@ def split_for_training(sel):
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
-def predict(means, stds):
+def predict(X_test, coef_means, coef_stds):
     '''Predict cases using sampled parameters
     '''
 
-    return None
+    pred_means =[]
+    pred_stds = []
+    for day in range(coef_means.shape[0]):
+        day_means = coef_means[day,:]
+        day_stds = coef_stds[day,:]
+        pred_means.append(np.dot(X_test,day_means))
+        pred_stds.append(np.dot(X_test,day_stds))
+    #Convert to arrays
+    pred_means = np.array(pred_means)
+    pred_stds = np.array(pred_stds)
 
-def evaluate():
+
+    return pred_means, pred_stds
+
+def evaluate(X_test,y_test, coef_means, coef_stds,outdir,regions):
     '''Evaluate the model
     '''
+    #1. Get predictions
+    predict(X_test, coef_means, coef_stds)
     #Evaluate the test cases
     for ri in range(len(regions)):
         #Plot
@@ -320,11 +334,25 @@ X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,
 
 
 #Fit GPR models
-coef_means = []
-coef_stds = []
-for day in range(y_train.shape[1]):
-    #Fir gpr
-    means,stds = get_gpr_model(X_train, y_train[:,day],day,outdir)
-    coef_means.append(means['beta'])
-    coef_stds.append(stds['beta'])
+try:
+    coef_means = np.load(outdir+'coef_means.npy',allow_pickle=True)
+    coef_stds = np.load(outdir+'coef_stds.npy',allow_pickle=True)
+except:
+    coef_means = []
+    coef_stds = []
+    for day in range(y_train.shape[1]):
+        #Fir gpr
+        means,stds = get_gpr_model(X_train, y_train[:,day],day,outdir)
+        coef_means.append(means['beta'])
+        coef_stds.append(stds['beta'])
+
+    #Save
+    coef_means=np.array(coef_means)
+    coef_stds=np.array(coef_stds)
+    np.save(outdir+'coef_means.npy',coef_means)
+    np.save(outdir+'coef_stds.npy',coef_stds)
+
+
+#Evaluate fit
+evaluate(X_test,y_test, coef_means, coef_stds,outdir,regions)
 pdb.set_trace()
