@@ -30,45 +30,67 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
-def get_features(adjusted_data):
+def get_features(adjusted_data, outdir):
     '''Get the selected features
     '''
 
-    selected_features = ['C1_School closing',
-                        'C2_Workplace closing',
-                        'C3_Cancel public events',
-                        'C4_Restrictions on gatherings',
-                        'C5_Close public transport',
-                        'C6_Stay at home requirements',
-                        'C7_Restrictions on internal movement',
-                        'C8_International travel controls',
-                        'H1_Public information campaigns',
-                        'H2_Testing policy',
-                        'H3_Contact tracing',
-                        'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
-                        'Country_index',
-                        'Region_index',
-                        'CountryName',
-                        'RegionName',
-                        'rescaled_cases',
-                        'cumulative_rescaled_cases',
-                        'death_to_case_scale',
-                        'case_death_delay',
-                        'gross_net_income',
-                        'population_density',
-                        'monthly_temperature',
-                        'retail_and_recreation',
-                        'grocery_and_pharmacy',
-                        'parks',
-                        'transit_stations',
-                        'workplaces',
-                        'residential',
-                        'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
-                        'population']
 
-    sel = adjusted_data[selected_features]
 
-    return sel
+    #Get features
+    try:
+        X_train = np.load(outdir+'X_train.npy', allow_pickle=True)
+        y_train = np.load(outdir+'y_train.npy', allow_pickle=True)
+        X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
+        y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
+        populations = np.load(outdir+'populations.npy', allow_pickle=True)
+        regions = np.load(outdir+'regions.npy', allow_pickle=True)
+
+    except:
+        selected_features = ['C1_School closing',
+                            'C2_Workplace closing',
+                            'C3_Cancel public events',
+                            'C4_Restrictions on gatherings',
+                            'C5_Close public transport',
+                            'C6_Stay at home requirements',
+                            'C7_Restrictions on internal movement',
+                            'C8_International travel controls',
+                            'H1_Public information campaigns',
+                            'H2_Testing policy',
+                            'H3_Contact tracing',
+                            'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
+                            'Country_index',
+                            'Region_index',
+                            'CountryName',
+                            'RegionName',
+                            'rescaled_cases',
+                            'cumulative_rescaled_cases',
+                            'death_to_case_scale',
+                            'case_death_delay',
+                            'gross_net_income',
+                            'population_density',
+                            'monthly_temperature',
+                            'retail_and_recreation',
+                            'grocery_and_pharmacy',
+                            'parks',
+                            'transit_stations',
+                            'workplaces',
+                            'residential',
+                            'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
+                            'population']
+
+        sel = adjusted_data[selected_features]
+
+        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel)
+        #Save
+        np.save(outdir+'X_train.npy',X_train)
+        np.save(outdir+'y_train.npy',y_train)
+        np.save(outdir+'X_test.npy',X_test)
+        np.save(outdir+'y_test.npy',y_test)
+        np.save(outdir+'populations.npy',populations)
+        np.save(outdir+'regions.npy',regions)
+
+
+    return X_train,y_train,X_test,y_test,populations,regions
 
 def split_for_training(sel):
     '''Split the data for training and testing
@@ -142,6 +164,12 @@ def split_for_training(sel):
             populations.append(population)
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
+
+def predict(means, stds):
+    '''Predict cases using sampled parameters
+    '''
+
+    return None
 
 def evaluate():
     '''Evaluate the model
@@ -259,7 +287,7 @@ def get_gpr_model(X_train,y_train,day,outdir):
     plt.yscale('log')
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
-    plt.savefig(outdir+'losses'+str(day)+'.png')
+    plt.savefig(outdir+'losses'+str(day+1)+'.png')
     plt.close()
 
 
@@ -269,11 +297,7 @@ def get_gpr_model(X_train,y_train,day,outdir):
 
     return means,stds
 
-def predict(means, stds):
-    '''Predict cases using sampled parameters
-    '''
 
-    return None
 
 
 #####MAIN#####
@@ -292,31 +316,15 @@ adjusted_data = adjusted_data.fillna(0)
 outdir = args.outdir[0]
 
 #Get features
-try:
-    X_train = np.load(outdir+'X_train.npy', allow_pickle=True)
-    y_train = np.load(outdir+'y_train.npy', allow_pickle=True)
-    X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
-    y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
-    populations = np.load(outdir+'populations.npy', allow_pickle=True)
-    regions = np.load(outdir+'regions.npy', allow_pickle=True)
-
-except:
-    sel=get_features(adjusted_data)
-    X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel)
-    #Save
-    np.save(outdir+'X_train.npy',X_train)
-    np.save(outdir+'y_train.npy',y_train)
-    np.save(outdir+'X_test.npy',X_test)
-    np.save(outdir+'y_test.npy',y_test)
-    np.save(outdir+'populations.npy',populations)
-    np.save(outdir+'regions.npy',regions)
+X_train,y_train,X_test,y_test,populations,regions  = get_features(sel,outdir)
 
 
 #Fit GPR models
 coef_means = []
 coef_stds = []
-for i in range(y_train.shape[1]):
+for day in range(y_train.shape[1]):
     #Fir gpr
-    means,stds = get_gpr_model(X_train, y_train[:,i])
+    means,stds = get_gpr_model(X_train, y_train[:,day],day,outdir)
     coef_means.append(means['beta'])
     coef_stds.append(stds['beta'])
+    pdb.set_trace()
