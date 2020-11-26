@@ -182,10 +182,6 @@ preds = []
 coefs = []
 for i in range(y_train.shape[1]):
     reg = LinearRegression().fit(X_train, y_train[:,i])
-    pdb.set_trace()
-    slope, intercept, r_value, p_value, std_err = stats.linregress(X_train, y_train[:,i])
-    confidence_interval = 2.58*std_err
-    pdb.set_trace()
     pred = reg.predict(X_test)
     #No negative predictions are allowed
     pred[pred<0]=0
@@ -210,15 +206,18 @@ for i in range(y_train.shape[1]):
 
 
 preds = np.array(preds)
-
+total_regional_error = []
+all_regional_corr = []
 #Evaluate the test cases
 for ri in range(len(regions)):
     #Plot
-    region_error = np.average(preds[:,ri]-y_test[ri,:])
+    region_error = np.cumsum(np.absolute(preds[:,ri]-y_test[ri,:]))[-1]
+    total_regional_error.append(region_error)
     region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
+    all_regional_corr.append(regional_corr)
     plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
     plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-    plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nError:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
+    plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
     plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
     plt.legend()
     plt.close()
