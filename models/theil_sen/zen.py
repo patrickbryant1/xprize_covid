@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 
 from scipy.stats import pearsonr
-from sklearn.linear_model import TheilSenRegressor
+from sklearn.linear_model import TheilSenRegressor, HuberRegressor
 import numpy as np
 
 
@@ -180,11 +180,10 @@ def predict(X_test, coef_means, coef_stds):
 
     return pred_means, pred_stds
 
-def evaluate(X_test,y_test, coef_means, coef_stds,outdir,regions):
+def evaluate(preds,y_test,outdir,regions):
     '''Evaluate the model
     '''
-    #1. Get predictions
-    pred_means, pred_stds = predict(X_test, coef_means, coef_stds)
+
     #2.Evaluate the test cases
     #Evaluate model
     results_file = open(outdir+'results.txt','w')
@@ -233,18 +232,16 @@ def evaluate(X_test,y_test, coef_means, coef_stds,outdir,regions):
 
 
 
-def fit_model(X_train,y_train,X_test,y_test):
+def fit_model(X_train,y_train,X_test):
     '''Create a GPR model in pymc3
     '''
-    pdb.set_trace()
-    reg = TheilSenRegressor(random_state=42,n_jobs=-1).fit(X_train,y_train)
+    print('Fitting...')
+    reg =  HuberRegressor().fit(X_train,y_train)
     pred = reg.predict(X_test)
     #No negative predictions are allowed
     pred[pred<0]=0
-    av_er = np.average(np.absolute(pred-y_test)/populations)
-    std = np.std(np.absolute(pred-y_test)/populations)
-    pdb.set_trace()
-    return means,stds
+
+    return pred
 
 
 
@@ -269,9 +266,17 @@ X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,
 
 
 #Fit models
-for day in range(y_train.shape[1]):
-    fit_model(X_train,y_train[:,day],X_test,y_test[:,day])
-
+try:
+    preds = np.load(outdir+'preds.npy',allow_pickle=True)
+except:
+    preds = []
+    for day in range(y_train.shape[1]):
+        preds.append(fit_model(X_train,y_train[:,day],X_test))
+        print(day,'error', np.round(np.average(np.absolute(np.array(preds[-1])-y_test[:,day]))))
+    #Save
+    preds = np.array(preds)
+    np.save(outdir+'preds.npy', preds)
 #Evaluate fit
-evaluate(X_test,y_test, coef_means, coef_stds,outdir,regions)
+pdb.set_trace()
+evaluate(preds,y_test,outdir,regions)
 pdb.set_trace()
