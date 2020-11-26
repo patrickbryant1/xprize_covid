@@ -316,7 +316,7 @@ adjusted_data = adjusted_data.fillna(0)
 outdir = args.outdir[0]
 
 #Get features
-X_train,y_train,X_test,y_test,populations,regions  = get_features(sel,outdir)
+X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,outdir)
 
 
 #Fit GPR models
@@ -327,4 +327,4 @@ for day in range(y_train.shape[1]):
     means,stds = get_gpr_model(X_train, y_train[:,day],day,outdir)
     coef_means.append(means['beta'])
     coef_stds.append(stds['beta'])
-    pdb.set_trace()
+pdb.set_trace()
