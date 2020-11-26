@@ -175,46 +175,68 @@ except:
     np.save(outdir+'populations.npy',populations)
     np.save(outdir+'regions.npy',regions)
 
-corrs = []
-errors = []
-stds = []
-preds = []
-coefs = []
-for i in range(y_train.shape[1]):
-    reg = LinearRegression().fit(X_train, y_train[:,i])
-    pred = reg.predict(X_test)
-    #No negative predictions are allowed
-    pred[pred<0]=0
-    preds.append(pred)
-    av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
-    std = np.std(np.absolute(pred-y_test[:,i])/populations)
-    print('Error',av_er, 'Std',std)
-    R,p = pearsonr(pred,y_test[:,i])
+try:
+    #If the model has already been fitted
+    corrs = np.load(outdir+'corrs.npy',allow_pickle=True)
+    errors = np.load(outdir+'errors.npy',allow_pickle=True)
+    stds = np.load(outdir+'stds.npy',allow_pickle=True)
+    preds = np.load(outdir+'preds.npy',allow_pickle=True)
+    coefs = np.load(outdir+'coefs.npy',allow_pickle=True)
+except:
+    #Fit the model
+    corrs = []
+    errors = []
+    stds = []
+    preds = []
+    coefs = []
+    for i in range(y_train.shape[1]):
+        reg = LinearRegression().fit(X_train, y_train[:,i])
+        pred = reg.predict(X_test)
+        #No negative predictions are allowed
+        pred[pred<0]=0
+        preds.append(pred)
+        av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
+        std = np.std(np.absolute(pred-y_test[:,i])/populations)
+        print('Error',av_er, 'Std',std)
+        R,p = pearsonr(pred,y_test[:,i])
+        #Save
+        corrs.append(R)
+        errors.append(av_er)
+        stds.append(std)
+        coefs.append(reg.coef_)
+        #Plot
+        plt.scatter(pred,y_test[:,i],s=1)
+        plt.title(str(i))
+        plt.xlabel('Predicted')
+        plt.xlabel('True')
+        plt.savefig(outdir+str(i)+'.png',format='png')
+        plt.close()
+
+
+    #Convert all to arrays
+    corrs = np.array(corrs )
+    errors = np.array(errors)
+    stds = np.array(stds)
+    preds = np.array(preds)
+    coefs = np.array(coefs)
     #Save
-    corrs.append(R)
-    errors.append(av_er)
-    stds.append(std)
-    coefs.append(reg.coef_)
-    #Plot
-    plt.scatter(pred,y_test[:,i],s=1)
-    plt.title(str(i))
-    plt.xlabel('Predicted')
-    plt.xlabel('True')
-    plt.savefig(outdir+str(i)+'.png',format='png')
-    plt.close()
-
-
-
-preds = np.array(preds)
-total_regional_error = []
+    np.save(outdir+'corrs.npy',corrs)
+    np.save(outdir+'errors.npy',errors)
+    np.save(outdir+'stds.npy',stds)
+    np.save(outdir+'preds.npy',preds)
+    np.save(outdir+'coefs.npy',coefs)
+#Evaluate errors
+total_regional_cum_error = []
+total_regional_mae = []
 all_regional_corr = []
 #Evaluate the test cases
 for ri in range(len(regions)):
     #Plot
     region_error = np.cumsum(np.absolute(preds[:,ri]-y_test[ri,:]))[-1]
-    total_regional_error.append(region_error)
+    total_regional_cum_error.append(region_error)
+    total_regional_mae.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])))
     region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
-    all_regional_corr.append(regional_corr)
+    all_regional_corr.append(region_corr)
     plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
     plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
     plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
@@ -222,11 +244,21 @@ for ri in range(len(regions)):
     plt.legend()
     plt.close()
     print(regions[i],region_corr)
+#Convert to arrays
+total_regional_cum_error = np.array(total_regional_cum_error)
+total_regional_mae = np.array(total_regional_mae)
+all_regional_corr = np.array(all_regional_corr)
+#Calculate error
+print('Total cumulative error:',np.sum(total_regional_cum_error))
+print('Total mae:',np.sum(total_regional_mae))
+print('Total normalized mae:',np.sum(total_regional_mae/np.sum(y_test,axis=1)))
 
+#Set NaNs to 0
+all_regional_corr[np.isnan(all_regional_corr)]=0
+print('Average correlation:',np.average(all_regional_corr))
 pdb.set_trace()
 
 #Look at coefs
-coefs = np.array(coefs)
 
 #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
 #--> get the last features, then divide into 21 portions
@@ -261,8 +293,6 @@ for i in range(remainder.shape[2]):
     plt.close()
 
 #Plot average error per day with std
-errors = np.array(errors)
-std = np.array(stds)
 plt.plot(range(1,22),errors,color='b')
 plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
 plt.title('Average error with std')
@@ -272,7 +302,6 @@ plt.savefig(outdir+'lr_av_error.png',format='png')
 plt.close()
 
 #Plot correlation
-corrs = np.array(corrs )
 plt.plot(range(1,22),corrs ,color='b')
 plt.title('Pearson R')
 plt.xlabel('Days in the future')
