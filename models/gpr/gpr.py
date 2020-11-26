@@ -187,76 +187,51 @@ def evaluate(X_test,y_test, coef_means, coef_stds,outdir,regions):
     '''Evaluate the model
     '''
     #1. Get predictions
-    predict(X_test, coef_means, coef_stds)
+    pred_means, pred_stds = predict(X_test, coef_means, coef_stds)
+    #2.Evaluate the test cases
+    #Evaluate model
+    results_file = open(outdir+'results.txt','w')
+    total_regional_cum_error = []
+    total_regional_mae = []
+    total_regional_2week_mae = []
+    all_regional_corr = []
     #Evaluate the test cases
     for ri in range(len(regions)):
         #Plot
-        region_error = np.average(preds[:,ri]-y_test[ri,:])
-        region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
-        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        region_error = np.cumsum(np.absolute(pred_means[:,ri]-y_test[ri,:]))[-1]
+        total_regional_cum_error.append(region_error)
+        total_regional_mae.append(np.average(np.absolute(pred_means[:,ri]-y_test[ri,:])))
+        total_regional_2week_mae.append(np.average(np.absolute(pred_means[:,ri][:14]-y_test[ri,:][:14])))
+        region_corr = pearsonr(pred_means[:,ri],y_test[ri,:])[0]
+        all_regional_corr.append(region_corr)
+        plt.plot(range(1,22),pred_means[:,ri],label='pred',color='grey')
+        #plt.fill_between(range(1,22),pred_means[:,ri]-pred_stds[:,ri],pred_means[:,ri]+pred_stds[:,ri],color='grey',alpha=0.5)
         plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-        plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nError:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
+        plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
         plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
         plt.legend()
+        plt.tight_layout()
         plt.close()
-        print(regions[i],region_corr)
+        results_file.write(regions[ri]+': '+str(region_corr)+'\n')
+    pdb.set_trace()
+    #Convert to arrays
+    total_regional_cum_error = np.array(total_regional_cum_error)
+    total_regional_mae = np.array(total_regional_mae)
+    all_regional_corr = np.array(all_regional_corr)
+    #Calculate error
+    results_file.write('Total cumulative error: '+str(np.sum(total_regional_cum_error))+'\n')
+    results_file.write('Total mae: '+str(np.sum(total_regional_mae))+'\n')
+    results_file.write('Total 2week mae: '+str(np.sum(total_regional_2week_mae))+'\n')
+    #Evaluate all regions with at least 10 observed cases
+    for t in [1,100,1000,10000]:
+        results_file.write('Total normalized mae for regions with over '+str(t)+' observed cases: '+str(np.sum(total_regional_mae[np.where(np.sum(y_test,axis=1)>t)]/(np.sum(y_test[np.where(np.sum(y_test,axis=1)>t)],axis=1))))+'\n')
 
+    #Set NaNs to 0
+    all_regional_corr[np.isnan(all_regional_corr)]=0
+    results_file.write('Average correlation: '+str(np.average(all_regional_corr)))
+    results_file.close()
     pdb.set_trace()
 
-    #Look at coefs
-    coefs = np.array(coefs)
-
-    #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
-    #--> get the last features, then divide into 21 portions
-
-    single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
-    single_features=coefs[:,-len(single_feature_names):]
-    plt.imshow(single_features)
-    plt.yticks(range(21),labels=range(1,22))
-    plt.xticks(range(len(single_feature_names)),labels=single_feature_names,rotation='vertical')
-    plt.colorbar()
-    plt.tight_layout()
-    plt.savefig(outdir+'single_features.png',format='png',dpi=300)
-    plt.close()
-    remainder=coefs[:,:-len(single_feature_names)]
-    remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind - this goes from -21 to 1,features
-    remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
-    'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
-    'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
-
-    for i in range(remainder.shape[2]):
-        plt.imshow(remainder[:,:,i])
-        #The first axis will end up horizontal, the second vertical
-        plt.xlabel('Future day')
-        plt.ylabel('Previous day')
-
-        plt.xticks(range(21),labels=range(1,22))
-        plt.yticks(range(21),labels=range(-21,0,1))
-        plt.colorbar()
-        plt.title('Days ahead',remainder_names[i]+1)
-        plt.tight_layout()
-        plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
-        plt.close()
-
-    #Plot average error per day with std
-    errors = np.array(errors)
-    std = np.array(stds)
-    plt.plot(range(1,22),errors,color='b')
-    plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
-    plt.title('Average error with std')
-    plt.xlabel('Days in the future')
-    plt.ylabel('Error per 100000')
-    plt.savefig(outdir+'lr_av_error.png',format='png')
-    plt.close()
-
-    #Plot correlation
-    corrs = np.array(corrs )
-    plt.plot(range(1,22),corrs ,color='b')
-    plt.title('Pearson R')
-    plt.xlabel('Days in the future')
-    plt.ylabel('PCC')
-    plt.savefig(outdir+'PCC.png',format='png')
-    plt.close()
 
 
 
