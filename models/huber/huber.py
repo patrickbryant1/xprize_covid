@@ -209,7 +209,7 @@ def evaluate(preds,y_test,outdir,regions):
         plt.tight_layout()
         plt.close()
         results_file.write(regions[ri]+': '+str(region_corr)+'\n')
-    pdb.set_trace()
+
     #Convert to arrays
     total_regional_cum_error = np.array(total_regional_cum_error)
     total_regional_mae = np.array(total_regional_mae)
@@ -226,7 +226,7 @@ def evaluate(preds,y_test,outdir,regions):
     all_regional_corr[np.isnan(all_regional_corr)]=0
     results_file.write('Average correlation: '+str(np.average(all_regional_corr)))
     results_file.close()
-    pdb.set_trace()
+
 
 
 
