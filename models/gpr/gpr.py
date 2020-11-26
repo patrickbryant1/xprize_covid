@@ -216,7 +216,10 @@ def evaluate():
     plt.savefig(outdir+'PCC.png',format='png')
     plt.close()
 
-def get_gpr_model(X_train,y_train):
+
+
+
+def get_gpr_model(X_train,y_train,day,outdir):
     '''Create a GPR model in pymc3
     '''
 
@@ -237,7 +240,6 @@ def get_gpr_model(X_train,y_train):
         # Prior parameters.
         #mus = [pm.Normal(str(i), mu=0, sigma=10) for i in range(Xy.shape[1])]
 
-        alpha = pm.Normal('alpha', mu=0, sigma=10)
         beta = pm.Normal('beta', mu=0, sigma=10,shape=X_train.shape[1])
         # c = pm.Normal('c', mu=0, sigma=10)
 
@@ -245,27 +247,35 @@ def get_gpr_model(X_train,y_train):
 
         # Relation between X and the mean of Y.
         #mu = a + b * C1_batch + c * C2_batch
-        mu = alpha + pm.math.dot(batch[:,:-1],beta)
+        mu = pm.math.dot(batch[:,:-1],beta)
         # Observed output Y.
         y_obs = pm.Normal('y_obs', mu=mu, sigma=sigma,
                       observed=batch[:,-1], total_size=n)
 
-        approx = pm.fit(100000, method='advi',obj_optimizer=pm.adagrad(learning_rate=1e-1), callbacks=[pm.callbacks.CheckParametersConvergence(tolerance=1e-4)])
+        approx = pm.fit(100000, method='advi', callbacks=[pm.callbacks.CheckParametersConvergence(tolerance=1e-4)])
 
     #Plot
     plt.plot(approx.hist)
-    plt.show()
+    plt.yscale('log')
+    plt.xlabel('Iteration')
+    plt.ylabel('Loss')
+    plt.savefig(outdir+'losses'+str(day)+'.png')
+    plt.close()
 
 
     means = approx.bij.rmap(approx.mean.eval())
-    sds = approx.bij.rmap(approx.std.eval())
+    stds = approx.bij.rmap(approx.std.eval())
 
 
+    return means,stds
+
+def predict(means, stds):
+    '''Predict cases using sampled parameters
+    '''
+
+    return None
 
 
-    pdb.set_trace()
-
-    return pred
 #####MAIN#####
 #Set font size
 matplotlib.rcParams.update({'font.size': 7})
@@ -301,29 +311,12 @@ except:
     np.save(outdir+'populations.npy',populations)
     np.save(outdir+'regions.npy',regions)
 
-corrs = []
-errors = []
-stds = []
-preds = []
-pred_sigmas = []
-coefs = []
+
+#Fit GPR models
+coef_means = []
+coef_stds = []
 for i in range(y_train.shape[1]):
     #Fir gpr
-    pred = get_gpr_model(X_train, y_train[:,i])
-    #No negative predictions are allowed
-    pred[pred<0]=0
-    preds.append(pred)
-    av_er = np.average(np.absolute(pred-y_test[:,i])/populations)
-    std = np.std(np.absolute(pred-y_test[:,i])/populations)
-    print('Error',av_er, 'Std',std)
-    R,p = pearsonr(pred,y_test[:,i])
-    #Save
-    corrs.append(R)
-    errors.append(av_er)
-    stds.append(std)
-    coefs.append(reg.coef_)
-
-
-
-
-preds = np.array(preds)
+    means,stds = get_gpr_model(X_train, y_train[:,i])
+    coef_means.append(means['beta'])
+    coef_stds.append(stds['beta'])
