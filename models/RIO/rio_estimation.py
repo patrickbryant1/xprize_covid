@@ -35,8 +35,40 @@ where X is the inputs used to train the neural net and y_pred its resulting pred
 
 2. After the parameters l and sigma have been learned, the predicted residuals can be used
 to calibrate the point predictions of the NN as well as providing the variance for the predictions.
-y_adj = (y_pred+r)+-r_var 
+y_adj = (y_pred+r)+-r_var
 '''
+
+def get_gpr_model(X_train,pred_train,true_train,outdir):
+    '''Create a GPR model in pymc3
+    '''
+
+    n=X_train.shape[0] #Number of data points
+    batch_size=128
+    Xy=np.append(X_train,np.array([y_train]).T,axis=1)
+    Xy = Xy
+    #Independent variables
+    batch = pm.Minibatch(Xy,batch_size)
+
+
+
+    # Find the parameters for the relation between X and Y.
+    with pm.Model() as model:
+        # Prior parameters.
+        #mus = [pm.Normal(str(i), mu=0, sigma=10) for i in range(Xy.shape[1])]
+
+        beta = pm.Normal('beta', mu=0, sigma=10,shape=X_train.shape[1])
+        # c = pm.Normal('c', mu=0, sigma=10)
+
+        sigma = pm.HalfNormal('sigma', sigma=10)
+
+        # Relation between X and the mean of Y.
+        #mu = a + b * C1_batch + c * C2_batch
+        mu = pm.math.dot(batch[:,:-1],beta)
+        # Observed output Y.
+        y_obs = pm.Normal('y_obs', mu=mu, sigma=sigma,
+                      observed=batch[:,-1], total_size=n)
+
+        approx = pm.fit(100000, method='advi', callbacks=[pm.callbacks.CheckParametersConvergence(tolerance=1e-4)])
 
 
 #####MAIN#####
