@@ -207,10 +207,10 @@ X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,
 #Fit models
 pred,coefs,intercept,breakdown = fit_model(X_train,y_train[:,days_ahead-1],X_test)
 #Save
-np.save(outdir+'preds.npy', pred)
-np.save(outdir+'coefficients.npy',coefs)
-np.save(outdir+'intercept.npy',intercept)
-np.save(outdir+'breakdown_point.npy',breakdown)
+np.save(outdir+'preds'+str(days_ahead)+'.npy', pred)
+np.save(outdir+'coefficients'+str(days_ahead)+'.npy',coefs)
+np.save(outdir+'intercept'+str(days_ahead)+'.npy',intercept)
+np.save(outdir+'breakdown_point'+str(days_ahead)+'.npy',breakdown)
 print(day,'error', np.round(np.average(np.absolute(pred-y_test[:,days_ahead-1]))))
 
 print('Done')
