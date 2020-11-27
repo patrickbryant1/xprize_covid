@@ -289,4 +289,6 @@ except:
 
 #Evaluate fit
 evaluate(preds,y_test,outdir,regions,populations)
+#Get residuals for RIO
+
 pdb.set_trace()
