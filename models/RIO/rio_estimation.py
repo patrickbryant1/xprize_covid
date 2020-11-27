@@ -17,10 +17,12 @@ import numpy as np
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''Get the residuals for RIO.''')
+parser = argparse.ArgumentParser(description = '''Calculate the parameters for RIO.''')
 
-parser.add_argument('--indir', nargs=1, type= str,
-                  default=sys.stdin, help = 'Path to processed data file.')
+parser.add_argument('--pred_train', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to predictions of train data.')
+parser.add_argument('--true_train', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to true values of train data.')
 
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
@@ -46,7 +48,6 @@ def get_residuals(X_train,y_train,indir,outdir):
 
     #Get the coefficients and intercepts, predict and calculate residuals
     residuals = []
-    preds = []
     for day in range(1,22):
         coefs= np.load(indir+'coefficients/coefficients'+str(day)+'.npy',allow_pickle=True)
         intercept = np.load(indir+'intercepts/intercept'+str(day)+'.npy',allow_pickle=True)
@@ -54,11 +55,10 @@ def get_residuals(X_train,y_train,indir,outdir):
         #Negative not allowed
         pred[pred<0]=0
         residuals.append(y_train[:,day-1]-pred)
-        preds.append(pred)
 
     #Save
     np.save(outdir+'residuals.npy',np.array(residuals))
-    np.save(outdir+'train_preds.npy',np.array(preds))
+
     print('Calculated residuals.')
 #####MAIN#####
 #Set font size
