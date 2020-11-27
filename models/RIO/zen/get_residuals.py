@@ -31,12 +31,12 @@ def get_features(indir):
     '''
 
     #Get features
-    X_train = np.load(intdir+'X_train.npy', allow_pickle=True)
+    X_train = np.load(indir+'X_train.npy', allow_pickle=True)
     y_train = np.load(indir+'y_train.npy', allow_pickle=True)
     X_test = np.load(indir+'X_test.npy', allow_pickle=True)
     y_test = np.load(indir+'y_test.npy', allow_pickle=True)
     populations = np.load(indir+'populations.npy', allow_pickle=True)
-    regions = np.load(outdir+'regions.npy', allow_pickle=True)
+    regions = np.load(indir+'regions.npy', allow_pickle=True)
 
     return X_train,y_train,X_test,y_test,populations,regions
 
@@ -47,12 +47,17 @@ def get_residuals(X_train,y_train,indir,outdir):
     #Get the coefficients and intercepts, predict and calculate residuals
     residuals = []
     for day in range(1,22):
-        coefs= np.load(indir+'coefficients'+str(day)+'.npy',allow_pickle=True)
-        intercept = np.load(indir+'intercept'+str(day)+'.npy',allow_pickle=True)
-        pred = np.dot(coefs,X_train)+intercept
+        coefs= np.load(indir+'coefficients/coefficients'+str(day)+'.npy',allow_pickle=True)
+        intercept = np.load(indir+'intercepts/intercept'+str(day)+'.npy',allow_pickle=True)
+        pred = np.dot(X_train,coefs)+intercept
+        #Negative not allowed
+        pred[pred<0]=0
         residuals.append(y_train[:,day-1]-pred)
-        pdb.set_trace()
 
+    #Save
+    np.save(outdir+'residuals.npy',np.array(residuals))
+
+    print('Calculated residuals.')
 #####MAIN#####
 #Set font size
 matplotlib.rcParams.update({'font.size': 7})
