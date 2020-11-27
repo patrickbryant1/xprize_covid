@@ -244,10 +244,15 @@ def fit_model(X_train,y_train,X_test):
     print('Fitting...')
     reg =  TheilSenRegressor().fit(X_train,y_train)
     pred = reg.predict(X_test)
+    #Save the coefficients of the fitted regressor
+    coefs = reg.coef_
+    intercept = reg.intercept_
+    breakdown = reg.breakdown_
+
     #No negative predictions are allowed
     pred[pred<0]=0
 
-    return pred
+    return pred,coefs,intercept,breakdown
 
 
 
@@ -276,12 +281,29 @@ try:
     preds = np.load(outdir+'preds.npy',allow_pickle=True)
 except:
     preds = []
+    coefficents = []
+    intercepts = []
+    breakdown_points = []
+
     for day in range(y_train.shape[1]):
-        preds.append(fit_model(X_train,y_train[:,day],X_test))
+        pred,coefs,intercept,breakdown = fit_model(X_train,y_train[:,day],X_test)
+         #Save
+        preds.append(pred)
+        coefficents.append(coefs)
+        intercepts.append(intercept)
+        breakdown_points.append(breakdown)
         print(day,'error', np.round(np.average(np.absolute(np.array(preds[-1])-y_test[:,day]))))
     #Save
     preds = np.array(preds)
     np.save(outdir+'preds.npy', preds)
+    coefficients = np.array(coefficients)
+    np.save(outdir+'coefficients.npy',coefficients)
+    intercepts = np.array(intercepts)
+    np.save(outdir+'intercepts.npy',intercepts)
+    breakdown_points = np.array(breakdown_points)
+    np.save(outdir+'breakdown_points.npy',breakdown_points)
+    print('Done')
+
 #Evaluate fit
 evaluate(preds,y_test,outdir,regions,populations)
 pdb.set_trace()
