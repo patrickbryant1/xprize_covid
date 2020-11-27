@@ -23,49 +23,29 @@ parser.add_argument('--pred_train', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to predictions of train data.')
 parser.add_argument('--true_train', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to true values of train data.')
-
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
-def get_features(indir):
-    '''Get the selected features
-    '''
+#####FUNCTIONS#####
+'''
+1. Need to estimate the paramters l and sigma for a Radial Basis Function (RBF) kernel
+that learns the redisuals (true-pred) by minimizing the log marginal likelihood: log p(r|X,y_pred),
+where X is the inputs used to train the neural net and y_pred its resulting predictions.
 
-    #Get features
-    X_train = np.load(indir+'X_train.npy', allow_pickle=True)
-    y_train = np.load(indir+'y_train.npy', allow_pickle=True)
-    X_test = np.load(indir+'X_test.npy', allow_pickle=True)
-    y_test = np.load(indir+'y_test.npy', allow_pickle=True)
-    populations = np.load(indir+'populations.npy', allow_pickle=True)
-    regions = np.load(indir+'regions.npy', allow_pickle=True)
+2. After the parameters l and sigma have been learned, the predicted residuals can be used
+to calibrate the point predictions of the NN as well as providing the variance for the predictions.
+y_adj = (y_pred+r)+-r_var 
+'''
 
-    return X_train,y_train,X_test,y_test,populations,regions
 
-def get_residuals(X_train,y_train,indir,outdir):
-    '''Get the residuals for the data
-    '''
-
-    #Get the coefficients and intercepts, predict and calculate residuals
-    residuals = []
-    for day in range(1,22):
-        coefs= np.load(indir+'coefficients/coefficients'+str(day)+'.npy',allow_pickle=True)
-        intercept = np.load(indir+'intercepts/intercept'+str(day)+'.npy',allow_pickle=True)
-        pred = np.dot(X_train,coefs)+intercept
-        #Negative not allowed
-        pred[pred<0]=0
-        residuals.append(y_train[:,day-1]-pred)
-
-    #Save
-    np.save(outdir+'residuals.npy',np.array(residuals))
-
-    print('Calculated residuals.')
 #####MAIN#####
 #Set font size
 matplotlib.rcParams.update({'font.size': 7})
 args = parser.parse_args()
 
-indir = args.indir[0]
+pred_train = np.load(args.pred_train[0],allow_pickle=True)
+true_train = np.load(args.true_train[0],allow_pickle=True)
 outdir = args.outdir[0]
 
 #Get features
