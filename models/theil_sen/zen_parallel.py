@@ -22,7 +22,8 @@ parser = argparse.ArgumentParser(description = '''Theil-Zen regression model.'''
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
-
+parser.add_argument('--days_ahead', nargs=1, type= int,
+                  default=sys.stdin, help = 'Number of days ahead to fit')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -163,63 +164,6 @@ def split_for_training(sel):
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
 
-def evaluate(preds,y_test,outdir,regions,populations):
-    '''Evaluate the model
-    '''
-
-    #2.Evaluate the test cases
-    #Evaluate model
-    results_file = open(outdir+'results.txt','w')
-    total_regional_cum_error = []
-    total_regional_mae = []
-    total_regional_mae_per_100000 = []
-    total_regional_2week_mae = []
-    all_regional_corr = []
-    #Evaluate the test cases
-    for ri in range(len(regions)):
-        #Plot
-        region_error = np.cumsum(np.absolute(preds[:,ri]-y_test[ri,:]))[-1]
-        total_regional_cum_error.append(region_error)
-        total_regional_mae.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])))
-        total_regional_mae_per_100000.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])/(populations[ri]/100000)))
-        total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
-        region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
-        all_regional_corr.append(region_corr)
-        fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
-        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-        plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
-        plt.xlabel('Day')
-        plt.ylabel('Cases')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        fig.tight_layout()
-        plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
-        plt.close()
-        results_file.write(regions[ri]+': '+str(region_corr)+'\n')
-
-    #Convert to arrays
-    total_regional_cum_error = np.array(total_regional_cum_error)
-    total_regional_mae = np.array(total_regional_mae)
-    all_regional_corr = np.array(all_regional_corr)
-    #Calculate error
-    results_file.write('Total 2week mae: '+str(np.sum(total_regional_2week_mae))+'\n')
-    results_file.write('Total mae: '+str(np.sum(total_regional_mae))+'\n')
-    results_file.write('Total mae per 100000: '+str(np.sum(total_regional_mae_per_100000))+'\n')
-    results_file.write('Total cumulative error: '+str(np.sum(total_regional_cum_error))+'\n')
-    #Evaluate all regions with at least 10 observed cases
-    for t in [1,100,1000,10000]:
-        results_file.write('Total normalized mae for regions with over '+str(t)+' observed cases: '+str(np.sum(total_regional_mae[np.where(np.sum(y_test,axis=1)>t)]/(np.sum(y_test[np.where(np.sum(y_test,axis=1)>t)],axis=1))))+'\n')
-
-    #Set NaNs to 0
-    all_regional_corr[np.isnan(all_regional_corr)]=0
-    results_file.write('Average correlation: '+str(np.average(all_regional_corr)))
-    results_file.close()
-    pdb.set_trace()
-
-
-
-
 
 def fit_model(X_train,y_train,X_test):
     '''Create a GPR model in pymc3
@@ -261,7 +205,7 @@ X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,
 
 #Fit models
 try:
-    preds = np.load(outdi<r+'preds.npy',allow_pickle=True)
+    preds = np.load(outdir+'preds.npy',allow_pickle=True)
 except:
     preds = []
     coefficents = []
