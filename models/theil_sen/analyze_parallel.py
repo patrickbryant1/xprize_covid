@@ -51,17 +51,17 @@ def evaluate(preds,coefs,intercepts,y_test,outdir,regions,populations):
         total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
         region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
         all_regional_corr.append(region_corr)
-        fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
-        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-        plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
-        plt.xlabel('Day')
-        plt.ylabel('Cases')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        fig.tight_layout()
-        plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
-        plt.close()
+        # fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
+        # plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        # plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
+        # plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
+        # plt.xlabel('Day')
+        # plt.ylabel('Cases')
+        # ax.spines['top'].set_visible(False)
+        # ax.spines['right'].set_visible(False)
+        # fig.tight_layout()
+        # plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
+        # plt.close()
         results_file.write(regions[ri]+': '+str(region_corr)+'\n')
 
     #Convert to arrays
@@ -103,22 +103,13 @@ def evaluate(preds,coefs,intercepts,y_test,outdir,regions,populations):
         plt.close()
 
 
-
+    for i in range()
 
 
 #####MAIN#####
 #Set font size
 matplotlib.rcParams.update({'font.size': 7})
 args = parser.parse_args()
-adjusted_data = pd.read_csv(args.adjusted_data[0],
-                 parse_dates=['Date'],
-                 encoding="ISO-8859-1",
-                 dtype={"RegionName": str,
-                        "RegionCode": str,
-                        "Country_index":int,
-                        "Region_index":int},
-                 error_bad_lines=False)
-adjusted_data = adjusted_data.fillna(0)
 indir = args.indir[0]
 outdir = args.outdir[0]
 
@@ -134,12 +125,14 @@ regions = np.load(indir+'regions.npy', allow_pickle=True)
 
 
 
-preds = np.load(indir+'preds.npy',allow_pickle=True))
+preds = np.load(indir+'preds.npy',allow_pickle=True)
 coefs = []
 intercepts = []
 for day in range(1,22):
     coefs.append(np.load(indir+'coefficients/coefficients'+str(day)+'.npy',allow_pickle=True))
-    intercepts.append(np.load(indir+'intercepts/intercepts'+str(day)+'.npy',allow_pickle=True))
-pdb.set_trace()
+    intercepts.append(np.load(indir+'intercepts/intercept'+str(day)+'.npy',allow_pickle=True))
+coefs = np.array(coefs)
+intercepts = np.array(intercepts)
+
 #Evaluate fit
-evaluate(preds,coefficients,intercepts,y_test,outdir,regions,populations)
+evaluate(preds,coefs,intercepts,y_test,outdir,regions,populations)
