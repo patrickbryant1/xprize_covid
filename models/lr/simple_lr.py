@@ -46,8 +46,10 @@ def get_features(adjusted_data,outdir):
                         'Region_index',
                         'CountryName',
                         'RegionName',
-                        'rescaled_cases',
-                        'cumulative_rescaled_cases',
+                        'smoothed_cases',
+                        'cumulative_smoothed_cases',
+                        #'rescaled_cases',
+                        #'cumulative_rescaled_cases',
                         'death_to_case_scale',
                         'case_death_delay',
                         'gross_net_income',
@@ -104,10 +106,10 @@ def split_for_training(sel):
             country_region_data = country_data[country_data['Region_index']==ri]
             #Select data 14 days before 0 cases
             try:
-                si = max(0,country_region_data[country_region_data['cumulative_rescaled_cases']>0].index[0]-14)
+                si = max(0,country_region_data[country_region_data['cumulative_smoothed_cases']>0].index[0]-14)
                 country_region_data = country_region_data.loc[si:]
             except:
-                print(len(country_region_data[country_region_data['cumulative_rescaled_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
+                print(len(country_region_data[country_region_data['cumulative_smoothed_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
                 continue
 
             country_region_data = country_region_data.reset_index()
@@ -141,8 +143,8 @@ def split_for_training(sel):
              'mas', 'uai', 'ltowvs', 'ivr','population'})
 
             #Normalize the cases by 100'000 population
-            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
-            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']#/(population/100000)
+            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
 
             #Loop through and get the first 21 days of data
             for di in range(len(country_region_data)-41):
@@ -151,7 +153,7 @@ def split_for_training(sel):
                 change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
                 X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
+                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['smoothed_cases']))
 
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())

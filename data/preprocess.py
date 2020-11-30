@@ -441,12 +441,10 @@ def cluster_countries(oxford_data,outdir):
         #Check if regions
         for region in regions:
             country_region_data = country_data[country_data['RegionCode']==region]
-            try:
-                cumulative_case_distribution.append(country_region_data['cumulative_rescaled_cases'].values[-1])
-                li = country_region_data['rescaled_cases'].index[-1]
-                last90.append(np.array(country_region_data.loc[li-89:,'rescaled_cases']))
-            except:
-                pdb.set_trace()
+            cumulative_case_distribution.append(country_region_data['cumulative_rescaled_cases'].values[-1])
+            li = country_region_data['rescaled_cases'].index[-1]
+            last90.append(np.array(country_region_data.loc[li-89:,'rescaled_cases']))
+
 
 
     #Plot the cumulative case distribution
@@ -536,6 +534,7 @@ except:
 
     oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,
                                 gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors)
+    oxford_data = oxford_data.fillna(0)
     oxford_data = cluster_countries(oxford_data,outdir)
     #Save the adjusted data
     oxford_data.to_csv(outdir+'adjusted_data.csv')
