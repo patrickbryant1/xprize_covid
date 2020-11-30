@@ -75,7 +75,7 @@ def get_features(adjusted_data, outdir):
                             'workplaces',
                             'residential',
                             'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
-                            'PC1','PC2',
+                            #'PC1','PC2',
                             'population']
 
         sel = adjusted_data[selected_features]
@@ -134,8 +134,8 @@ def split_for_training(sel):
             uai = country_region_data.loc[0,'uai'] #Uncertainty
             ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
             ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-            PC1 =  country_region_data.loc[0,'PC1'] #Principal components 1 and 2 of last 90 days of cases
-            PC2 =  country_region_data.loc[0,'PC2']
+            #PC1 =  country_region_data.loc[0,'PC1'] #Principal components 1 and 2 of last 90 days of cases
+            #PC2 =  country_region_data.loc[0,'PC2']
             population = country_region_data.loc[0,'population']
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
@@ -144,7 +144,7 @@ def split_for_training(sel):
 
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr','PC1','PC2','population'})
+             'mas', 'uai', 'ltowvs', 'ivr','population'})
 
             #Normalize the cases by 100'000 population
             #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
@@ -156,7 +156,7 @@ def split_for_training(sel):
                 xi = np.array(country_region_data.loc[di:di+20]).flatten()
                 change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, PC1, PC2, population]))
+                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
                 y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['smoothed_cases']))
 
             #Get the last 3 weeks as test
@@ -224,7 +224,7 @@ def evaluate(preds,coefs,intercepts,y_test,outdir,regions,populations):
     #Look at coefs
     #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
     #--> get the last features, then divide into 21 portions
-    single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','PC1','PC2','population']
+    single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
     #days pred,days behind - this goes from -21 to 1,features
     repeat_feature_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
     'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
@@ -249,8 +249,10 @@ def fit_model(X_train,y_train,X_test):
     pred = reg.predict(X_test)
     #No negative predictions are allowed
     pred[pred<0]=0
-
-    return pred
+    #Save the coefficients of the fitted regressor
+    coefs = reg.coef_
+    intercept = reg.intercept_
+    return pred,coefs,intercept
 
 
 
@@ -284,10 +286,11 @@ except:
     coefficients = []
     intercepts = []
     for day in range(y_train.shape[1]):
-        preds.append(fit_model(X_train,y_train[:,day],X_test))
+        pred,coefs,intercept = fit_model(X_train,y_train[:,day],X_test)
+        preds.append(pred)
         coefficients.append(coefs)
         intercepts.append(intercept)
-        print(day,'error', np.round(np.average(np.absolute(np.array(preds[-1])-y_test[:,day]))))
+        print(day,'error', np.round(np.average(np.absolute(pred-y_test[:,day]))))
     #Save
     preds = np.array(preds)
     np.save(outdir+'preds.npy', preds)
