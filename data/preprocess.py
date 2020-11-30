@@ -10,7 +10,7 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 
-
+from sklearn.decomposition import PCA
 import pdb
 #Arguments for argparse module:
 parser = argparse.ArgumentParser(description = '''Preprocess data for training.''')
@@ -333,8 +333,6 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         #Check if regions
         if regions.shape[0]>0:
             for region in regions:
-                #Create fig for vis
-                fig,ax = plt.subplots(figsize=(6/2.54,4.5/2.54))
                 country_region_data = country_data[country_data['RegionCode']==region]
                 #Smooth cases and deaths
                 cases,deaths = smooth_cases_and_deaths(np.array(country_region_data['ConfirmedCases']),np.array(country_region_data['ConfirmedDeaths']))
@@ -409,7 +407,7 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
 
     return oxford_data
 
-def cluster_countries(oxford_data):
+def cluster_countries(oxford_data,outdir):
     '''Cluster the different epidemic curves and investigate their characteristics
     '''
     #Cumulativ case distribution - save total amount of reported cases
@@ -430,10 +428,28 @@ def cluster_countries(oxford_data):
             cumulative_case_distribution.append(country_region_data['cumulative_rescaled_cases'].values[-1])
             li = country_region_data['rescaled_cases'].index[-1]
             last90.append(np.array(country_region_data.loc[li-89:,'rescaled_cases']))
+
+
+    #Plot the cumulative case distribution
+    fig,ax = plt.subplots(figsize=(6/2.54,4.5/2.54))
+    plt.hist(np.log10(np.array(cumulative_case_distribution)+1))
+    plt.xlabel('log cumulative cases')
+    plt.ylabel('count')
+    plt.tight_layout()
+    plt.savefig(outdir+'cumulative_case_distr.png', format='png', dpi=300)
+    plt.close()
+
+    #PCA
+    last90 = np.array(last90)
+    decomp90 = PCA().fit(last90)
+    fig,ax = plt.subplots(figsize=(6/2.54,4.5/2.54))
+    plt.bar(np.arange(90),decomp90.explained_variance_ratio_)
+    plt.ylabel('log explained_variance_ratio_')
+    plt.xlabel('PC')
+    plt.tight_layout()
+    plt.savefig(outdir+'explained_variance.png', format='png', dpi=300)
+    plt.close()
     pdb.set_trace()
-
-
-
 
 #####MAIN#####
 #Set font size
@@ -477,7 +493,7 @@ except:
     oxford_data.to_csv(outdir+'adjusted_data.csv')
 
 
-cluster_countries(oxford_data)
+cluster_countries(oxford_data,outdir)
 
 
 #Get the dates for training
