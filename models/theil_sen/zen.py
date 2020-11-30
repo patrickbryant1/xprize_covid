@@ -262,6 +262,7 @@ X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,
 #Fit models
 try:
     preds = np.load(outdi<r+'preds.npy',allow_pickle=True)
+    
 except:
     preds = []
     coefficents = []
