@@ -220,10 +220,6 @@ def evaluate(preds,y_test,outdir,regions,populations):
     results_file.close()
 
 
-
-
-
-
 def fit_model(X_train,y_train,X_test):
     '''Create a GPR model in pymc3
     '''
@@ -270,4 +266,3 @@ except:
     np.save(outdir+'preds.npy', preds)
 #Evaluate fit
 evaluate(preds,y_test,outdir,regions,populations)
-pdb.set_trace()
