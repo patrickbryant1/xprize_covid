@@ -414,25 +414,23 @@ def cluster_countries(oxford_data):
     '''
     #Cumulativ case distribution - save total amount of reported cases
     cumulative_case_distribution = []
-
+    #last 90 days of case data
+    last90 = []
     #Unique countries
     country_codes = oxford_data['CountryCode'].unique()
 
     #Go through all countries and sub regions
     for cc in country_codes:
         country_data = oxford_data[oxford_data['CountryCode']==cc]
-        #Get country total
-        whole_country_data = country_data[country_data['RegionCode'].isna()]
-
         #Get regions
-        regions = country_data['RegionCode'].dropna().unique()
+        regions = country_data['RegionCode'].unique()
         #Check if regions
-        if regions.shape[0]>0:
-            for region in regions:
-                #Create fig for vis
-                fig,ax = plt.subplots(figsize=(6/2.54,4.5/2.54))
-                country_region_data = country_data[country_data['RegionCode']==region]
-                pdb.set_trace()
+        for region in regions:
+            country_region_data = country_data[country_data['RegionCode']==region]
+            cumulative_case_distribution.append(country_region_data['cumulative_rescaled_cases'].values[-1])
+            li = country_region_data['rescaled_cases'].index[-1]
+            last90.append(np.array(country_region_data.loc[li-89:,'rescaled_cases']))
+    pdb.set_trace()
 
 
 
@@ -469,8 +467,10 @@ try:
            "Country_index":int,
            "Region_index":int},
     error_bad_lines=False)
+    oxford_data = oxford_data.fillna(0)
+
 except:
-    adjusted_data = adjusted_data.fillna(0))
+
     oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,
                                 gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors)
     #Save the adjusted data
