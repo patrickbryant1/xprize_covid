@@ -200,6 +200,9 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
     #Define country and regional indices
     oxford_data['Country_index']=0
     oxford_data['Region_index']=0
+    oxford_data['smoothed_cases']=0
+    oxford_data['cumulative_smoothed_cases']=0
+    oxford_data['smoothed_deaths']=0
     oxford_data['rescaled_cases']=0
     oxford_data['cumulative_rescaled_cases']=0
     oxford_data['death_to_case_scale']=0
@@ -316,6 +319,12 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
         #If the rescaled cases are smaller than the cases, set to cases
         if max(rescaled_cases) < max(cases):
             rescaled_cases = cases
+        #Save smoothed cases
+        oxford_data.at[whole_country_data.index,'smoothed_cases']=cases
+        #Save cumulative smoothed cases
+        oxford_data.at[whole_country_data.index,'cumulative_smoothed_cases']=np.cumsum(cases)
+        #Save smoothed deaths
+        oxford_data.at[whole_country_data.index,'smoothed_deaths']=deaths
         #Save the rescaled cases
         oxford_data.at[whole_country_data.index,'rescaled_cases']=rescaled_cases
         #Save cumulative rescaled cases
@@ -362,6 +371,13 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
                 #If the rescaled cases are smaller than the cases, set to cases
                 if max(rescaled_cases) < max(cases):
                     rescaled_cases = cases
+
+                #Save smoothed cases
+                oxford_data.at[country_region_data.index,'smoothed_cases']=cases
+                #Save cumulative smoothed cases
+                oxford_data.at[country_region_data.index,'cumulative_smoothed_cases']=np.cumsum(cases)
+                #Save smoothed deaths
+                oxford_data.at[country_region_data.index,'smoothed_deaths']=deaths
                 #Save rescaled cases
                 oxford_data.at[country_region_data.index,'rescaled_cases']=rescaled_cases
                 #Save cumulative rescaled cases
@@ -425,9 +441,12 @@ def cluster_countries(oxford_data,outdir):
         #Check if regions
         for region in regions:
             country_region_data = country_data[country_data['RegionCode']==region]
-            cumulative_case_distribution.append(country_region_data['cumulative_rescaled_cases'].values[-1])
-            li = country_region_data['rescaled_cases'].index[-1]
-            last90.append(np.array(country_region_data.loc[li-89:,'rescaled_cases']))
+            try:
+                cumulative_case_distribution.append(country_region_data['cumulative_rescaled_cases'].values[-1])
+                li = country_region_data['rescaled_cases'].index[-1]
+                last90.append(np.array(country_region_data.loc[li-89:,'rescaled_cases']))
+            except:
+                pdb.set_trace()
 
 
     #Plot the cumulative case distribution

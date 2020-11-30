@@ -321,6 +321,10 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
 adjusted_data = adjusted_data.fillna(0)
 outdir = args.outdir[0]
 
+#Use only data from July 1
+adjusted_data = adjusted_data[adjusted_data['Date']>='2020-07-01']
+
+
 #Get data
 X_train,y_train,X_test,y_test,populations,regions =  get_features(adjusted_data,outdir)
 #Fit model
