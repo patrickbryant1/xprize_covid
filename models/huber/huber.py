@@ -59,8 +59,10 @@ def get_features(adjusted_data, outdir):
                             'Region_index',
                             'CountryName',
                             'RegionName',
-                            'rescaled_cases',
-                            'cumulative_rescaled_cases',
+                            'smoothed_cases',
+                            'cumulative_smoothed_cases',
+                            #'rescaled_cases',
+                            #'cumulative_rescaled_cases',
                             'death_to_case_scale',
                             'case_death_delay',
                             'gross_net_income',
@@ -108,10 +110,10 @@ def split_for_training(sel):
             country_region_data = country_data[country_data['Region_index']==ri]
             #Select data 14 days before 0 cases
             try:
-                si = max(0,country_region_data[country_region_data['cumulative_rescaled_cases']>0].index[0]-14)
+                si = max(0,country_region_data[country_region_data['cumulative_smoothed_cases']>0].index[0]-14)
                 country_region_data = country_region_data.loc[si:]
             except:
-                print(len(country_region_data[country_region_data['cumulative_rescaled_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
+                print(len(country_region_data[country_region_data['cumulative_smoothed_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
                 continue
 
             country_region_data = country_region_data.reset_index()
@@ -145,8 +147,8 @@ def split_for_training(sel):
              'mas', 'uai', 'ltowvs', 'ivr','PC1','PC2','population'})
 
             #Normalize the cases by 100'000 population
-            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
-            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']#/(population/100000)
+            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
 
             #Loop through and get the first 21 days of data
             for di in range(len(country_region_data)-41):
@@ -155,7 +157,7 @@ def split_for_training(sel):
                 change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
                 X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, PC1, PC2, population]))
-                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
+                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['smoothed_cases']))
 
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())
@@ -166,7 +168,7 @@ def split_for_training(sel):
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
-def evaluate(preds,y_test,outdir,regions,populations):
+def evaluate(preds,coefs,intercepts,y_test,outdir,regions,populations):
     '''Evaluate the model
     '''
 
@@ -219,6 +221,25 @@ def evaluate(preds,y_test,outdir,regions,populations):
     results_file.write('Average correlation: '+str(np.average(all_regional_corr)))
     results_file.close()
 
+    #Look at coefs
+    #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
+    #--> get the last features, then divide into 21 portions
+    single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','PC1','PC2','population']
+    #days pred,days behind - this goes from -21 to 1,features
+    repeat_feature_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
+    'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
+    'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
+    all_feature_names = single_feature_names+repeat_feature_names*21
+    for i in range(coefs.shape[0]):
+        fig,ax=plt.subplots(figsize=(18,6))
+        plt.bar(range(coefs.shape[1]),coefs[i,:],)
+        #for j in range(coefs.shape[1]):
+        #    plt.text(j,coefs[i,j],all_feature_names[j],fontsize=12)
+
+        plt.title('Day '+str(i+1))
+        plt.tight_layout()
+        plt.savefig(outdir+'coefs_'+str(i+1)+'.png',format='png',dpi=300)
+        plt.close()
 
 def fit_model(X_train,y_train,X_test):
     '''Create a GPR model in pymc3
@@ -256,13 +277,21 @@ X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,
 #Fit models
 try:
     preds = np.load(outdir+'preds.npy',allow_pickle=True)
+    coefficients=np.load(outdir+'coefficients.npy',allow_pickle=True)
+    intercepts = np.load(outdir+'intercepts.npy',allow_pickle=True)
 except:
     preds = []
+    coefficients = []
+    intercepts = []
     for day in range(y_train.shape[1]):
         preds.append(fit_model(X_train,y_train[:,day],X_test))
+        coefficients.append(coefs)
+        intercepts.append(intercept)
         print(day,'error', np.round(np.average(np.absolute(np.array(preds[-1])-y_test[:,day]))))
     #Save
     preds = np.array(preds)
     np.save(outdir+'preds.npy', preds)
+    np.save(outdir+'coefficients.npy',coefficients)
+    np.save(outdir+'intercepts.npy',intercepts)
 #Evaluate fit
-evaluate(preds,y_test,outdir,regions,populations)
+evaluate(preds,coefficients,intercepts,y_test,outdir,regions,populations)
