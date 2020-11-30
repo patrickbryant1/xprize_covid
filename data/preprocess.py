@@ -444,11 +444,39 @@ def cluster_countries(oxford_data,outdir):
     decomp90 = PCA().fit(last90)
     fig,ax = plt.subplots(figsize=(6/2.54,4.5/2.54))
     plt.bar(np.arange(90),decomp90.explained_variance_ratio_)
-    plt.ylabel('log explained_variance_ratio_')
+    plt.ylabel('explained_variance_ratio_')
     plt.xlabel('PC')
+    plt.yscale('log')
     plt.tight_layout()
     plt.savefig(outdir+'explained_variance.png', format='png', dpi=300)
     plt.close()
+    #Transform
+    transformed_last90 = decomp90.transform(last90)
+    fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
+    plt.scatter(transformed_last90[:,0],transformed_last90[:,1],s=0.1)
+    plt.xlabel('PC1:'+str(np.round(decomp90.explained_variance_ratio_[0],2)))
+    plt.ylabel('PC2:'+str(np.round(decomp90.explained_variance_ratio_[1],2)))
+    plt.tight_layout()
+    plt.savefig(outdir+'first2_PCs.png', format='png', dpi=300)
+    plt.close()
+
+    #Add to Oxford data
+    oxford_data['PC1']=0
+    oxford_data['PC2']=0
+    #Go through all countries and sub regions
+    cri=0
+    for cc in country_codes:
+        country_data = oxford_data[oxford_data['CountryCode']==cc]
+        #Get regions
+        regions = country_data['RegionCode'].unique()
+        #Check if regions
+        for region in regions:
+            country_region_indices = country_data[country_data['RegionCode']==region].index
+            oxford_data.at[country_region_indices,'PC1']=transformed_last90[cri,0]
+            oxford_data.at[country_region_indices,'PC2']=transformed_last90[cri,1]
+            cri+=1
+
+    return oxford_data
     pdb.set_trace()
 
 #####MAIN#####
@@ -489,11 +517,10 @@ except:
 
     oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,
                                 gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors)
+    oxford_data = cluster_countries(oxford_data,outdir)
     #Save the adjusted data
     oxford_data.to_csv(outdir+'adjusted_data.csv')
 
-
-cluster_countries(oxford_data,outdir)
 
 
 #Get the dates for training
