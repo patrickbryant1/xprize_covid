@@ -60,7 +60,7 @@ def get_features(adjusted_data,outdir):
                         'workplaces',
                         'residential',
                         'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
-                        'PCA1','PCA2',
+                        'PC1','PC2',
                         'population']
 
     #Get features
@@ -74,7 +74,6 @@ def get_features(adjusted_data,outdir):
 
     except:
         sel = adjusted_data[selected_features]
-        sel=get_features(adjusted_data)
         X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel)
         #Save
         np.save(outdir+'X_train.npy',X_train)
@@ -186,8 +185,8 @@ def fit_model(X_train,y_train,X_test,outdist):
             #No negative predictions are allowed
             pred[pred<0]=0
             preds.append(pred)
-            av_er = np.average(np.absolute(pred-y_test[:,i])/(populations/100000))
-            std = np.std(np.absolute(pred-y_test[:,i])/(populations/100000))
+            av_er = np.average(np.absolute(pred-y_test[:,i]))
+            std = np.std(np.absolute(pred-y_test[:,i]))
             print('Error',av_er, 'Std',std)
             R,p = pearsonr(pred,y_test[:,i])
             #Save
@@ -240,17 +239,17 @@ def evaluate_model(corrs, errors, stds, preds, coefs, y_test, outdir):
         total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
         region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
         all_regional_corr.append(region_corr)
-        fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
-        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-        plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
-        plt.xlabel('Day')
-        plt.ylabel('Cases')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        fig.tight_layout()
-        plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
-        plt.close()
+        #fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
+        #plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        #plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
+        #plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
+        #plt.xlabel('Day')
+        #plt.ylabel('Cases')
+        #ax.spines['top'].set_visible(False)
+        #ax.spines['right'].set_visible(False)
+        #fig.tight_layout()
+        #plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
+        #plt.close()
         results_file.write(regions[ri]+': '+str(region_corr)+'\n')
     #Convert to arrays
     total_regional_cum_error = np.array(total_regional_cum_error)
@@ -275,34 +274,20 @@ def evaluate_model(corrs, errors, stds, preds, coefs, y_test, outdir):
     #--> get the last features, then divide into 21 portions
 
     single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr', 'PC1', 'PC2','population']
-    single_features=coefs[:,-len(single_feature_names):]
-    plt.imshow(single_features)
-    plt.yticks(range(21),labels=range(1,22))
-    plt.xticks(range(len(single_feature_names)),labels=single_feature_names,rotation='vertical')
-    plt.colorbar()
-    plt.tight_layout()
-    plt.savefig(outdir+'single_features.png',format='png',dpi=300)
-    plt.close()
-    remainder=coefs[:,:-len(single_feature_names)]
-    remainder=np.reshape(remainder,(21,21,-1)) #days pred,days behind - this goes from -21 to 1,features
-    remainder_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
+    #days pred,days behind - this goes from -21 to 1,features
+    repeat_feature_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
     'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
     'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
 
-    for i in range(remainder.shape[2]):
-        plt.imshow(remainder[:,:,i])
+    for i in range(coefs.shape[0]):
+        plt.bar(range(coefs.shape[1]),coefs[i,:])
         #The first axis will end up horizontal, the second vertical
-        plt.xlabel('Future day')
-        plt.ylabel('Previous day')
-
-        plt.xticks(range(21),labels=range(1,22))
-        plt.yticks(range(21),labels=range(-21,0,1))
-        plt.colorbar()
-        plt.title(remainder_names[i])
+        plt.xticks(range(coefs.shape[1]),labels=single_feature_names+repeat_feature_names*21)
+        plt.title('Day '+str(i+1))
         plt.tight_layout()
-        plt.savefig(outdir+'feature_'+str(i)+'.png',format='png',dpi=300)
+        plt.savefig(outdir+'coefs_'+str(i+1)+'.png',format='png',dpi=300)
         plt.close()
-
+        pdb.set_trace()
     #Plot average error per day with std
     plt.plot(range(1,22),errors,color='b')
     plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
@@ -338,6 +323,6 @@ outdir = args.outdir[0]
 #Get data
 X_train,y_train,X_test,y_test,populations,regions =  get_features(adjusted_data,outdir)
 #Fit model
-corrs, errors, stds, preds, coefs = fit_model(X_train,y_train,X_test,outdist)
+corrs, errors, stds, preds, coefs = fit_model(X_train,y_train,X_test,outdir)
 #Evaluate model
 evaluate_model(corrs, errors, stds, preds, coefs, y_test, outdir)
