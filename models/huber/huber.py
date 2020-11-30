@@ -73,6 +73,7 @@ def get_features(adjusted_data, outdir):
                             'workplaces',
                             'residential',
                             'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
+                            'PC1','PC2',
                             'population']
 
         sel = adjusted_data[selected_features]
@@ -131,6 +132,8 @@ def split_for_training(sel):
             uai = country_region_data.loc[0,'uai'] #Uncertainty
             ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
             ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
+            PC1 =  country_region_data.loc[0,'PC1'] #Principal components 1 and 2 of last 90 days of cases
+            PC2 =  country_region_data.loc[0,'PC2']
             population = country_region_data.loc[0,'population']
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
@@ -139,7 +142,7 @@ def split_for_training(sel):
 
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr','population'})
+             'mas', 'uai', 'ltowvs', 'ivr','PC1','PC2','population'})
 
             #Normalize the cases by 100'000 population
             country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
@@ -151,7 +154,7 @@ def split_for_training(sel):
                 xi = np.array(country_region_data.loc[di:di+20]).flatten()
                 change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, PC1, PC2, population]))
                 y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
 
             #Get the last 3 weeks as test
@@ -160,25 +163,8 @@ def split_for_training(sel):
             #Save population
             populations.append(population)
 
+
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
-
-def predict(X_test, coef_means, coef_stds):
-    '''Predict cases using sampled parameters
-    '''
-
-    preds =[]
-    pred_stds = []
-    for day in range(coef_means.shape[0]):
-        day_means = coef_means[day,:]
-        day_stds = coef_stds[day,:]
-        preds.append(np.dot(X_test,day_means))
-        pred_stds.append(np.dot(X_test,day_stds))
-    #Convert to arrays
-    preds = np.array(preds)
-    pred_stds = np.array(pred_stds)
-
-
-    return preds, pred_stds
 
 def evaluate(preds,y_test,outdir,regions,populations):
     '''Evaluate the model
