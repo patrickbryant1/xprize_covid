@@ -278,16 +278,18 @@ def evaluate_model(corrs, errors, stds, preds, coefs, y_test, outdir):
     repeat_feature_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
     'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
     'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
-
+    all_feature_names = single_feature_names+repeat_feature_names*21
     for i in range(coefs.shape[0]):
-        plt.bar(range(coefs.shape[1]),coefs[i,:])
-        #The first axis will end up horizontal, the second vertical
-        plt.xticks(range(coefs.shape[1]),labels=single_feature_names+repeat_feature_names*21)
+        fig,ax=plt.subplots(figsize=(18,6))
+        plt.bar(range(coefs.shape[1]),coefs[i,:],)
+        for j in range(coefs.shape[1]):
+            plt.text(j,coefs[i,j],all_feature_names[j])
+
         plt.title('Day '+str(i+1))
         plt.tight_layout()
         plt.savefig(outdir+'coefs_'+str(i+1)+'.png',format='png',dpi=300)
         plt.close()
-        pdb.set_trace()
+    pdb.set_trace()
     #Plot average error per day with std
     plt.plot(range(1,22),errors,color='b')
     plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
