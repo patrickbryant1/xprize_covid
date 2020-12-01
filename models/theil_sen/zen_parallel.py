@@ -32,7 +32,7 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
-def get_features(adjusted_data, outdir):
+def get_features(adjusted_data, train_days, outdir):
     '''Get the selected features
     '''
 
@@ -84,7 +84,7 @@ def get_features(adjusted_data, outdir):
 
         sel = adjusted_data[selected_features]
 
-        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel)
+        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel,train_days)
         #Save
         np.save(outdir+'X_train.npy',X_train)
         np.save(outdir+'y_train.npy',y_train)
@@ -96,7 +96,7 @@ def get_features(adjusted_data, outdir):
 
     return X_train,y_train,X_test,y_test,populations,regions
 
-def split_for_training(sel):
+def split_for_training(sel, train_days):
     '''Split the data for training and testing
     '''
     X_train = [] #Inputs
@@ -154,14 +154,15 @@ def split_for_training(sel):
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
 
-            #Loop through and get the first 21 days of data
-            for di in range(len(country_region_data)-41):
+            #Loop through and get the data
+            forecast_days=21
+            for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
-                xi = np.array(country_region_data.loc[di:di+20]).flatten()
+                xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
                 change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
                 X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['smoothed_cases']))
+                y_train.append(np.array(country_region_data.loc[di+train_days:di++train_days+forecast_days-1]['smoothed_cases']))
 
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())
@@ -206,10 +207,13 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
 days_ahead = args.days_ahead[0]
+start_date = args.start_date[0]
+train_days = args.train_days[0]
 outdir = args.outdir[0]
-
+#Use only data from start date
+adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
-X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,outdir)
+X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,train_days,outdir)
 
 
 #Fit models
