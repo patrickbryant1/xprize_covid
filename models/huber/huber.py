@@ -22,12 +22,15 @@ parser = argparse.ArgumentParser(description = '''Huber regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
-
+parser.add_argument('--start_date', nargs=1, type= str,
+                  default=sys.stdin, help = 'Date to start from.')
+parser.add_argument('--train_days', nargs=1, type= int,
+                  default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
-def get_features(adjusted_data, outdir):
+def get_features(adjusted_data, train_days, outdir):
     '''Get the selected features
     '''
 
@@ -61,8 +64,8 @@ def get_features(adjusted_data, outdir):
                             'RegionName',
                             'smoothed_cases',
                             'cumulative_smoothed_cases',
-                            #'rescaled_cases',
-                            #'cumulative_rescaled_cases',
+                            'rescaled_cases',
+                            'cumulative_rescaled_cases',
                             'death_to_case_scale',
                             'case_death_delay',
                             'gross_net_income',
@@ -80,7 +83,7 @@ def get_features(adjusted_data, outdir):
 
         sel = adjusted_data[selected_features]
 
-        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel)
+        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel,train_days)
         #Save
         np.save(outdir+'X_train.npy',X_train)
         np.save(outdir+'y_train.npy',y_train)
@@ -92,7 +95,7 @@ def get_features(adjusted_data, outdir):
 
     return X_train,y_train,X_test,y_test,populations,regions
 
-def split_for_training(sel):
+def split_for_training(sel,train_days):
     '''Split the data for training and testing
     '''
     X_train = [] #Inputs
@@ -147,17 +150,18 @@ def split_for_training(sel):
              'mas', 'uai', 'ltowvs', 'ivr','population'})
 
             #Normalize the cases by 100'000 population
-            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
-            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
 
-            #Loop through and get the first 21 days of data
-            for di in range(len(country_region_data)-41):
+            #Loop through and get the data
+            forecast_days=21
+            for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
-                xi = np.array(country_region_data.loc[di:di+20]).flatten()
+                xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
                 change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
                 X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['smoothed_cases']))
+                y_train.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])/(population/100000))
 
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())
@@ -168,7 +172,7 @@ def split_for_training(sel):
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
-def evaluate(preds,coefs,intercepts,y_test,outdir,regions,populations):
+def evaluate(preds,coefficients,intercepts,y_test,outdir,regions,populations,train_days,outdir):
     '''Evaluate the model
     '''
 
@@ -190,17 +194,17 @@ def evaluate(preds,coefs,intercepts,y_test,outdir,regions,populations):
         total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
         region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
         all_regional_corr.append(region_corr)
-        fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
-        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-        plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
-        plt.xlabel('Day')
-        plt.ylabel('Cases')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        fig.tight_layout()
-        plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
-        plt.close()
+        # fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
+        # plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        # plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
+        # plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
+        # plt.xlabel('Day')
+        # plt.ylabel('Cases')
+        # ax.spines['top'].set_visible(False)
+        # ax.spines['right'].set_visible(False)
+        # fig.tight_layout()
+        # plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
+        # plt.close()
         results_file.write(regions[ri]+': '+str(region_corr)+'\n')
 
     #Convert to arrays
@@ -241,6 +245,23 @@ def evaluate(preds,coefs,intercepts,y_test,outdir,regions,populations):
         plt.savefig(outdir+'coefs_'+str(i+1)+'.png',format='png',dpi=300)
         plt.close()
 
+    #Plot average error per day with std
+    plt.plot(range(1,22),errors,color='b')
+    plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
+    plt.title('Average error with std')
+    plt.xlabel('Days in the future')
+    plt.ylabel('Error per 100000')
+    plt.savefig(outdir+'lr_av_error.png',format='png')
+    plt.close()
+
+    #Plot correlation
+    plt.plot(range(1,22),corrs ,color='b')
+    plt.title('Pearson R')
+    plt.xlabel('Days in the future')
+    plt.ylabel('PCC')
+    plt.savefig(outdir+'PCC.png',format='png')
+    plt.close()
+
 def fit_model(X_train,y_train,X_test):
     '''Create a GPR model in pymc3
     '''
@@ -270,10 +291,13 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                         "Region_index":int},
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
+start_date = args.start_date[0]
+train_days = args.train_days[0]
 outdir = args.outdir[0]
-
+#Use only data from start date
+adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
-X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,outdir)
+X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,train_days,outdir)
 
 
 #Fit models
@@ -281,8 +305,14 @@ try:
     preds = np.load(outdir+'preds.npy',allow_pickle=True)
     coefficients=np.load(outdir+'coefficients.npy',allow_pickle=True)
     intercepts = np.load(outdir+'intercepts.npy',allow_pickle=True)
+    corrs = np.load(outdir+'corrs.npy',allow_pickle=True)
+    errors = np.load(outdir+'errors.npy',allow_pickle=True)
+    stds = np.load(outdir+'stds.npy',allow_pickle=True)
 except:
     preds = []
+    corrs = []
+    errors = []
+    stds = []
     coefficients = []
     intercepts = []
     for day in range(y_train.shape[1]):
@@ -291,10 +321,20 @@ except:
         coefficients.append(coefs)
         intercepts.append(intercept)
         print(day,'error', np.round(np.average(np.absolute(pred-y_test[:,day]))))
+        #Get average error, std and PearsonR
+        av_er = np.average(np.absolute(pred-y_test[:,day]))
+        std = np.std(np.absolute(pred-y_test[:,day]))
+        R,p = pearsonr(pred,y_test[:,day])
+        #Save
+        corrs.append(R)
+        errors.append(av_er)
+        stds.append(std)
     #Save
-    preds = np.array(preds)
-    np.save(outdir+'preds.npy', preds)
-    np.save(outdir+'coefficients.npy',coefficients)
-    np.save(outdir+'intercepts.npy',intercepts)
+    np.save(outdir+'preds.npy', np.array(preds))
+    np.save(outdir+'coefficients.npy',np.array(coefficients))
+    np.save(outdir+'intercepts.npy',np.array(intercepts))
+    np.save(outdir+'corrs.npy',np.array(corrs))
+    np.save(outdir+'errors.npy',np.array(errors))
+    np.save(outdir+'stds.npy',np.array(stds))
 #Evaluate fit
-evaluate(preds,coefficients,intercepts,y_test,outdir,regions,populations)
+evaluate(preds,coefficients,intercepts,y_test,outdir,regions,populations,train_days,outdir)

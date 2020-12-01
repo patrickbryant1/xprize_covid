@@ -22,6 +22,10 @@ parser = argparse.ArgumentParser(description = '''Analyze Theil-Sen model.''')
 
 parser.add_argument('--indir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
+parser.add_argument('--start_date', nargs=1, type= str,
+                  default=sys.stdin, help = 'Date to start from.')
+parser.add_argument('--train_days', nargs=1, type= int,
+                  default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 

@@ -146,10 +146,10 @@ def split_for_training(sel,train_days):
              'mas', 'uai', 'ltowvs', 'ivr','population'})
 
             #Normalize the cases by 100'000 population
-            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
-            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
 
-            #Loop through and get the first 21 days of data
+            #Loop through and get the data
             forecast_days=21
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
@@ -157,7 +157,7 @@ def split_for_training(sel,train_days):
                 period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
                 X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y_train.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
+                y_train.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])/(population/100000))
 
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())
@@ -244,17 +244,17 @@ def evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir)
         total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
         region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
         all_regional_corr.append(region_corr)
-        #fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
-        #plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-        #plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-        #plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
-        #plt.xlabel('Day')
-        #plt.ylabel('Cases')
-        #ax.spines['top'].set_visible(False)
-        #ax.spines['right'].set_visible(False)
-        #fig.tight_layout()
-        #plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
-        #plt.close()
+        fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
+        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
+        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
+        plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
+        plt.xlabel('Day')
+        plt.ylabel('Cases')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        fig.tight_layout()
+        plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
+        plt.close()
         results_file.write(regions[ri]+': '+str(region_corr)+'\n')
     #Convert to arrays
     total_regional_cum_error = np.array(total_regional_cum_error)
@@ -278,11 +278,11 @@ def evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir)
     #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
     #--> get the last features, then divide into 21 portions
 
-    single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
+    single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in input period days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
     #days pred,days behind - this goes from -21 to 1,features
     repeat_feature_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
     'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
-    'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
+    'smoothed_cases', 'cumulative_smoothed_cases', 'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
     all_feature_names = single_feature_names+repeat_feature_names*train_days
     for i in range(coefs.shape[0]):
         fig,ax=plt.subplots(figsize=(18,6))
@@ -329,7 +329,7 @@ start_date = args.start_date[0]
 train_days = args.train_days[0]
 outdir = args.outdir[0]
 
-#Use only data from July 1
+#Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 
 
