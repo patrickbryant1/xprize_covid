@@ -21,7 +21,8 @@ parser = argparse.ArgumentParser(description = '''Simple linear regression model
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
-
+parser.add_argument('--start_date', nargs=1, type= str,
+                  default=sys.stdin, help = 'Date to start from.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -321,10 +322,11 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                         "Region_index":int},
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
+start_date = args.start_date[0]
 outdir = args.outdir[0]
 
 #Use only data from July 1
-adjusted_data = adjusted_data[adjusted_data['Date']>='2020-07-01']
+adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 
 
 #Get data

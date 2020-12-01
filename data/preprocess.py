@@ -494,7 +494,58 @@ def cluster_countries(oxford_data,outdir):
             cri+=1
 
     return oxford_data
-    pdb.set_trace()
+
+def correlations_within_data(oxford_data, outdir):
+    '''Analyze the correlations within the data
+    '''
+
+    selected_features = ['C1_School closing',
+                        'C2_Workplace closing',
+                        'C3_Cancel public events',
+                        'C4_Restrictions on gatherings',
+                        'C5_Close public transport',
+                        'C6_Stay at home requirements',
+                        'C7_Restrictions on internal movement',
+                        'C8_International travel controls',
+                        'H1_Public information campaigns',
+                        'H2_Testing policy',
+                        'H3_Contact tracing',
+                        'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
+                        'smoothed_cases',
+                        'cumulative_smoothed_cases',
+                        'rescaled_cases',
+                        'cumulative_rescaled_cases',
+                        'death_to_case_scale',
+                        'case_death_delay',
+                        'gross_net_income',
+                        'population_density',
+                        'monthly_temperature',
+                        'retail_and_recreation',
+                        'grocery_and_pharmacy',
+                        'parks',
+                        'transit_stations',
+                        'workplaces',
+                        'residential',
+                        'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
+                        'population']
+
+    features_sel = np.array(oxford_data[selected_features])
+    correlations = np.zeros((features_sel.shape[1],features_sel.shape[1]))
+    for i in range(correlations.shape[0]):
+        for j in range(i+1,correlations.shape[1]):
+            print(i,j)
+            try:
+                correlations[i,j]=np.correlate(features_sel[:,i],features_sel[:,j])[0]
+            except:
+                continue
+
+    plt.imshow(correlations)
+    plt.xticks(ticks=range(correlations.shape[0]),labels=selected_features,rotation='vertical')
+    plt.yticks(ticks=range(correlations.shape[1]),labels=selected_features)
+    plt.colorbar()
+    plt.tight_layout()
+    plt.show()
+
 
 #####MAIN#####
 #Set font size
@@ -540,7 +591,8 @@ except:
     oxford_data.to_csv(outdir+'adjusted_data.csv')
 
 
-
+#Analyze the auto correlations of the features
+correlations_within_data(oxford_data, outdir)
 #Get the dates for training
 '''
 The flags just tells the presence, while the features tell the strength?
