@@ -24,11 +24,24 @@ parser.add_argument('--indir', nargs=1, type= str,
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
-def predict(X_train,y_train,coefs,intercepts):
+def predict(X_train,y_train,coefs,intercept,day):
     '''Predict to analyze error
     '''
+
     train_pred = np.dot(X_train,coefs)+intercept
-    pdb.set_trace()
+    #Negative not allowed
+    train_pred[train_pred<0]=0
+    train_errors = np.absolute(train_pred-y_train)
+    av_train_error = np.average(train_errors)
+    std_train_error = np.std(train_errors)
+    R,p = pearsonr(train_pred,y_train)
+    fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
+    plt.scatter(train_pred,y_train,s=1)
+    plt.title('Av.er:'+str(np.round(av_train_error,3))+'|std:'+str(np.round(std_train_error,3))+'|PCC:'+str(np.round(R,2)))
+    fig.tight_layout()
+    plt.savefig(outdir+'train_true'+str(day)+'.png',format='png')
+    plt.close()
+    return av_train_error, std_train_error, R
 
 
 def evaluate(preds,coefs,intercepts,X_train,y_train,y_test,outdir,regions,populations):
@@ -104,12 +117,23 @@ def evaluate(preds,coefs,intercepts,X_train,y_train,y_test,outdir,regions,popula
     #     plt.close()
 
     #Analyze error per day ahead
-    for da in range(preds.shape[1]):
-        predict(X_train,y_train[:,da],coefs,intercepts)
-        pdb.set_trace()
+    av_err_per_day = []
+    std_per_day = []
+    corr_per_day = []
+
+    for da in range(preds.shape[0]):
+        av_train_error, std_train_error, R = predict(X_train,y_train[:,da],coefs[da,:],intercepts[da],da+1)
+        av_err_per_day.append(av_train_error)
+        std_per_day.append(std_train_error)
+        corr_per_day.append(R)
+    #Convert to arrays
+    av_err_per_day = np.array(av_err_per_day)
+    std_per_day = np.array(std_per_day)
+    corr_per_day = np.array(corr_per_day)
     #Plot average error per day with std
-    plt.plot(range(1,22),errors,color='b')
-    plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
+    fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
+    plt.plot(range(1,len(av_err_per_day)+1),av_err_per_day,color='b')
+    plt.fill_between(range(1,len(av_err_per_day)+1),av_err_per_day-std_per_day,av_err_per_day+std_per_day,color='b',alpha=0.5)
     plt.title('Average error with std')
     plt.xlabel('Days in the future')
     plt.ylabel('Error per 100000')
@@ -117,7 +141,8 @@ def evaluate(preds,coefs,intercepts,X_train,y_train,y_test,outdir,regions,popula
     plt.close()
 
     #Plot correlation
-    plt.plot(range(1,22),corrs ,color='b')
+    fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
+    plt.plot(range(1,len(corr_per_day)+1),corr_per_day ,color='b')
     plt.title('Pearson R')
     plt.xlabel('Days in the future')
     plt.ylabel('PCC')
