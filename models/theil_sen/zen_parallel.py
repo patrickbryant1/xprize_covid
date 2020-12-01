@@ -219,6 +219,6 @@ np.save(outdir+'preds'+str(days_ahead)+'.npy', pred)
 np.save(outdir+'coefficients'+str(days_ahead)+'.npy',coefs)
 np.save(outdir+'intercept'+str(days_ahead)+'.npy',intercept)
 np.save(outdir+'breakdown_point'+str(days_ahead)+'.npy',breakdown)
-print(day,'error', np.round(np.average(np.absolute(pred-y_test[:,days_ahead-1]))))
+print(days_ahead,'error', np.round(np.average(np.absolute(pred-y_test[:,days_ahead-1]))))
 
 print('Done')
