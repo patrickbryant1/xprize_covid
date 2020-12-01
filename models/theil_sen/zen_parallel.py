@@ -24,6 +24,10 @@ parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
 parser.add_argument('--days_ahead', nargs=1, type= int,
                   default=sys.stdin, help = 'Number of days ahead to fit')
+parser.add_argument('--start_date', nargs=1, type= str,
+                  default=sys.stdin, help = 'Date to start from.')
+parser.add_argument('--train_days', nargs=1, type= int,
+                  default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -60,6 +64,8 @@ def get_features(adjusted_data, outdir):
                             'Region_index',
                             'CountryName',
                             'RegionName',
+                            'smoothed_cases',
+                            'cumulative_smoothed_cases',
                             'rescaled_cases',
                             'cumulative_rescaled_cases',
                             'death_to_case_scale',
@@ -140,11 +146,13 @@ def split_for_training(sel):
 
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr','population'})
+             'mas', 'uai', 'ltowvs', 'ivr',
+             'rescaled_cases','cumulative_rescaled_cases',
+             'population'})
 
             #Normalize the cases by 100'000 population
-            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
-            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']#/(population/100000)
+            country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
+            country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
 
             #Loop through and get the first 21 days of data
             for di in range(len(country_region_data)-41):
@@ -153,7 +161,7 @@ def split_for_training(sel):
                 change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
                 X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
+                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['smoothed_cases']))
 
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())
@@ -166,7 +174,7 @@ def split_for_training(sel):
 
 
 def fit_model(X_train,y_train,X_test):
-    '''Create a GPR model in pymc3
+    '''CFit regressor
     '''
     print('Fitting...')
     reg =  TheilSenRegressor().fit(X_train,y_train)

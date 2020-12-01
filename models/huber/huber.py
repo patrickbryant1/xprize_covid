@@ -172,7 +172,7 @@ def split_for_training(sel,train_days):
 
     return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
 
-def evaluate(preds,coefficients,intercepts,y_test,outdir,regions,populations,train_days,outdir):
+def evaluate(preds,coefs,intercepts,corrs,errors,stds,y_test,regions,populations,train_days,outdir):
     '''Evaluate the model
     '''
 
@@ -337,4 +337,4 @@ except:
     np.save(outdir+'errors.npy',np.array(errors))
     np.save(outdir+'stds.npy',np.array(stds))
 #Evaluate fit
-evaluate(preds,coefficients,intercepts,y_test,outdir,regions,populations,train_days,outdir)
+evaluate(preds,coefficients,intercepts,corrs,errors,stds,y_test,regions,populations,train_days,outdir)
