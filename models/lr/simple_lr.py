@@ -23,11 +23,13 @@ parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
 parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
+parser.add_argument('--train_days', nargs=1, type= int,
+                  default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
-def get_features(adjusted_data,outdir):
+def get_features(adjusted_data,train_days,outdir):
     '''Get the selected features
     '''
 
@@ -49,8 +51,8 @@ def get_features(adjusted_data,outdir):
                         'RegionName',
                         'smoothed_cases',
                         'cumulative_smoothed_cases',
-                        #'rescaled_cases',
-                        #'cumulative_rescaled_cases',
+                        'rescaled_cases',
+                        'cumulative_rescaled_cases',
                         'death_to_case_scale',
                         'case_death_delay',
                         'gross_net_income',
@@ -76,7 +78,7 @@ def get_features(adjusted_data,outdir):
 
     except:
         sel = adjusted_data[selected_features]
-        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel)
+        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel,train_days)
         #Save
         np.save(outdir+'X_train.npy',X_train)
         np.save(outdir+'y_train.npy',y_train)
@@ -89,7 +91,7 @@ def get_features(adjusted_data,outdir):
 
     return X_train,y_train,X_test,y_test,populations,regions
 
-def split_for_training(sel):
+def split_for_training(sel,train_days):
     '''Split the data for training and testing
     '''
     X_train = [] #Inputs
@@ -148,13 +150,14 @@ def split_for_training(sel):
             #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
 
             #Loop through and get the first 21 days of data
-            for di in range(len(country_region_data)-41):
+            forecast_days=21
+            for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
-                xi = np.array(country_region_data.loc[di:di+20]).flatten()
-                change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
+                xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
+                period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['smoothed_cases']))
+                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                y_train.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
             #Get the last 3 weeks as test
             X_test.append(X_train.pop())
@@ -220,7 +223,7 @@ def fit_model(X_train,y_train,X_test,outdist):
 
     return corrs, errors, stds, preds, coefs
 
-def evaluate_model(corrs, errors, stds, preds, coefs, y_test, outdir):
+def evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir):
     '''Evaluate the fit model
     '''
 
@@ -280,7 +283,7 @@ def evaluate_model(corrs, errors, stds, preds, coefs, y_test, outdir):
     repeat_feature_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
     'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
     'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
-    all_feature_names = single_feature_names+repeat_feature_names*21
+    all_feature_names = single_feature_names+repeat_feature_names*train_days
     for i in range(coefs.shape[0]):
         fig,ax=plt.subplots(figsize=(18,6))
         plt.bar(range(coefs.shape[1]),coefs[i,:],)
@@ -291,7 +294,7 @@ def evaluate_model(corrs, errors, stds, preds, coefs, y_test, outdir):
         plt.tight_layout()
         plt.savefig(outdir+'coefs_'+str(i+1)+'.png',format='png',dpi=300)
         plt.close()
-    pdb.set_trace()
+
     #Plot average error per day with std
     plt.plot(range(1,22),errors,color='b')
     plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
@@ -323,6 +326,7 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
 start_date = args.start_date[0]
+train_days = args.train_days[0]
 outdir = args.outdir[0]
 
 #Use only data from July 1
@@ -330,8 +334,8 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 
 
 #Get data
-X_train,y_train,X_test,y_test,populations,regions =  get_features(adjusted_data,outdir)
+X_train,y_train,X_test,y_test,populations,regions =  get_features(adjusted_data,train_days,outdir)
 #Fit model
 corrs, errors, stds, preds, coefs = fit_model(X_train,y_train,X_test,outdir)
 #Evaluate model
-evaluate_model(corrs, errors, stds, preds, coefs, y_test, outdir)
+evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir)
