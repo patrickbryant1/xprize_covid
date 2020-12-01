@@ -18,7 +18,7 @@ from tensorflow import keras
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
 import tensorflow.keras.models as M
-
+from tensorflow.keras.callbacks import TensorBoard
 from scipy.stats import pearsonr
 
 import pdb
@@ -220,50 +220,25 @@ class DataGenerator(keras.utils.Sequence):
     def __data_generation(self, batch_indices):
         'Generates data containing batch_size samples'
 
-        #save data
-        #y_batch = []
-        #Generate batch_size days between 0-20 (days ahead to predict)
-        #np.random.choice(21,self.batch_size)
-        #Get the targets (y)
-        # for i in range(len(batch_indices)):
-        #     y_batch.append(self.y_train_fold[batch_indices[i],batch_days[i]])
-        #
-        # return np.append(self.X_train_fold[batch_indices],np.array([batch_days]).T,axis=-1), np.array(y_batch)
-
         return self.X_train_fold[batch_indices],self.y_train_fold[batch_indices]
 
 #####LOSSES AND SCORES#####
+def test(net, X_test,y_test,populations,regions):
+    '''Test the net on the last 3 weeks of data
+    '''
+    for xi in range(X_test.shape[0]):
+        preds_i=net.predict(np.array([X_test]))[0]
+        R,p = pearsonr(preds_i,y_test)
+        print(regions[xi],R)
+
 #Custom loss
-def correlationLoss(x,y, axis=-2):
-  """Loss function that maximizes the pearson correlation coefficient between the predicted values and the labels,
-  while trying to have the same mean and variance"""
-  x = tf.convert_to_tensor(x)
-  y = tf.cast(y, x.dtype)
-  n = tf.cast(tf.shape(x)[axis], x.dtype)
-  xsum = tf.reduce_sum(x, axis=axis)
-  ysum = tf.reduce_sum(y, axis=axis)
-  xmean = xsum / n
-  ymean = ysum / n
-  xsqsum = tf.reduce_sum( tf.math.squared_difference(x, xmean), axis=axis)
-  ysqsum = tf.reduce_sum( tf.math.squared_difference(y, ymean), axis=axis)
-  cov = tf.reduce_sum( (x - xmean) * (y - ymean), axis=axis)
-  corr = cov / tf.sqrt(xsqsum * ysqsum)
-  # absdif = tmean(tf.abs(x - y), axis=axis) / tf.sqrt(yvar)
-  sqdif = tf.reduce_sum(tf.math.squared_difference(x, y), axis=axis) / n / tf.sqrt(ysqsum / n)
-  # meandif = tf.abs(xmean - ymean) / tf.abs(ymean)
-  # vardif = tf.abs(xvar - yvar) / yvar
-  # return tf.convert_to_tensor( K.mean(tf.constant(1.0, dtype=x.dtype) - corr + (meandif * 0.01) + (vardif * 0.01)) , dtype=tf.float32 )
-  return tf.convert_to_tensor( K.mean(tf.constant(1.0, dtype=x.dtype) - corr + (0.01 * sqdif)) , dtype=tf.float32 )
+# calculate minkowski distance
+def minkowski_distance(y_true, y_pred):
+    tf.dtypes.cast(y_true, tf.float32)
+    tf.dtypes.cast(y_pred, tf.float32)
+    metric = tf.math.pow(y_true-y_pred,1.2)
+    return K.mean(metric)
 
-def bin_loss(y_true, y_pred):
-
-    g_loss = tf.keras.losses.mean_absolute_error(y_true, y_pred) #general, compare difference
-    kl_loss = tf.keras.losses.kullback_leibler_divergence(y_true, y_pred) #better than comparing to gaussian
-    sum_kl_loss = K.sum(kl_loss, axis =0)
-    sum_g_loss = K.sum(g_loss, axis =0)
-    #sum_g_loss = sum_g_loss*10 #This is basically a loss penalty
-    loss = sum_g_loss+sum_kl_loss
-    return loss
 
 #####BUILD NET#####
 def build_net(n1,n2,input_dim):
@@ -272,36 +247,14 @@ def build_net(n1,n2,input_dim):
     z = L.Input((input_dim,), name="Patient")
     x1 = L.Dense(n1, activation="relu", name="d1")(z)
     x2 = L.Dense(n2, activation="relu", name="d2")(x1)
-    #p1 = L.Dense(3, activation="linear", name="p1")(x3)
-    #p1 = K.abs(p1)
-    preds = L.Dense(21, activation="relu", name="preds")(x2)
-    # preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
-    #                  name="preds")([p1, p2])
-    #Ensure non-negative values
-    #preds = K.abs(preds)
-    model = M.Model(z, preds, name="MQR")
-    model.compile(loss='kullback_leibler_divergence', optimizer=tf.keras.optimizers.Adam(lr=0.1, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae','kullback_leibler_divergence'])
+    preds = L.Dense(1, activation="relu", name="preds")(x2)
+
+    model = M.Model(z, preds, name="Dense")
+    model.compile(loss=minkowski_distance, optimizer=tf.keras.optimizers.Adam(lr=0.001),metrics=['mae'])
     return model
 
-def test(net, X_test,y_test,populations,regions):
-    '''Test the net on the last 3 weeks of data
-    '''
-    for xi in range(X_test.shape[0]):
-        preds_i=np.absolute(net.predict(np.array([X_test[xi]]))[0])
-        R,p = pearsonr(preds_i,y_test[xi])
-        print(regions[xi],R)
-        # fig,ax = plt.subplots(figsize=(6/2.54,4/2.54))
-        # plt.plot(np.arange(1,22),y_test[xi],color='g')
-        # plt.plot(np.arange(1,22),preds_i[:,1],color='grey')
-        # plt.fill_between(np.arange(1,22),preds_i[:,0],preds_i[:,2],color='grey',alpha=0.5)
-        # plt.title(regions[xi]+'\n'+str(np.round(populations[xi]/1000000,2))+' millions')
-        # plt.tight_layout()
-        # plt.savefig(outdir+regions[xi]+'.png',dpi=300,format='png')
-        # plt.close()
 
 #####MAIN#####
-#Set font size
-matplotlib.rcParams.update({'font.size': 7})
 args = parser.parse_args()
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
@@ -323,24 +276,25 @@ seed_everything(42) #The answer it is
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
 X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,train_days,outdir)
-
-
-pdb.set_trace()
+#Select day
+y_train = y_train[:,days_ahead-1]
+y_test = y_test[:,days_ahead-1]
 #Get net parameters
 BATCH_SIZE=256
-EPOCHS=100
-n1=200 #Nodes layer 1
-n2=100 #Nodes layer 2
+EPOCHS=1000
+n1=20 #Nodes layer 1
+n2=20 #Nodes layer 2
 #Make net
 net = build_net(n1,n2,X_train.shape[1]+1)
 print(net.summary())
 #KFOLD
-NFOLD = 5
+NFOLD = 10
 kf = KFold(n_splits=NFOLD)
 fold=0
 
 for tr_idx, val_idx in kf.split(X_train):
     fold+=1
+    tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
     net = build_net(n1,n2,X_train.shape[1])
     #Data generation
@@ -349,7 +303,8 @@ for tr_idx, val_idx in kf.split(X_train):
 
     net.fit(training_generator,
             validation_data=valid_generator,
-            epochs=EPOCHS
+            epochs=EPOCHS,
+            callbacks = [tensorboard]
             )
 
     #Test the net
