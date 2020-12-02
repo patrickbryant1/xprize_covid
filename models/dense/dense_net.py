@@ -33,6 +33,8 @@ parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
 parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
+#parser.add_argument('--param_combo', nargs=1, type= int,
+                  #default=sys.stdin, help = 'Parameter combo.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -308,7 +310,7 @@ y_train = y_train[:,days_ahead-1]
 y_test = y_test[:,days_ahead-1]
 #Get net parameters
 BATCH_SIZE=256
-EPOCHS=500
+EPOCHS=200
 n1=16 #Nodes layer 1
 n2=16 #Nodes layer 2
 min_val = 0
