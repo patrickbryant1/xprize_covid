@@ -226,18 +226,30 @@ class DataGenerator(keras.utils.Sequence):
 def test(net, X_test,y_test,populations,regions):
     '''Test the net on the last 3 weeks of data
     '''
-    for xi in range(X_test.shape[0]):
-        preds_i=net.predict(np.array([X_test]))[0]
-        R,p = pearsonr(preds_i,y_test)
-        print(regions[xi],R)
+
+    test_preds=net.predict(np.array(X_test))
+    R,p = pearsonr(test_preds[:,1],y_test)
+    print('PCC:',R)
+    order = np.argsort(y_test)
+    plt.plot(y_test[order],test_preds[:,1][order],color='grey')
+    plt.plot(y_test[order],y_test[order],color='k',linestyle='--')
+    plt.fill_between(y_test[order],test_preds[:,0][order],test_preds[:,2][order],color='grey',alpha=0.5)
+    plt.xlim([min(y_test),max(y_test)])
+    plt.ylim([min(y_test),max(y_test)])
+    plt.xlabel('True')
+    plt.ylabel('Pred')
+    plt.show()
 
 #Custom loss
-# calculate minkowski distance
-def minkowski_distance(y_true, y_pred):
-    tf.dtypes.cast(y_true, tf.float32)
-    tf.dtypes.cast(y_pred, tf.float32)
-    metric = tf.math.pow(y_true-y_pred,1.2)
-    return K.mean(metric)
+#============================#
+def qloss(y_true, y_pred):
+    # Pinball loss for multiple quantiles
+    qs = [0.2, 0.50, 0.8]
+    q = tf.constant(np.array([qs]), dtype=tf.float32)
+    e = y_true - y_pred
+    v = tf.maximum(q*e, (q-1)*e)
+    return K.mean(v)
+
 
 
 #####BUILD NET#####
@@ -245,20 +257,26 @@ def build_net(n1,n2,input_dim,bins):
     '''Build the net using Keras
     '''
     z = L.Input((input_dim,), name="Patient")
-    
+
     x1 = L.Dense(n1, activation="relu", name="d1")(z)
     x1 = L.BatchNormalization()(x1)
     x2 = L.Dense(n2, activation="relu", name="d2")(x1)
-    probabilities = L.Dense(6, activation="softmax", name="preds")(x2)
+    x2 = L.BatchNormalization()(x2)
 
-    bins_K = K.variable(value=bins)
-
-    def multiply(x):
-      return tf.matmul(x, bins_K,transpose_b=True)
-
-    preds = L.Lambda(multiply)(probabilities)
+    p1 = L.Dense(3, activation="linear", name="p1")(x2)
+    p2 = L.Dense(3, activation="relu", name="p2")(x2)
+    preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
+                     name="preds")([p1, p2])
+    # probabilities = L.Dense(6, activation="softmax", name="preds")(x2)
+    #
+    # bins_K = K.variable(value=bins)
+    #
+    # def multiply(x):
+    #   return tf.matmul(x, bins_K,transpose_b=True)
+    #
+    # preds = L.Lambda(multiply)(probabilities)
     model = M.Model(z, preds, name="Dense")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.001))
+    model.compile(loss=qloss, optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae'])
     return model
 
 
@@ -289,8 +307,8 @@ X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,
 y_train = y_train[:,days_ahead-1]
 y_test = y_test[:,days_ahead-1]
 #Get net parameters
-BATCH_SIZE=32
-EPOCHS=1000
+BATCH_SIZE=256
+EPOCHS=500
 n1=16 #Nodes layer 1
 n2=16 #Nodes layer 2
 min_val = 0
@@ -301,7 +319,7 @@ bins = np.expand_dims(bins, axis=0)
 net = build_net(n1,n2,X_train.shape[1]+1,bins )
 print(net.summary())
 #KFOLD
-NFOLD = 10
+NFOLD = 5
 kf = KFold(n_splits=NFOLD)
 fold=0
 
