@@ -188,7 +188,7 @@ def fit_model(X,y,outdist):
             X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
 
             for day in range(y_train.shape[1]):
-                reg = LinearRegression().fit(X_train, y_train[:,day)
+                reg = LinearRegression().fit(X_train, y_train[:,day])
                 pred = reg.predict(X_valid)
                 #No negative predictions are allowed
                 pred[pred<0]=0
@@ -222,50 +222,11 @@ def evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir)
 
     #Evaluate model
     results_file = open(outdir+'results.txt','w')
-    total_regional_cum_error = []
-    total_regional_mae = []
-    total_regional_2week_mae = []
-    total_regional_mae_per_100000 = []
-    all_regional_corr = []
-    #Evaluate the test cases
-    for ri in range(len(regions)):
-        #Plot
-        region_error = np.cumsum(np.absolute(preds[:,ri]-y_test[ri,:]))[-1]
-        total_regional_cum_error.append(region_error)
-        total_regional_mae.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])))
-        total_regional_mae_per_100000.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])/(populations[ri]/100000)))
-        total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
-        region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
-        all_regional_corr.append(region_corr)
-        fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
-        plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-        plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-        plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
-        plt.xlabel('Day')
-        plt.ylabel('Cases')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        fig.tight_layout()
-        plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
-        plt.close()
-        results_file.write(regions[ri]+': '+str(region_corr)+'\n')
-    #Convert to arrays
-    total_regional_cum_error = np.array(total_regional_cum_error)
-    total_regional_mae = np.array(total_regional_mae)
-    all_regional_corr = np.array(all_regional_corr)
     #Calculate error
     results_file.write('Total 2week mae: '+str(np.sum(total_regional_2week_mae))+'\n')
     results_file.write('Total mae: '+str(np.sum(total_regional_mae))+'\n')
     results_file.write('Total mae per 100000: '+str(np.sum(total_regional_mae_per_100000))+'\n')
     results_file.write('Total cumulative error: '+str(np.sum(total_regional_cum_error))+'\n')
-    #Evaluate all regions with at least 10 observed cases
-    for t in [1,100,1000,10000]:
-        results_file.write('Total normalized mae for regions with over '+str(t)+' observed cases: '+str(np.sum(total_regional_mae[np.where(np.sum(y_test,axis=1)>t)]/(np.sum(y_test[np.where(np.sum(y_test,axis=1)>t)],axis=1))))+'\n')
-
-    #Set NaNs to 0
-    all_regional_corr[np.isnan(all_regional_corr)]=0
-    results_file.write('Average correlation: '+str(np.average(all_regional_corr)))
-    results_file.close()
 
     #Look at coefs
     #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
@@ -329,7 +290,6 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 
 #Get data
 X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
-pdb.set_trace()
 #Fit model
 corrs, errors, stds, preds, coefs = fit_model(X,y,outdir)
 #Evaluate model
