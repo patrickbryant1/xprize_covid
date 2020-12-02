@@ -47,7 +47,7 @@ def seed_everything(seed=2020):
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-def get_features(adjusted_data, train_days, outdir):
+def get_features(adjusted_data, train_days, forecast_days, outdir):
     '''Get the selected features
     '''
 
@@ -159,8 +159,8 @@ def split_for_training(sel, train_days, forecast_days):
              'mas', 'uai', 'ltowvs', 'ivr', 'population'})
 
             #Normalize the cases by 100'000 population
-            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
-            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
+            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
@@ -244,7 +244,7 @@ def qloss(y_true, y_pred):
 
 
 #####BUILD NET#####
-def build_net(n1,n2,input_dim,bins):
+def build_net(n1,n2,input_dim):
     '''Build the net using Keras
     '''
     z = L.Input((input_dim,), name="Patient")
@@ -252,7 +252,6 @@ def build_net(n1,n2,input_dim,bins):
     x1 = L.Dense(n1, activation="relu", name="d1")(z)
     x1 = L.BatchNormalization()(x1)
     x2 = L.Dense(n2, activation="relu", name="d2")(x1)
-    x2 = L.BatchNormalization()(x2)
 
     p1 = L.Dense(3, activation="linear", name="p1")(x2)
     p2 = L.Dense(3, activation="relu", name="p2")(x2)
@@ -291,27 +290,26 @@ X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days,o
 y= y[:,days_ahead-1]
 
 #Get net parameters
-BATCH_SIZE=256
+BATCH_SIZE=512
 EPOCHS=200
-n1=16 #Nodes layer 1
-n2=16 #Nodes layer 2
-min_val = 0
-max_val = 1000
-bins = np.arange(min_val, max_val+200,200)
-bins = np.expand_dims(bins, axis=0)
+n1=64 #Nodes layer 1
+n2=64 #Nodes layer 2
+
 #Make net
-net = build_net(n1,n2,X_train.shape[1]+1,bins )
+net = build_net(n1,n2,X.shape[1]+1)
 print(net.summary())
 #KFOLD
 NFOLD = 5
 kf = KFold(n_splits=NFOLD)
 fold=0
-
+#Save errors
+errors = []
+corrs = []
 for tr_idx, val_idx in kf.split(X):
     fold+=1
     tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
-    net = build_net(n1,n2,X_train.shape[1],bins)
+    net = build_net(n1,n2,X.shape[1])
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx], BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx], BATCH_SIZE)
@@ -322,5 +320,9 @@ for tr_idx, val_idx in kf.split(X):
             callbacks = [tensorboard]
             )
 
-    pdb.set_trace()
+    preds = net.predict(X[val_idx])
+    preds[preds<0]=0
+    errors.append(np.average(np.absolute(preds[:,1]-y[val_idx])))
+    errors.append(pearsonr(preds[:,1],y[val_idx])[0])
+pdb.set_trace()
 pdb.set_trace()
