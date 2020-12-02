@@ -61,9 +61,9 @@ def evaluate(preds,coefs,intercepts,X_train,y_train,y_test,outdir,regions,popula
         #Plot
         region_error = np.cumsum(np.absolute(preds[:,ri]-y_test[ri,:]))[-1]
         total_regional_cum_error.append(region_error)
-        total_regional_mae.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])))
-        total_regional_mae_per_100000.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])/(populations[ri]/100000)))
-        total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
+        total_regional_mae.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])*(populations[ri]/100000)))
+        total_regional_mae_per_100000.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])))
+        total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])*(populations[ri]/100000)))
         region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
         all_regional_corr.append(region_corr)
         fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
@@ -87,6 +87,7 @@ def evaluate(preds,coefs,intercepts,X_train,y_train,y_test,outdir,regions,popula
     results_file.write('Total 2week mae: '+str(np.sum(total_regional_2week_mae))+'\n')
     results_file.write('Total mae: '+str(np.sum(total_regional_mae))+'\n')
     results_file.write('Total mae per 100000: '+str(np.sum(total_regional_mae_per_100000))+'\n')
+    results_file.write('Average mae per 100000: '+str(np.average(total_regional_mae_per_100000))+'\n')
     results_file.write('Total cumulative error: '+str(np.sum(total_regional_cum_error))+'\n')
     #Evaluate all regions with at least 10 observed cases
     for t in [1,100,1000,10000]:
