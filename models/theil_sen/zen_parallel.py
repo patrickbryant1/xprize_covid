@@ -32,7 +32,7 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
-def get_features(adjusted_data, train_days, outdir):
+def get_features(adjusted_data, train_days, forecast_days, outdir):
     '''Get the selected features
     '''
 
@@ -40,12 +40,11 @@ def get_features(adjusted_data, train_days, outdir):
 
     #Get features
     try:
-        X_train = np.load(outdir+'X_train.npy', allow_pickle=True)
-        y_train = np.load(outdir+'y_train.npy', allow_pickle=True)
-        X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
-        y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
+        X = np.load(outdir+'X.npy', allow_pickle=True)
+        y = np.load(outdir+'y.npy', allow_pickle=True)
         populations = np.load(outdir+'populations.npy', allow_pickle=True)
         regions = np.load(outdir+'regions.npy', allow_pickle=True)
+
 
     except:
         selected_features = ['C1_School closing',
@@ -83,20 +82,18 @@ def get_features(adjusted_data, train_days, outdir):
                             'population']
 
         sel = adjusted_data[selected_features]
-
-        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel,train_days)
+        X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
-        np.save(outdir+'X_train.npy',X_train)
-        np.save(outdir+'y_train.npy',y_train)
-        np.save(outdir+'X_test.npy',X_test)
-        np.save(outdir+'y_test.npy',y_test)
+        np.save(outdir+'X.npy',X)
+        np.save(outdir+'y.npy',y)
         np.save(outdir+'populations.npy',populations)
         np.save(outdir+'regions.npy',regions)
 
 
-    return X_train,y_train,X_test,y_test,populations,regions
 
-def split_for_training(sel, train_days):
+    return X,y,populations,regions
+
+def split_for_training(sel, train_days, forecast_days):
     '''Split the data for training and testing
     '''
     X_train = [] #Inputs
@@ -151,44 +148,62 @@ def split_for_training(sel, train_days):
              'population'})
 
             #Normalize the cases by 100'000 population
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
-
             #Loop through and get the data
-            forecast_days=21
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
                 xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
                 change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y_train.append(np.array(country_region_data.loc[di+train_days:di++train_days+forecast_days-1]['smoothed_cases']))
+                X.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
-            #Get the last 3 weeks as test
-            X_test.append(X_train.pop())
-            y_test.append(y_train.pop())
             #Save population
             populations.append(population)
 
-    return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
+    return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
 
 
-def fit_model(X_train,y_train,X_test):
+def fit_model(X, y, NFOLD, outdir):
     '''CFit regressor
     '''
-    print('Fitting...')
-    reg =  TheilSenRegressor().fit(X_train,y_train)
-    pred = reg.predict(X_test)
-    #Save the coefficients of the fitted regressor
-    coefs = reg.coef_
-    intercept = reg.intercept_
-    breakdown = reg.breakdown_
+    #KFOLD
+    kf = KFold(n_splits=NFOLD, random_state=42)
 
-    #No negative predictions are allowed
-    pred[pred<0]=0
+    coefs = []
+    intercepts = []
+    breakdown_points = []
+    corrs = []
+    errors = []
+    #Perform K-fold CV
+    FOLD=0
+    for tr_idx, val_idx in kf.split(X):
+        FOLD+=1
+        X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
+        print('Fitting...')
+        reg =  TheilSenRegressor().fit(X_train,y_train)
+        pred = reg.predict(X_valid)
+        #Save the coefficients of the fitted regressor
+        coefs.append(reg.coef_)
+        intercepts.append(reg.intercept_)
+        breakdown_points.append(reg.breakdown_)
 
-    return pred,coefs,intercept,breakdown
+        #No negative predictions are allowed
+        pred[pred<0]=0
+        av_er = np.average(np.absolute(pred-y_valid))
+        print('Fold',FOLD,'Average error',av_er)
+        R,p = pearsonr(pred,y_valid])
+        #Save
+        corrs.append(R)
+        errors.append(av_er)
+        coefs.append(reg.coef_)
+
+
+    return coefs,intercepts,breakdown_points,corrs,errors
 
 
 
@@ -213,16 +228,16 @@ outdir = args.outdir[0]
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
-X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,train_days,outdir)
+X,y,populations,regions  = get_features(adjusted_data,train_days,outdir)
 
 
 #Fit models
-pred,coefs,intercept,breakdown = fit_model(X_train,y_train[:,days_ahead-1],X_test)
+coefs,intercepts,breakdown_points,corrs,errors = fit_model(X_train,y_train[:,days_ahead-1],X_test)
 #Save
-np.save(outdir+'preds'+str(days_ahead)+'.npy', pred)
 np.save(outdir+'coefficients'+str(days_ahead)+'.npy',coefs)
 np.save(outdir+'intercept'+str(days_ahead)+'.npy',intercept)
 np.save(outdir+'breakdown_point'+str(days_ahead)+'.npy',breakdown)
-print(days_ahead,'error', np.round(np.average(np.absolute(pred-y_test[:,days_ahead-1]))))
+np.save(outdir+'correlations'+str(days_ahead)+'.npy',corrs)
+np.save(outdir+'average_error'+str(days_ahead)+'.npy',errors)
 
 print('Done')

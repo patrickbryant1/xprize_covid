@@ -163,7 +163,7 @@ def split_for_training(sel,train_days,forecast_days):
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
-def fit_model(X, y, NFOLD, outdist):
+def fit_model(X, y, NFOLD, outdir):
     '''Fit the linear model
     '''
     try:
