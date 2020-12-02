@@ -70,7 +70,7 @@ def get_residuals(X_train,y_train,indir,outdir):
     residuals = np.array(residuals)
     for i in range(residuals.shape[1]):
         plt.plot(np.arange(residuals.shape[0]),residuals[:,i],linewidth=0.5,alpha=0.1)
-    plt.show()
+    plt.savefig(outdir+'residual_propagation.png',format='png')
     pdb.set_trace()
 #####MAIN#####
 #Set font size
