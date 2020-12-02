@@ -257,29 +257,26 @@ def build_net(input_dim):
             batch_out2 = L.BatchNormalization()(conv_out1) #Bacth normalize, focus on segment
             activation2 = L.Activation('relu')(batch_out2)
             #Downsample - half filters
-            conv_out2 = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = 5, padding ="same")(activation2)
-            x = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = 5, padding ="same")(x)
+            conv_out2 = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(activation2)
+            x = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x)
             x = L.add([x, conv_out2]) #Skip connection
 
         return x
 
     x_in = keras.Input(shape = input_dim)
     #Initial convolution
-    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = 2, input_shape=(21,32), padding ="same")(x_in)
-
+    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, input_shape=(21,32), padding ="same")(x_in)
+    batch_out1 = L.BatchNormalization()(in_conv)
     #Output (batch, steps(len), filters), filters = channels in next
-    x1 = resnet(in_conv, 1)
+    #x1 = resnet(in_conv, 1)
     #Maxpool along sequence axis
-    maxpool1 = L.MaxPooling1D(pool_size=21)(x1)
+    maxpool1 = L.MaxPooling1D(pool_size=21)(batch_out1)
 
     flat1 = L.Flatten()(maxpool1)  #Flatten
-    p1 = L.Dense(3, activation="linear", name="p1")(flat1)
-    p2 = L.Dense(3, activation="relu", name="p2")(flat1)
-    preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
-                     name="preds")([p1, p2])
+    preds = L.Dense(1, activation="relu", name="p2")(flat1)
 
     model = M.Model(x_in, preds, name="CNN")
-    model.compile(loss=qloss, optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae'])
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01),metrics=['mae'])
     return model
 
 
@@ -310,11 +307,11 @@ X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days,o
 y= y[:,days_ahead-1]
 
 #Get net parameters
-BATCH_SIZE=64
+BATCH_SIZE=256
 EPOCHS=100
-dilation_rate = 5
-kernel_size = 21
-filters = 10
+dilation_rate = 3
+kernel_size = 5
+filters = 5
 #Make net
 
 net = build_net(X.shape[1:])
