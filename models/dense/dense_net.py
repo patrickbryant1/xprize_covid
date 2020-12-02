@@ -241,16 +241,24 @@ def minkowski_distance(y_true, y_pred):
 
 
 #####BUILD NET#####
-def build_net(n1,n2,input_dim):
+def build_net(n1,n2,input_dim,bins):
     '''Build the net using Keras
     '''
     z = L.Input((input_dim,), name="Patient")
+    
     x1 = L.Dense(n1, activation="relu", name="d1")(z)
+    x1 = L.BatchNormalization()(x1)
     x2 = L.Dense(n2, activation="relu", name="d2")(x1)
-    preds = L.Dense(1, activation="relu", name="preds")(x2)
+    probabilities = L.Dense(6, activation="softmax", name="preds")(x2)
 
+    bins_K = K.variable(value=bins)
+
+    def multiply(x):
+      return tf.matmul(x, bins_K,transpose_b=True)
+
+    preds = L.Lambda(multiply)(probabilities)
     model = M.Model(z, preds, name="Dense")
-    model.compile(loss=minkowski_distance, optimizer=tf.keras.optimizers.Adam(lr=0.001),metrics=['mae'])
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.001))
     return model
 
 
@@ -276,16 +284,21 @@ seed_everything(42) #The answer it is
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
 X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,train_days,outdir)
+
 #Select day
 y_train = y_train[:,days_ahead-1]
 y_test = y_test[:,days_ahead-1]
 #Get net parameters
-BATCH_SIZE=256
+BATCH_SIZE=32
 EPOCHS=1000
-n1=20 #Nodes layer 1
-n2=20 #Nodes layer 2
+n1=16 #Nodes layer 1
+n2=16 #Nodes layer 2
+min_val = 0
+max_val = 1000
+bins = np.arange(min_val, max_val+200,200)
+bins = np.expand_dims(bins, axis=0)
 #Make net
-net = build_net(n1,n2,X_train.shape[1]+1)
+net = build_net(n1,n2,X_train.shape[1]+1,bins )
 print(net.summary())
 #KFOLD
 NFOLD = 10
@@ -296,7 +309,7 @@ for tr_idx, val_idx in kf.split(X_train):
     fold+=1
     tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
-    net = build_net(n1,n2,X_train.shape[1])
+    net = build_net(n1,n2,X_train.shape[1],bins)
     #Data generation
     training_generator = DataGenerator(X_train[tr_idx], y_train[tr_idx], BATCH_SIZE)
     valid_generator = DataGenerator(X_train[val_idx], y_train[val_idx], BATCH_SIZE)
