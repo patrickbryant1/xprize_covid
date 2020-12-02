@@ -394,6 +394,7 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
                     try:
                         oxford_data.at[country_region_data.index,'population']=us_state_populations[us_state_populations['State']==region_name]['Population'].values[0]
                     except:
+                        print('No population')
                         pdb.set_trace()
 
                 #Get mobility for subregion
@@ -636,4 +637,5 @@ populating each date with the last available "good" data point.
 
 I should thus use the display indices.
 '''
+print('Preprocessing completed...')
 pdb.set_trace()
