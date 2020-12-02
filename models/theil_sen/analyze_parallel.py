@@ -96,7 +96,7 @@ def evaluate(preds,coefs,intercepts,X_train,y_train,y_test,outdir,regions,popula
     #Set NaNs to 0
     all_regional_corr[np.isnan(all_regional_corr)]=0
     results_file.write('Average correlation: '+str(np.average(all_regional_corr)))
-    results_file.close()
+
 
     #Look at coefs
     #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
@@ -152,7 +152,8 @@ def evaluate(preds,coefs,intercepts,X_train,y_train,y_test,outdir,regions,popula
     plt.savefig(outdir+'PCC.png',format='png', dpi=300)
     plt.close()
 
-
+    results_file.close()
+    return None
 
 #####MAIN#####
 #Set font size

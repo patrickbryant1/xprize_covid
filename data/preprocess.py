@@ -391,8 +391,10 @@ def parse_regions(oxford_data, us_state_populations, regional_populations, count
                     oxford_data.at[country_region_data.index,'population']=regional_populations[regional_populations['Region Code']==region]['2019 population'].values[0]
                 else:
                     region_name = country_region_data['RegionName'].unique()[0]
-                    oxford_data.at[country_region_data.index,'population']=us_state_populations[us_state_populations['State']==region_name]['Population'].values[0]
-
+                    try:
+                        oxford_data.at[country_region_data.index,'population']=us_state_populations[us_state_populations['State']==region_name]['Population'].values[0]
+                    except:
+                        pdb.set_trace()
 
                 #Get mobility for subregion
                 country_region_mobility = country_mobility[(country_mobility['sub_region_1']==country_region_data['RegionName'].unique()[0]) & (country_mobility['sub_region_2'].isna())] #Select country region

@@ -69,7 +69,7 @@ def get_residuals(X_train,y_train,indir,outdir):
     #Visualize the residual development
     residuals = np.array(residuals)
     for i in range(residuals.shape[1]):
-        plt.plot(np.arange(residuals.shape[0]),residuals[:,i],linewidth=0.5,alpha=0.1)
+        plt.plot(np.arange(residuals.shape[0]),residuals[:,i],linewidth=0.5,alpha=0.1,color='b')
     plt.savefig(outdir+'residual_propagation.png',format='png')
     pdb.set_trace()
 #####MAIN#####

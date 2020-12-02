@@ -25,6 +25,8 @@ parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
 parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
+parser.add_argument('--forecast_days', nargs=1, type= str,
+                  default=sys.stdin, help = 'Days to forecast.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -69,35 +71,30 @@ def get_features(adjusted_data,train_days,outdir):
 
     #Get features
     try:
-        X_train = np.load(outdir+'X_train.npy', allow_pickle=True)
-        y_train = np.load(outdir+'y_train.npy', allow_pickle=True)
-        X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
-        y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
+        X_train = np.load(outdir+'X.npy', allow_pickle=True)
+        y_train = np.load(outdir+'y.npy', allow_pickle=True)
         populations = np.load(outdir+'populations.npy', allow_pickle=True)
         regions = np.load(outdir+'regions.npy', allow_pickle=True)
 
     except:
         sel = adjusted_data[selected_features]
-        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel,train_days)
+        X,y,populations,regions = split_for_training(sel,train_days)
         #Save
-        np.save(outdir+'X_train.npy',X_train)
-        np.save(outdir+'y_train.npy',y_train)
-        np.save(outdir+'X_test.npy',X_test)
-        np.save(outdir+'y_test.npy',y_test)
+        np.save(outdir+'X.npy',X_train)
+        np.save(outdir+'y.npy',y_train)
         np.save(outdir+'populations.npy',populations)
         np.save(outdir+'regions.npy',regions)
 
 
 
-    return X_train,y_train,X_test,y_test,populations,regions
+    return X,y,populations,regions
 
 def split_for_training(sel,train_days):
     '''Split the data for training and testing
     '''
-    X_train = [] #Inputs
-    y_train = [] #Targets
-    X_test = [] #Inputs
-    y_test = [] #Targets
+    X = [] #Inputs
+    y = [] #Targets
+
     countries = sel['Country_index'].unique()
     populations = []
     regions = []
@@ -107,7 +104,7 @@ def split_for_training(sel,train_days):
         country_regions = country_data['Region_index'].unique()
         for ri in country_regions:
             country_region_data = country_data[country_data['Region_index']==ri]
-            #Select data 14 days before 0 cases
+            #Select data 14 days before above 0 cases
             try:
                 si = max(0,country_region_data[country_region_data['cumulative_smoothed_cases']>0].index[0]-14)
                 country_region_data = country_region_data.loc[si:]
@@ -156,16 +153,13 @@ def split_for_training(sel,train_days):
                 xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
                 period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y_train.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])/(population/100000))
+                X.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])/(population/100000))
 
-            #Get the last 3 weeks as test
-            X_test.append(X_train.pop())
-            y_test.append(y_train.pop())
             #Save population
             populations.append(population)
 
-    return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
+    return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
 def fit_model(X_train,y_train,X_test,outdist):
     '''Fit the linear model
@@ -327,6 +321,7 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
 adjusted_data = adjusted_data.fillna(0)
 start_date = args.start_date[0]
 train_days = args.train_days[0]
+forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
 
 #Use only data from start date
@@ -334,7 +329,8 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 
 
 #Get data
-X_train,y_train,X_test,y_test,populations,regions =  get_features(adjusted_data,train_days,outdir)
+X,y,populations,regions =  get_features(adjusted_data,train_days,outdir)
+pdb.set_trace()
 #Fit model
 corrs, errors, stds, preds, coefs = fit_model(X_train,y_train,X_test,outdir)
 #Evaluate model
