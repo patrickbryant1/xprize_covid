@@ -243,7 +243,7 @@ def build_net(n1,n2,input_dim):
     #Ensure non-negative values
     #preds = K.abs(preds)
     model = M.Model(z, preds, name="MQR")
-    model.compile(loss='kullback_leibler_divergence', optimizer=tf.keras.optimizers.Adam(lr=0.1, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae','kullback_leibler_divergence'])
+    model.compile(loss='kullback_leibler_divergence', optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae','kullback_leibler_divergence'])
     return model
 
 def test(net, X_test,y_test,populations,regions):
@@ -300,10 +300,10 @@ except:
 seed_everything(42) #The answer it is
 
 #Get net parameters
-BATCH_SIZE=256
+BATCH_SIZE=32
 EPOCHS=100
-n1=200 #Nodes layer 1
-n2=100 #Nodes layer 2
+n1=16 #Nodes layer 1
+n2=16 #Nodes layer 2
 #Make net
 net = build_net(n1,n2,X_train.shape[1]+1)
 print(net.summary())

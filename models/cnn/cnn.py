@@ -23,7 +23,7 @@ from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''A dense regression model.''')
+parser = argparse.ArgumentParser(description = '''A CNN regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -155,8 +155,7 @@ def split_for_training(sel, train_days, forecast_days):
                 regions.append(country_region_data.loc[0,'CountryName'])
 
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
-            'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr', 'population'})
+            'RegionName', 'death_to_case_scale', 'case_death_delay'})
 
             #Normalize the cases by 100'000 population
             #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
@@ -165,11 +164,7 @@ def split_for_training(sel, train_days, forecast_days):
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
-                #Get change over the past 21 days
-                xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
-                period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
-                #Add
-                X.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                X.append(np.array(country_region_data.loc[di:di+train_days-1]))
                 y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
             #Save population
@@ -244,30 +239,54 @@ def qloss(y_true, y_pred):
 
 
 #####BUILD NET#####
-def build_net(n1,n2,input_dim):
+def build_net(input_dim):
     '''Build the net using Keras
     '''
-    z = L.Input((input_dim,), name="Patient")
 
-    x1 = L.Dense(n1, activation="relu", name="d1")(z)
-    x1 = L.BatchNormalization()(x1)
-    x2 = L.Dense(n2, activation="relu", name="d2")(x1)
-    x3 = L.Dense(n2, activation="relu", name="d3")(x2)
+    def resnet(x, num_res_blocks):
+        """Builds a resnet with 1D convolutions of the defined depth.
+        """
 
-    p1 = L.Dense(3, activation="linear", name="p1")(x3)
-    p2 = L.Dense(3, activation="relu", name="p2")(x3)
+
+        # Instantiate the stack of residual units
+        #Similar to ProtCNN, but they used batch_size = 64, 2000 filters and kernel size of 21
+        for res_block in range(num_res_blocks):
+            batch_out1 = L.BatchNormalization()(x) #Bacth normalize, focus on segment
+            activation1 = L.Activation('relu')(batch_out1)
+            conv_out1 = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(activation1)
+            batch_out2 = L.BatchNormalization()(conv_out1) #Bacth normalize, focus on segment
+            activation2 = L.Activation('relu')(batch_out2)
+            #Downsample - half filters
+            conv_out2 = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = 5, padding ="same")(activation2)
+            x = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = 5, padding ="same")(x)
+            x = L.add([x, conv_out2]) #Skip connection
+
+        return x
+
+    x_in = keras.Input(shape = input_dim)
+    #Initial convolution
+    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = 2, input_shape=(21,32), padding ="same")(x_in)
+
+    #Output (batch, steps(len), filters), filters = channels in next
+    x1 = resnet(in_conv, 1)
+    #Maxpool along sequence axis
+    maxpool1 = L.MaxPooling1D(pool_size=21)(x1)
+
+    flat1 = L.Flatten()(maxpool1)  #Flatten
+    p1 = L.Dense(3, activation="linear", name="p1")(flat1)
+    p2 = L.Dense(3, activation="relu", name="p2")(flat1)
     preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
                      name="preds")([p1, p2])
 
-    model = M.Model(z, preds, name="Dense")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae'])
+    model = M.Model(x_in, preds, name="CNN")
+    model.compile(loss=qloss, optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae'])
     return model
 
 
 #####MAIN#####
 args = parser.parse_args()
 #Seed
-seed_everything(0) #The answer it is
+seed_everything(42) #The answer it is
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -293,16 +312,18 @@ y= y[:,days_ahead-1]
 #Get net parameters
 BATCH_SIZE=64
 EPOCHS=100
-n1=16 #Nodes layer 1
-n2=16 #Nodes layer 2
-
+dilation_rate = 5
+kernel_size = 21
+filters = 10
 #Make net
-net = build_net(n1,n2,X.shape[1]+1)
+
+net = build_net(X.shape[1:])
 print(net.summary())
 #KFOLD
 NFOLD = 5
 kf = KFold(n_splits=NFOLD)
 fold=0
+
 #Save errors
 errors = []
 corrs = []
@@ -310,7 +331,7 @@ for tr_idx, val_idx in kf.split(X):
     fold+=1
     tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
-    net = build_net(n1,n2,X.shape[1])
+    net = build_net(X.shape[1:])
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx], BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx], BATCH_SIZE)
@@ -325,5 +346,6 @@ for tr_idx, val_idx in kf.split(X):
     preds[preds<0]=0
     errors.append(np.average(np.absolute(preds[:,1]-y[val_idx])))
     corrs.append(pearsonr(preds[:,1],y[val_idx])[0])
-pdb.set_trace()
+print(np.average(errors))
+np.average(corrs)
 pdb.set_trace()
