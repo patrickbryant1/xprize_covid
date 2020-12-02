@@ -10,9 +10,11 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression,Ridge,ElasticNet
+from sklearn.model_selection import KFold
 from scipy.stats import pearsonr
 from scipy import stats
 import numpy as np
+
 
 
 import pdb
@@ -25,13 +27,13 @@ parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
 parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
-parser.add_argument('--forecast_days', nargs=1, type= str,
+parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
-def get_features(adjusted_data,train_days,outdir):
+def get_features(adjusted_data,train_days,forecast_days,outdir):
     '''Get the selected features
     '''
 
@@ -71,17 +73,17 @@ def get_features(adjusted_data,train_days,outdir):
 
     #Get features
     try:
-        X_train = np.load(outdir+'X.npy', allow_pickle=True)
-        y_train = np.load(outdir+'y.npy', allow_pickle=True)
+        X = np.load(outdir+'X.npy', allow_pickle=True)
+        y = np.load(outdir+'y.npy', allow_pickle=True)
         populations = np.load(outdir+'populations.npy', allow_pickle=True)
         regions = np.load(outdir+'regions.npy', allow_pickle=True)
 
     except:
         sel = adjusted_data[selected_features]
-        X,y,populations,regions = split_for_training(sel,train_days)
+        X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
-        np.save(outdir+'X.npy',X_train)
-        np.save(outdir+'y.npy',y_train)
+        np.save(outdir+'X.npy',X)
+        np.save(outdir+'y.npy',y)
         np.save(outdir+'populations.npy',populations)
         np.save(outdir+'regions.npy',regions)
 
@@ -89,7 +91,7 @@ def get_features(adjusted_data,train_days,outdir):
 
     return X,y,populations,regions
 
-def split_for_training(sel,train_days):
+def split_for_training(sel,train_days,forecast_days):
     '''Split the data for training and testing
     '''
     X = [] #Inputs
@@ -145,31 +147,29 @@ def split_for_training(sel,train_days):
             #Normalize the cases by 100'000 population
             country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
             country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
-
+            country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
+            country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
-            forecast_days=21
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
                 xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
                 period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
                 X.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])/(population/100000))
+                y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
             #Save population
             populations.append(population)
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
-def fit_model(X_train,y_train,X_test,outdist):
+def fit_model(X,y,outdist):
     '''Fit the linear model
     '''
     try:
         #If the model has already been fitted
         corrs = np.load(outdir+'corrs.npy',allow_pickle=True)
         errors = np.load(outdir+'errors.npy',allow_pickle=True)
-        stds = np.load(outdir+'stds.npy',allow_pickle=True)
-        preds = np.load(outdir+'preds.npy',allow_pickle=True)
         coefs = np.load(outdir+'coefs.npy',allow_pickle=True)
     except:
         #Fit the model
@@ -178,35 +178,34 @@ def fit_model(X_train,y_train,X_test,outdist):
         stds = []
         preds = []
         coefs = []
-        for i in range(y_train.shape[1]):
-            reg = LinearRegression().fit(X_train, y_train[:,i])
-            pred = reg.predict(X_test)
-            #No negative predictions are allowed
-            pred[pred<0]=0
-            preds.append(pred)
-            av_er = np.average(np.absolute(pred-y_test[:,i]))
-            std = np.std(np.absolute(pred-y_test[:,i]))
-            print('Error',av_er, 'Std',std)
-            R,p = pearsonr(pred,y_test[:,i])
-            #Save
-            corrs.append(R)
-            errors.append(av_er)
-            stds.append(std)
-            coefs.append(reg.coef_)
-            #Plot
-            plt.scatter(pred,y_test[:,i],s=1)
-            plt.title(str(i))
-            plt.xlabel('Predicted')
-            plt.xlabel('True')
-            plt.savefig(outdir+str(i)+'.png',format='png')
-            plt.close()
+        #KFOLD
+        NFOLD = 5
+        kf = KFold(n_splits=NFOLD, random_state=42)
+        #Perform K-fold CV
+        FOLD=0
+        for tr_idx, val_idx in kf.split(X):
+            FOLD+=1
+            X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
+
+            for day in range(y_train.shape[1]):
+                reg = LinearRegression().fit(X_train, y_train[:,day)
+                pred = reg.predict(X_valid)
+                #No negative predictions are allowed
+                pred[pred<0]=0
+                av_er = np.average(np.absolute(pred-y_valid[:,day]))
+                print('Fold',FOLD,'Day',day,'Error',av_er)
+                R,p = pearsonr(pred,y_valid[:,day])
+                #Save
+                corrs.append(R)
+                errors.append(av_er)
+                coefs.append(reg.coef_)
+                pdb.set_trace()
+
 
 
         #Convert all to arrays
         corrs = np.array(corrs )
         errors = np.array(errors)
-        stds = np.array(stds)
-        preds = np.array(preds)
         coefs = np.array(coefs)
         #Save
         np.save(outdir+'corrs.npy',corrs)
@@ -329,9 +328,9 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 
 
 #Get data
-X,y,populations,regions =  get_features(adjusted_data,train_days,outdir)
+X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
 pdb.set_trace()
 #Fit model
-corrs, errors, stds, preds, coefs = fit_model(X_train,y_train,X_test,outdir)
+corrs, errors, stds, preds, coefs = fit_model(X,y,outdir)
 #Evaluate model
 evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir)
