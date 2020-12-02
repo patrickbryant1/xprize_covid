@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 
 
 from scipy.stats import pearsonr
-from sklearn.linear_model import TheilSenRegressor, HuberRegressor
+from sklearn.linear_model import TheilSenRegressor
+from sklearn.model_selection import KFold
 import numpy as np
 
 
@@ -28,6 +29,8 @@ parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
 parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
+parser.add_argument('--forecast_days', nargs=1, type= int,
+                  default=sys.stdin, help = 'Days to forecast.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -96,10 +99,8 @@ def get_features(adjusted_data, train_days, forecast_days, outdir):
 def split_for_training(sel, train_days, forecast_days):
     '''Split the data for training and testing
     '''
-    X_train = [] #Inputs
-    y_train = [] #Targets
-    X_test = [] #Inputs
-    y_test = [] #Targets
+    X = [] #Inputs
+    y = [] #Targets
     countries = sel['Country_index'].unique()
     populations = []
     regions = []
@@ -143,9 +144,7 @@ def split_for_training(sel, train_days, forecast_days):
 
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr',
-             'rescaled_cases','cumulative_rescaled_cases',
-             'population'})
+             'mas', 'uai', 'ltowvs', 'ivr', 'population'})
 
             #Normalize the cases by 100'000 population
             country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
@@ -156,7 +155,7 @@ def split_for_training(sel, train_days, forecast_days):
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
                 xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
-                change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
+                period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
                 X.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                 y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
@@ -196,7 +195,7 @@ def fit_model(X, y, NFOLD, outdir):
         pred[pred<0]=0
         av_er = np.average(np.absolute(pred-y_valid))
         print('Fold',FOLD,'Average error',av_er)
-        R,p = pearsonr(pred,y_valid])
+        R,p = pearsonr(pred,y_valid)
         #Save
         corrs.append(R)
         errors.append(av_er)
@@ -224,19 +223,20 @@ adjusted_data = adjusted_data.fillna(0)
 days_ahead = args.days_ahead[0]
 start_date = args.start_date[0]
 train_days = args.train_days[0]
+forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
-X,y,populations,regions  = get_features(adjusted_data,train_days,outdir)
+X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days,outdir)
 
 
 #Fit models
-coefs,intercepts,breakdown_points,corrs,errors = fit_model(X_train,y_train[:,days_ahead-1],X_test)
+coefs,intercepts,breakdown_points,corrs,errors = fit_model(X, y[:,days_ahead-1], 5, outdir)
 #Save
 np.save(outdir+'coefficients'+str(days_ahead)+'.npy',coefs)
-np.save(outdir+'intercept'+str(days_ahead)+'.npy',intercept)
-np.save(outdir+'breakdown_point'+str(days_ahead)+'.npy',breakdown)
+np.save(outdir+'intercepts'+str(days_ahead)+'.npy',intercepts)
+np.save(outdir+'breakdown_points'+str(days_ahead)+'.npy',breakdown_points)
 np.save(outdir+'correlations'+str(days_ahead)+'.npy',corrs)
 np.save(outdir+'average_error'+str(days_ahead)+'.npy',errors)
 
