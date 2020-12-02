@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression,Ridge,ElasticNet
+from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import KFold
 from scipy.stats import pearsonr
 from scipy import stats
@@ -165,101 +165,42 @@ def split_for_training(sel,train_days,forecast_days):
 
 def fit_model(X, y, NFOLD, outdir):
     '''Fit the linear model
-    '''
-    try:
-        #If the model has already been fitted
+
+    #Fit the model
+
+    #KFOLD
+    kf = KFold(n_splits=NFOLD, random_state=42)
+    #Perform K-fold CV
+    FOLD=0
+    for tr_idx, val_idx in kf.split(X):
+        FOLD+=1
+        X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
         corrs = []
         errors = []
         coefs = []
-        for f in range(1,NFOLD+1):
-            corrs.append(np.load(outdir+'corrs'+str(f)+'.npy',allow_pickle=True))
-            errors.append(np.load(outdir+'errors'+str(f)+'.npy',allow_pickle=True))
-            coefs.append(np.load(outdir+'coefs'+str(f)+'.npy',allow_pickle=True))
-    except:
-        #Fit the model
-
-        #KFOLD
-        kf = KFold(n_splits=NFOLD, random_state=42)
-        #Perform K-fold CV
-        FOLD=0
-        for tr_idx, val_idx in kf.split(X):
-            FOLD+=1
-            X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
-            corrs = []
-            errors = []
-            coefs = []
-            intercepts = []
-            for day in range(y_train.shape[1]):
-                reg = LinearRegression().fit(X_train, y_train[:,day])
-                pred = reg.predict(X_valid)
-                #No negative predictions are allowed
-                pred[pred<0]=0
-                av_er = np.average(np.absolute(pred-y_valid[:,day]))
-                print('Fold',FOLD,'Day',day,'Average error',av_er)
-                R,p = pearsonr(pred,y_valid[:,day])
-                #Save
-                corrs.append(R)
-                errors.append(av_er)
-                coefs.append(reg.coef_)
-                intercepts.append(reg.intercept_)
-
+        intercepts = []
+        for day in range(y_train.shape[1]):
+            reg = LinearRegression().fit(X_train, y_train[:,day])
+            pred = reg.predict(X_valid)
+            #No negative predictions are allowed
+            pred[pred<0]=0
+            av_er = np.average(np.absolute(pred-y_valid[:,day]))
+            print('Fold',FOLD,'Day',day,'Average error',av_er)
+            R,p = pearsonr(pred,y_valid[:,day])
             #Save
-            np.save(outdir+'corrs'+str(FOLD)+'.npy',np.array(corrs))
-            np.save(outdir+'errors'+str(FOLD)+'.npy',np.array(errors))
-            np.save(outdir+'coefs'+str(FOLD)+'.npy',np.array(coefs))
-            np.save(outdir+'intercepts'+str(FOLD)+'.npy',np.array(intercepts))
+            corrs.append(R)
+            errors.append(av_er)
+            coefs.append(reg.coef_)
+            intercepts.append(reg.intercept_)
 
-    return corrs, errors, coefs
+        #Save
+        np.save(outdir+'corrs'+str(FOLD)+'.npy',np.array(corrs))
+        np.save(outdir+'errors'+str(FOLD)+'.npy',np.array(errors))
+        np.save(outdir+'coefs'+str(FOLD)+'.npy',np.array(coefs))
+        np.save(outdir+'intercepts'+str(FOLD)+'.npy',np.array(intercepts))
 
-def evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir):
-    '''Evaluate the fit model
-    '''
+    return None
 
-    #Evaluate model
-    results_file = open(outdir+'results.txt','w')
-    #Calculate error
-    results_file.write('Total 2week mae: '+str(np.sum(total_regional_2week_mae))+'\n')
-    results_file.write('Total mae: '+str(np.sum(total_regional_mae))+'\n')
-    results_file.write('Total mae per 100000: '+str(np.sum(total_regional_mae_per_100000))+'\n')
-    results_file.write('Total cumulative error: '+str(np.sum(total_regional_cum_error))+'\n')
-
-    #Look at coefs
-    #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
-    #--> get the last features, then divide into 21 portions
-
-    single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in input period days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
-    #days pred,days behind - this goes from -21 to 1,features
-    repeat_feature_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
-    'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
-    'smoothed_cases', 'cumulative_smoothed_cases', 'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
-    all_feature_names = single_feature_names+repeat_feature_names*train_days
-    for i in range(coefs.shape[0]):
-        fig,ax=plt.subplots(figsize=(18,6))
-        plt.bar(range(coefs.shape[1]),coefs[i,:],)
-        for j in range(coefs.shape[1]):
-            plt.text(j,coefs[i,j],all_feature_names[j],fontsize=12)
-
-        plt.title('Day '+str(i+1))
-        plt.tight_layout()
-        plt.savefig(outdir+'coefs_'+str(i+1)+'.png',format='png',dpi=300)
-        plt.close()
-
-    #Plot average error per day with std
-    plt.plot(range(1,22),errors,color='b')
-    plt.fill_between(range(1,22),errors-stds,errors+stds,color='b',alpha=0.5)
-    plt.title('Average error with std')
-    plt.xlabel('Days in the future')
-    plt.ylabel('Error per 100000')
-    plt.savefig(outdir+'lr_av_error.png',format='png')
-    plt.close()
-
-    #Plot correlation
-    plt.plot(range(1,22),corrs ,color='b')
-    plt.title('Pearson R')
-    plt.xlabel('Days in the future')
-    plt.ylabel('PCC')
-    plt.savefig(outdir+'PCC.png',format='png')
-    plt.close()
 
 #####MAIN#####
 #Set font size
@@ -286,7 +227,5 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get data
 X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
 #Fit model
-corrs, errors, stds, preds, coefs = fit_model(X,y,5,outdir)
-#Evaluate model
-pdb.set_trace()
-evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir)
+corrs, errors, coefs, intercepts = fit_model(X,y,5,outdir)
+print('Done fitting.')
