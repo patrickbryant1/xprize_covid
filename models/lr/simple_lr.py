@@ -168,9 +168,13 @@ def fit_model(X, y, NFOLD, outdir):
     '''
     try:
         #If the model has already been fitted
-        corrs = np.load(outdir+'corrs.npy',allow_pickle=True)
-        errors = np.load(outdir+'errors.npy',allow_pickle=True)
-        coefs = np.load(outdir+'coefs.npy',allow_pickle=True)
+        corrs = []
+        errors = []
+        coefs = []
+        for f in range(1,NFOLD+1):
+            corrs.append(np.load(outdir+'corrs'+str(f)+'.npy',allow_pickle=True))
+            errors.append(np.load(outdir+'errors'+str(f)+'.npy',allow_pickle=True))
+            coefs.append(np.load(outdir+'coefs'+str(f)+'.npy',allow_pickle=True))
     except:
         #Fit the model
 
@@ -183,8 +187,8 @@ def fit_model(X, y, NFOLD, outdir):
             X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
             corrs = []
             errors = []
-            stds = []
             coefs = []
+            intercepts = []
             for day in range(y_train.shape[1]):
                 reg = LinearRegression().fit(X_train, y_train[:,day])
                 pred = reg.predict(X_valid)
@@ -197,14 +201,15 @@ def fit_model(X, y, NFOLD, outdir):
                 corrs.append(R)
                 errors.append(av_er)
                 coefs.append(reg.coef_)
+                intercepts.append(reg.intercept_)
 
             #Save
             np.save(outdir+'corrs'+str(FOLD)+'.npy',np.array(corrs))
             np.save(outdir+'errors'+str(FOLD)+'.npy',np.array(errors))
             np.save(outdir+'coefs'+str(FOLD)+'.npy',np.array(coefs))
-        pdb.set_trace()
+            np.save(outdir+'intercepts'+str(FOLD)+'.npy',np.array(intercepts))
 
-    return corrs, errors, stds, preds, coefs
+    return corrs, errors, coefs
 
 def evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir):
     '''Evaluate the fit model
@@ -283,4 +288,5 @@ X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,o
 #Fit model
 corrs, errors, stds, preds, coefs = fit_model(X,y,5,outdir)
 #Evaluate model
+pdb.set_trace()
 evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir)
