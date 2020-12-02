@@ -56,15 +56,22 @@ def get_residuals(X_train,y_train,indir,outdir):
         residuals.append(y_train[:,day-1]-pred)
         preds.append(pred)
         #Plot residuals
-        plt.plot(np.arange(residuals[-1].shape[0]),residuals[-1])
-        plt.savefig(outdir+'residuals'+str(day)+'.png',format='png',dpi=300)
-        plt.close()
-    pdb.set_trace()
+        #plt.plot(np.arange(residuals[-1].shape[0]),residuals[-1])
+        #plt.savefig(outdir+'residuals'+str(day)+'.png',format='png',dpi=300)
+        #plt.close()
+
 
     #Save
     np.save(outdir+'residuals.npy',np.array(residuals))
     np.save(outdir+'train_preds.npy',np.array(preds))
     print('Calculated residuals.')
+
+    #Visualize the residual development
+    residuals = np.array(residuals)
+    for i in range(residuals.shape[1]):
+        plt.plot(np.arange(residuals.shape[0]),residuals[:,i],linewidth=0.5,alpha=0.1)
+    plt.show()
+    pdb.set_trace()
 #####MAIN#####
 #Set font size
 matplotlib.rcParams.update({'font.size': 7})
