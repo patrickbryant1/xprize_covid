@@ -33,6 +33,8 @@ parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
 parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
+parser.add_argument('--forecast_days', nargs=1, type= int,
+                  default=sys.stdin, help = 'Days to forecast.')
 #parser.add_argument('--param_combo', nargs=1, type= int,
                   #default=sys.stdin, help = 'Parameter combo.')
 parser.add_argument('--outdir', nargs=1, type= str,
@@ -49,16 +51,13 @@ def get_features(adjusted_data, train_days, outdir):
     '''Get the selected features
     '''
 
-
-
     #Get features
     try:
-        X_train = np.load(outdir+'X_train.npy', allow_pickle=True)
-        y_train = np.load(outdir+'y_train.npy', allow_pickle=True)
-        X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
-        y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
+        X = np.load(outdir+'X.npy', allow_pickle=True)
+        y = np.load(outdir+'y.npy', allow_pickle=True)
         populations = np.load(outdir+'populations.npy', allow_pickle=True)
         regions = np.load(outdir+'regions.npy', allow_pickle=True)
+
 
     except:
         selected_features = ['C1_School closing',
@@ -96,28 +95,24 @@ def get_features(adjusted_data, train_days, outdir):
                             'population']
 
         sel = adjusted_data[selected_features]
-
-        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel,train_days)
+        X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
-        np.save(outdir+'X_train.npy',X_train)
-        np.save(outdir+'y_train.npy',y_train)
-        np.save(outdir+'X_test.npy',X_test)
-        np.save(outdir+'y_test.npy',y_test)
+        np.save(outdir+'X.npy',X)
+        np.save(outdir+'y.npy',y)
         np.save(outdir+'populations.npy',populations)
         np.save(outdir+'regions.npy',regions)
 
 
-    return X_train,y_train,X_test,y_test,populations,regions
+
+    return X,y,populations,regions
 
 
 
-def split_for_training(sel, train_days):
+def split_for_training(sel, train_days, forecast_days):
     '''Split the data for training and testing
     '''
-    X_train = [] #Inputs
-    y_train = [] #Targets
-    X_test = [] #Inputs
-    y_test = [] #Targets
+    X = [] #Inputs
+    y = [] #Targets
     countries = sel['Country_index'].unique()
     populations = []
     regions = []
@@ -161,32 +156,26 @@ def split_for_training(sel, train_days):
 
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr',
-             'rescaled_cases','cumulative_rescaled_cases',
-             'population'})
+             'mas', 'uai', 'ltowvs', 'ivr', 'population'})
 
             #Normalize the cases by 100'000 population
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
-
             #Loop through and get the data
-            forecast_days=21
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
                 xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
-                change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
+                period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y_train.append(np.array(country_region_data.loc[di+train_days:di++train_days+forecast_days-1]['smoothed_cases']))
+                X.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
-            #Get the last 3 weeks as test
-            X_test.append(X_train.pop())
-            y_test.append(y_train.pop())
             #Save population
             populations.append(population)
 
-    return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
-
+    return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
 class DataGenerator(keras.utils.Sequence):
     '''Generates data for Keras'''
@@ -269,14 +258,7 @@ def build_net(n1,n2,input_dim,bins):
     p2 = L.Dense(3, activation="relu", name="p2")(x2)
     preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
                      name="preds")([p1, p2])
-    # probabilities = L.Dense(6, activation="softmax", name="preds")(x2)
-    #
-    # bins_K = K.variable(value=bins)
-    #
-    # def multiply(x):
-    #   return tf.matmul(x, bins_K,transpose_b=True)
-    #
-    # preds = L.Lambda(multiply)(probabilities)
+
     model = M.Model(z, preds, name="Dense")
     model.compile(loss=qloss, optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae'])
     return model
@@ -284,6 +266,8 @@ def build_net(n1,n2,input_dim,bins):
 
 #####MAIN#####
 args = parser.parse_args()
+#Seed
+seed_everything(42) #The answer it is
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -296,18 +280,16 @@ adjusted_data = adjusted_data.fillna(0)
 days_ahead = args.days_ahead[0]
 start_date = args.start_date[0]
 train_days = args.train_days[0]
+forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
-
-#Seed
-seed_everything(42) #The answer it is
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
-X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,train_days,outdir)
+X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days,outdir)
 
 #Select day
-y_train = y_train[:,days_ahead-1]
-y_test = y_test[:,days_ahead-1]
+y= y[:,days_ahead-1]
+
 #Get net parameters
 BATCH_SIZE=256
 EPOCHS=200
@@ -325,14 +307,14 @@ NFOLD = 5
 kf = KFold(n_splits=NFOLD)
 fold=0
 
-for tr_idx, val_idx in kf.split(X_train):
+for tr_idx, val_idx in kf.split(X):
     fold+=1
     tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
     net = build_net(n1,n2,X_train.shape[1],bins)
     #Data generation
-    training_generator = DataGenerator(X_train[tr_idx], y_train[tr_idx], BATCH_SIZE)
-    valid_generator = DataGenerator(X_train[val_idx], y_train[val_idx], BATCH_SIZE)
+    training_generator = DataGenerator(X[tr_idx], y[tr_idx], BATCH_SIZE)
+    valid_generator = DataGenerator(X[val_idx], y[val_idx], BATCH_SIZE)
 
     net.fit(training_generator,
             validation_data=valid_generator,
@@ -340,7 +322,5 @@ for tr_idx, val_idx in kf.split(X_train):
             callbacks = [tensorboard]
             )
 
-    #Test the net
-    test(net, X_test,y_test,populations,regions)
     pdb.set_trace()
 pdb.set_trace()
