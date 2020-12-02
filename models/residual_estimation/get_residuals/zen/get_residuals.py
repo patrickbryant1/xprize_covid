@@ -55,6 +55,11 @@ def get_residuals(X_train,y_train,indir,outdir):
         pred[pred<0]=0
         residuals.append(y_train[:,day-1]-pred)
         preds.append(pred)
+        #Plot residuals
+        plt.plot(np.arange(residuals[-1].shape[0]),residuals[-1])
+        plt.savefig(outdir+'residuals'+str(day)+'.png',format='png',dpi=300)
+        plt.close()
+    pdb.set_trace()
 
     #Save
     np.save(outdir+'residuals.npy',np.array(residuals))
