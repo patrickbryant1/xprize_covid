@@ -163,7 +163,7 @@ def split_for_training(sel,train_days,forecast_days):
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
-def fit_model(X,y,outdist):
+def fit_model(X, y, NFOLD, outdist):
     '''Fit the linear model
     '''
     try:
@@ -173,46 +173,36 @@ def fit_model(X,y,outdist):
         coefs = np.load(outdir+'coefs.npy',allow_pickle=True)
     except:
         #Fit the model
-        corrs = []
-        errors = []
-        stds = []
-        preds = []
-        coefs = []
+
         #KFOLD
-        NFOLD = 5
         kf = KFold(n_splits=NFOLD, random_state=42)
         #Perform K-fold CV
         FOLD=0
         for tr_idx, val_idx in kf.split(X):
             FOLD+=1
             X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
-
+            corrs = []
+            errors = []
+            stds = []
+            coefs = []
             for day in range(y_train.shape[1]):
                 reg = LinearRegression().fit(X_train, y_train[:,day])
                 pred = reg.predict(X_valid)
                 #No negative predictions are allowed
                 pred[pred<0]=0
                 av_er = np.average(np.absolute(pred-y_valid[:,day]))
-                print('Fold',FOLD,'Day',day,'Error',av_er)
+                print('Fold',FOLD,'Day',day,'Average error',av_er)
                 R,p = pearsonr(pred,y_valid[:,day])
                 #Save
                 corrs.append(R)
                 errors.append(av_er)
                 coefs.append(reg.coef_)
-                pdb.set_trace()
 
-
-
-        #Convert all to arrays
-        corrs = np.array(corrs )
-        errors = np.array(errors)
-        coefs = np.array(coefs)
-        #Save
-        np.save(outdir+'corrs.npy',corrs)
-        np.save(outdir+'errors.npy',errors)
-        np.save(outdir+'stds.npy',stds)
-        np.save(outdir+'preds.npy',preds)
-        np.save(outdir+'coefs.npy',coefs)
+            #Save
+            np.save(outdir+'corrs'+str(FOLD)+'.npy',np.array(corrs))
+            np.save(outdir+'errors'+str(FOLD)+'.npy',np.array(errors))
+            np.save(outdir+'coefs'+str(FOLD)+'.npy',np.array(coefs))
+        pdb.set_trace()
 
     return corrs, errors, stds, preds, coefs
 
@@ -291,6 +281,6 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get data
 X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
 #Fit model
-corrs, errors, stds, preds, coefs = fit_model(X,y,outdir)
+corrs, errors, stds, preds, coefs = fit_model(X,y,5,outdir)
 #Evaluate model
 evaluate_model(corrs, errors, stds, preds, coefs, y_test, train_days,outdir)
