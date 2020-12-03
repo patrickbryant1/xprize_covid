@@ -35,8 +35,8 @@ parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
-#parser.add_argument('--param_combo', nargs=1, type= int,
-                  #default=sys.stdin, help = 'Parameter combo.')
+parser.add_argument('--param_combo', nargs=1, type= int,
+                  default=sys.stdin, help = 'Parameter combo.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -46,6 +46,10 @@ def seed_everything(seed=2020):
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
     tf.random.set_seed(seed)
+
+def get_params(param_combo):
+    '''Get parameters for neural net
+    '''
 
 def get_features(adjusted_data, train_days, forecast_days, outdir):
     '''Get the selected features
@@ -246,7 +250,7 @@ def build_net():
     preds = L.Dense(21, activation="relu", name="p2")(maxpool1)
 
     model = M.Model(x_in, preds, name="CNN")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01))
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
     return model
 
 
@@ -280,10 +284,11 @@ num_days = np.array(num_days)
 
 #Get net parameters
 BATCH_SIZE=1
-EPOCHS=10
+EPOCHS=50
 dilation_rate = 3
 kernel_size = 5
 filters = 32
+lr = 0.01
 #Make net
 
 net = build_net()

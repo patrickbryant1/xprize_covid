@@ -1,0 +1,3 @@
+filters=32
+dilation_rate=3
+lr=0.001
