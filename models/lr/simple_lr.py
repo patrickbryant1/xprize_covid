@@ -150,16 +150,22 @@ def split_for_training(sel,train_days,forecast_days):
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
+            X_region = []
+            y_region = []
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
                 xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
                 period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
+                X_region.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                y_region.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
+            #Save X and y for region
+            X.append(np.array(X_region))
+            y.append(np.array(y_region))
             #Save population
             populations.append(population)
+            pdb.set_trace()
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
@@ -223,9 +229,8 @@ outdir = args.outdir[0]
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 
-
 #Get data
 X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
+
 #Fit model
 corrs, errors, coefs, intercepts = fit_model(X,y,5,outdir)
-print('Done fitting.')
