@@ -117,7 +117,8 @@ def split_for_training(sel,train_days,forecast_days):
             country_region_data = country_region_data.reset_index()
 
             #Check if data
-            if len(country_region_data)<1:
+            if len(country_region_data)<train_days+forecast_days+1:
+                print('Not enough data for',country_region_data['CountryName'].values[0])
                 continue
 
             country_index = country_region_data.loc[0,'Country_index']
@@ -185,20 +186,35 @@ def fit_model(X, y, NFOLD, outdir):
         errors = []
         coefs = []
         intercepts = []
-        for day in range(y_train.shape[1]):
-            pdb.set_trace()
-            reg = LinearRegression().fit(X_train, y_train[:,day])
-            pred = reg.predict(X_valid)
+        #Extract train and valid data by country region
+        X_train_extracted = X_train[0]
+        y_train_extracted = y_train[0]
+        for cr in range(1,len(X_train)):
+            X_train_extracted = np.append(X_train_extracted,X_train[cr],axis=0)
+            y_train_extracted = np.append(y_train_extracted,y_train[cr],axis=0)
+
+        X_valid_extracted = X_valid[0]
+        y_valid_extracted = y_valid[0]
+        for cr in range(1,len(X_valid)):
+            X_valid_extracted = np.append(X_valid_extracted,X_valid[cr],axis=0)
+            y_valid_extracted = np.append(y_valid_extracted,y_valid[cr],axis=0)
+
+
+        #Fit each day
+        for day in range(y_train[0].shape[1]):
+            reg = LinearRegression().fit(X_train_extracted, y_train_extracted[:,day])
+            pred = reg.predict(X_valid_extracted)
             #No negative predictions are allowed
             pred[pred<0]=0
-            av_er = np.average(np.absolute(pred-y_valid[:,day]))
+            av_er = np.average(np.absolute(pred-y_valid_extracted[:,day]))
             print('Fold',FOLD,'Day',day,'Average error',av_er)
-            R,p = pearsonr(pred,y_valid[:,day])
+            R,p = pearsonr(pred,y_valid_extracted[:,day])
             #Save
             corrs.append(R)
             errors.append(av_er)
             coefs.append(reg.coef_)
             intercepts.append(reg.intercept_)
+            pdb.set_trace()
 
         #Save
         np.save(outdir+'corrs'+str(FOLD)+'.npy',np.array(corrs))
