@@ -95,16 +95,65 @@ def predict(start_date: str,
                         'residential',
                         'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
                         'population']
+
+    NB_LOOKBACK_DAYS=21
     # Make predictions for each country,region pair
     geo_pred_dfs = []
     for g in ips_df.GeoID.unique():
         print('\nPredicting for', g)
-
-         # Pull out all relevant data for country c
-        adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
-        last_known_date = adjusted_data_gdf.Date.max()
+        #Get intervention plan for g
         ips_gdf = ips_df[ips_df.GeoID == g]
-        
+         # Pull out all relevant data for g
+        adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
+        adjusted_ip_g = np.array(adjusted_data_gdf[ip_features])
+        adjusted_additional_g = np.array(adjusted_data_gdf[additional_features])
+        future_npis = np.array(ips_gdf[NPI_COLS])
+        #Check the timelag to the last known date
+        last_known_date = adjusted_data_gdf.Date.max()
+        #It may be that the start date is much ahead of the last known date, where input will have to be predicted
+        # Make prediction for each day
+        geo_preds = []
+        # Start predicting from start_date, unless there's a gap since last known date
+        current_date = min(last_known_date + np.timedelta64(1, 'D'), start_date)
+        days_ahead = 0
+        while current_date <= end_date:
+            # Prepare data - make check so that enough previous data exists
+            X_aditional = adjusted_additional_g[-NB_LOOKBACK_DAYS:]
+            X_npis = adjusted_ip_g[-NB_LOOKBACK_DAYS:]
+            X = np.concatenate([X_aditional.flatten(),
+                                X_npis.flatten()])
+
+            # Make the prediction (reshape so that sklearn is happy)
+            pred = model.predict(X.reshape(1, -1))[0]
+            pred = max(0, pred)  # Do not allow predicting negative cases
+            # Add if it's a requested date
+            if current_date >= start_date:
+                geo_preds.append(pred)
+                if verbose:
+                    print(f"{current_date.strftime('%Y-%m-%d')}: {pred}")
+            else:
+                if verbose:
+                    print(f"{current_date.strftime('%Y-%m-%d')}: {pred} - Skipped (intermediate missing daily cases)")
+
+            # Append the prediction and npi's for the next x predicted days
+            # in order to rollout predictions for further days.
+            future_additional = np.repeat(adjusted_additional_g,len(pred))
+            future_additional[0,:]=pred #add predicted cases
+            future_additional[1,:]=np.cumsum(pred) #add predicted cumulative cases
+            #Look up monthly temperature for predicted dates: 'monthly_temperature'
+            adjusted_additional_g = np.append(adjusted_additional_g, future_additional)
+            adjusted_ip_g = np.append(adjusted_ip_g, future_npis[days_ahead:days_ahead + 21], axis=0)
+
+            # Move to next period
+            current_date = current_date + np.timedelta64(21, 'D')
+            days_ahead += 21
+
+
+
+
+
+
+
 
         # Make prediction for each day
         geo_preds = []
