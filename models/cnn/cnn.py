@@ -163,32 +163,34 @@ def split_for_training(sel, train_days, forecast_days):
 
 class DataGenerator(keras.utils.Sequence):
     '''Generates data for Keras'''
-    def __init__(self, X_train_fold, y_train_fold, batch_size=1, shuffle=True):
+    def __init__(self, X_train_fold, y_train_fold, region_days, train_days,forecast_days, batch_size=1, shuffle=True):
         'Initialization'
         self.X_train_fold = X_train_fold
         self.y_train_fold = y_train_fold
+        self.region_days = region_days
+        self.train_days = train_days
+        self.forecast_days = forecast_days
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.on_epoch_end()
 
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(np.floor(len(self.X_train_fold) / self.batch_size))
+        return int(max(self.region_days)-self.train_days-self.forecast_days)
 
     def __getitem__(self, index):
         'Generate one batch of data'
         # Generate indexes of the batch
-        batch_indices = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-
+        batch_indices = self.indices+index
         # Generate data
         X_batch, y_batch = self.__data_generation(batch_indices)
-
+        
         return X_batch, y_batch
 
     def on_epoch_end(self): #Will be done at epoch 0 also
-        'Updates indexes after each epoch'
-        self.indexes = np.arange(len(self.X_train_fold))
-        np.random.shuffle(self.indexes)
+        'Resets indices after each epoch'
+        self.indices = np.repeat(self.train_days,self.X_train_fold.shape[0])
+
 
 
     def __data_generation(self, batch_indices):
@@ -196,9 +198,12 @@ class DataGenerator(keras.utils.Sequence):
         X_batch = []
         y_batch = []
 
-        pdb.set_trace()
+        for i in range(self.X_train_fold.shape[0]):
+            days_i = min(self.region_days[i]-self.forecast_days,batch_indices[i])
+            X_batch.append(self.X_train_fold[i][:days_i])
+            y_batch.append(self.y_train_fold[i][days_i:days_i+self.forecast_days])
 
-        return self.X_train_fold[batch_indices],self.y_train_fold[batch_indices]
+        return np.array(X_batch),np.array(y_batch)
 
 #####LOSSES AND SCORES#####
 def test(net, X_test,y_test,populations,regions):
@@ -279,6 +284,11 @@ outdir = args.outdir[0]
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
 X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days,outdir)
+#Get number of days in X
+num_days = []
+for cr in range(len(X)):
+    num_days.append(X[cr].shape[0])
+num_days = np.array(num_days)
 
 #Get net parameters
 BATCH_SIZE=int(len(X)*0.8)
@@ -304,8 +314,8 @@ for tr_idx, val_idx in kf.split(X):
     print("FOLD", fold)
     net = build_net((None,32))
     #Data generation
-    training_generator = DataGenerator(X[tr_idx], y[tr_idx], BATCH_SIZE)
-    valid_generator = DataGenerator(X[val_idx], y[val_idx], BATCH_SIZE)
+    training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
+    valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
 
     net.fit(training_generator,
             validation_data=valid_generator,
