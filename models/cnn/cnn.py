@@ -184,7 +184,7 @@ class DataGenerator(keras.utils.Sequence):
         batch_indices = self.indices+index
         # Generate data
         X_batch, y_batch = self.__data_generation(batch_indices)
-        
+
         return X_batch, y_batch
 
     def on_epoch_end(self): #Will be done at epoch 0 also
@@ -199,11 +199,11 @@ class DataGenerator(keras.utils.Sequence):
         y_batch = []
 
         for i in range(self.X_train_fold.shape[0]):
-            days_i = min(self.region_days[i]-self.forecast_days,batch_indices[i])
-            X_batch.append(self.X_train_fold[i][:days_i])
-            y_batch.append(self.y_train_fold[i][days_i:days_i+self.forecast_days])
+            days_i = min(self.region_days[i]-self.forecast_days-self.train_days,batch_indices[i])
+            X_batch.append(self.X_train_fold[i][days_i:days_i+self.train_days])
+            y_batch.append(self.y_train_fold[i][days_i+self.train_days:days_i+self.train_days+self.forecast_days])
 
-        return np.array(X_batch),np.array(y_batch)
+        return np.array(X_batch), np.array(y_batch)
 
 #####LOSSES AND SCORES#####
 def test(net, X_test,y_test,populations,regions):
@@ -236,7 +236,7 @@ def qloss(y_true, y_pred):
 
 
 #####BUILD NET#####
-def build_net(input_dim):
+def build_net():
     '''Build the net using Keras
     '''
 
@@ -245,16 +245,15 @@ def build_net(input_dim):
         """
 
 
-    x_in = keras.Input(shape = input_dim)
+    x_in = keras.Input(shape= (None,32))
     #Initial convolution
-    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x_in)
-    batch_out1 = L.BatchNormalization()(in_conv)
-    #Output (batch, steps(len), filters), filters = channels in next
-
+    conv1 = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x_in)
+    batch_out1 = L.BatchNormalization()(conv1)
+    conv2 = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = 7, padding ="same")(conv1)
+    batch_out2 = L.BatchNormalization()(conv2)
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(batch_out1)
+    maxpool1 = L.GlobalMaxPooling1D()(batch_out2)
 
-    #flat1 = L.Flatten()(maxpool1)  #Flatten
     preds = L.Dense(21, activation="relu", name="p2")(maxpool1)
 
     model = M.Model(x_in, preds, name="CNN")
@@ -298,7 +297,7 @@ kernel_size = 5
 filters = 32
 #Make net
 
-net = build_net((None,32))
+net = build_net()
 print(net.summary())
 #KFOLD
 NFOLD = 5
@@ -312,7 +311,7 @@ for tr_idx, val_idx in kf.split(X):
     fold+=1
     tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
-    net = build_net((None,32))
+    net = build_net()
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
