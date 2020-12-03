@@ -165,13 +165,12 @@ def split_for_training(sel,train_days,forecast_days):
             y.append(np.array(y_region))
             #Save population
             populations.append(population)
-            pdb.set_trace()
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
 def fit_model(X, y, NFOLD, outdir):
     '''Fit the linear model
-
+    '''
     #Fit the model
 
     #KFOLD
@@ -179,6 +178,7 @@ def fit_model(X, y, NFOLD, outdir):
     #Perform K-fold CV
     FOLD=0
     for tr_idx, val_idx in kf.split(X):
+
         FOLD+=1
         X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
         corrs = []
@@ -186,6 +186,7 @@ def fit_model(X, y, NFOLD, outdir):
         coefs = []
         intercepts = []
         for day in range(y_train.shape[1]):
+            pdb.set_trace()
             reg = LinearRegression().fit(X_train, y_train[:,day])
             pred = reg.predict(X_valid)
             #No negative predictions are allowed
