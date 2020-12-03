@@ -23,7 +23,7 @@ from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''A CNN regression model.''')
+parser = argparse.ArgumentParser(description = '''A LSTM regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -225,14 +225,6 @@ def test(net, X_test,y_test,populations,regions):
 
 #Custom loss
 #============================#
-def qloss(y_true, y_pred):
-    # Pinball loss for multiple quantiles
-    qs = [0.2, 0.50, 0.8]
-    q = tf.constant(np.array([qs]), dtype=tf.float32)
-    e = y_true - y_pred
-    v = tf.maximum(q*e, (q-1)*e)
-    return K.mean(v)
-
 
 
 #####BUILD NET#####
@@ -240,23 +232,16 @@ def build_net():
     '''Build the net using Keras
     '''
 
-    def resnet(x, num_res_blocks):
-        """Builds a resnet with 1D convolutions of the defined depth.
-        """
-
 
     x_in = keras.Input(shape= (None,32))
     #Initial convolution
-    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x_in)
 
-    batch_out1 = L.BatchNormalization()(in_conv)
-    #Output (batch, steps(len), filters), filters = channels in next
+    lstm1 = L.LSTM(32, activation="tanh", name="l1", return_sequences=True)(x_in)
+    batch_out1 = L.BatchNormalization()(lstm1)
+    lstm2 = L.LSTM(32, activation="tanh", name="l2", return_sequences=True)(batch_out1)
+    batch_out2 = L.BatchNormalization()(lstm2)
 
-    #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(batch_out1)
-
-    #flat1 = L.Flatten()(maxpool1)  #Flatten
-    preds = L.Dense(21, activation="relu", name="p2")(maxpool1)
+    preds = L.Dense(21, activation="relu", name="dense")(maxpool1)
 
     model = M.Model(x_in, preds, name="CNN")
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01),metrics=['mae'])
