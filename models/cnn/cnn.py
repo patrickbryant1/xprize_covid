@@ -8,8 +8,6 @@ import os
 import numpy as np
 import random
 import pandas as pd
-import matplotlib
-import matplotlib.pyplot as plt
 
 from sklearn.model_selection import KFold
 
@@ -35,7 +33,7 @@ parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
-parser.add_argument('--param_combo', nargs=1, type= int,
+parser.add_argument('--param_combo', nargs=1, type= str,
                   default=sys.stdin, help = 'Parameter combo.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
@@ -296,13 +294,12 @@ num_days = np.array(num_days)
 #Get net parameters
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
-EPOCHS=50
-dilation_rate = net_params['dilation_rate']#3
-kernel_size = net_params['kernel_size'] #5
-filters = net_params['filters'] #32
-lr = net_params['lr'] #0.01
+EPOCHS=1
+filters = int(net_params['filters']) #32
+dilation_rate = int(net_params['dilation_rate'])#3
+kernel_size = int(net_params['kernel_size']) #5
+lr = float(net_params['lr']) #0.01
 #Make net
-
 net = build_net()
 print(net.summary())
 #KFOLD
@@ -311,27 +308,28 @@ kf = KFold(n_splits=NFOLD)
 fold=0
 
 #Save errors
-errors = []
+train_errors = []
+valid_errors = []
 corrs = []
 for tr_idx, val_idx in kf.split(X):
     fold+=1
-    tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
+    #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
     net = build_net()
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
 
-    net.fit(training_generator,
+    history = net.fit(training_generator,
             validation_data=valid_generator,
-            epochs=EPOCHS,
-            callbacks = [tensorboard]
+            epochs=EPOCHS
             )
-
-    preds = net.predict(X[val_idx])
-    preds[preds<0]=0
-    errors.append(np.average(np.absolute(preds[:,1]-y[val_idx])))
-    corrs.append(pearsonr(preds[:,1],y[val_idx])[0])
-print(np.average(errors))
-np.average(corrs)
-pdb.set_trace()
+    #Save loss and accuracy
+    train_errors.append(np.array(history.history['loss']))
+    valid_errors.append(np.array(history.history['val_loss']))
+    #Evaluate correlation on a random pick
+    random_pred = net.predict(np.array([X[tr_idx][100]])[:,:-21,:])
+    true = 
+    pdb.set_trace()
+np.save(outdir+'losses.npy', losses)
+np.save(outdir+'acc.npy', acc)
