@@ -133,27 +133,17 @@ def split_for_training(sel, train_days, forecast_days):
             country_region_data = country_region_data.reset_index()
 
             #Check if data
-            if len(country_region_data)<1:
+            if len(country_region_data)<train_days+forecast_days+1:
+                print('Not enough data for',country_region_data['CountryName'].values[0])
                 continue
 
-            country_index = country_region_data.loc[0,'Country_index']
             region_index = country_region_data.loc[0,'Region_index']
-            death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
-            case_death_delay = country_region_data.loc[0,'case_death_delay']
-            gross_net_income = country_region_data.loc[0,'gross_net_income']
-            population_density = country_region_data.loc[0,'population_density']
-            pdi = country_region_data.loc[0,'pdi'] #Power distance
-            idv = country_region_data.loc[0, 'idv'] #Individualism
-            mas = country_region_data.loc[0,'mas'] #Masculinity
-            uai = country_region_data.loc[0,'uai'] #Uncertainty
-            ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
-            ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-            population = country_region_data.loc[0,'population']
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
             else:
                 regions.append(country_region_data.loc[0,'CountryName'])
 
+            population = country_region_data.loc[0,'population']
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay'})
 
@@ -162,11 +152,10 @@ def split_for_training(sel, train_days, forecast_days):
             #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
-            #Loop through and get the data
-            for di in range(len(country_region_data)-(train_days+forecast_days-1)):
-                X.append(np.array(country_region_data.loc[di:di+train_days-1]))
-                y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
-
+            #Get the data
+            X.append(np.array(country_region_data))
+            y.append(np.array(country_region_data['smoothed_cases']))
+            pdb.set_trace()
             #Save population
             populations.append(population)
 

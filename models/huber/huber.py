@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 
 
 from scipy.stats import pearsonr
-from sklearn.linear_model import TheilSenRegressor, HuberRegressor
+from sklearn.linear_model import HuberRegressor
+from sklearn.model_selection import KFold
 import numpy as np
 
 
@@ -175,7 +176,7 @@ def fit_model(X, y, NFOLD, outdir):
     #Fit the model
 
     #KFOLD
-    kf = KFold(n_splits=NFOLD, random_state=42)
+    kf = KFold(n_splits=NFOLD)
     #Perform K-fold CV
     FOLD=0
     for tr_idx, val_idx in kf.split(X):
@@ -202,7 +203,7 @@ def fit_model(X, y, NFOLD, outdir):
 
         #Fit each day
         for day in range(y_train[0].shape[1]):
-            reg =  HuberRegressor().fit(X_train,y_train)
+            reg =  HuberRegressor().fit(X_train_extracted,y_train_extracted[:,day])
             pred = reg.predict(X_valid_extracted)
             #No negative predictions are allowed
             pred[pred<0]=0
@@ -247,12 +248,7 @@ forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-#Get features
-X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,train_days,outdir)
 
-
-#Use only data from start date
-adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 
 #Get data
 X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
