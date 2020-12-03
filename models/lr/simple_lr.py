@@ -207,14 +207,15 @@ def fit_model(X, y, NFOLD, outdir):
             #No negative predictions are allowed
             pred[pred<0]=0
             av_er = np.average(np.absolute(pred-y_valid_extracted[:,day]))
-            print('Fold',FOLD,'Day',day,'Average error',av_er)
+
             R,p = pearsonr(pred,y_valid_extracted[:,day])
+            print('Fold',FOLD,'Day',day,'Average error',av_er,'PCC',R)
             #Save
             corrs.append(R)
             errors.append(av_er)
             coefs.append(reg.coef_)
             intercepts.append(reg.intercept_)
-            pdb.set_trace()
+
 
         #Save
         np.save(outdir+'corrs'+str(FOLD)+'.npy',np.array(corrs))
