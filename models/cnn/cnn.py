@@ -329,7 +329,7 @@ for tr_idx, val_idx in kf.split(X):
     valid_errors.append(np.array(history.history['val_loss']))
     #Evaluate correlation on a random pick
     random_pred = net.predict(np.array([X[tr_idx][100]])[:,:-21,:])
-    true = 
+    true = y[tr_idx][100][-21:]
     pdb.set_trace()
 np.save(outdir+'losses.npy', losses)
 np.save(outdir+'acc.npy', acc)
