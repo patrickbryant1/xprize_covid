@@ -236,15 +236,14 @@ def build_net():
     x_in = keras.Input(shape= (None,32))
     #Initial convolution
 
-    lstm1 = L.LSTM(32, activation="tanh", name="l1", return_sequences=True)(x_in)
+    lstm1 = L.LSTM(16, activation="tanh", name="l1", return_sequences=True)(x_in)
     batch_out1 = L.BatchNormalization()(lstm1)
-    lstm2 = L.LSTM(32, activation="tanh", name="l2", return_sequences=True)(batch_out1)
-    batch_out2 = L.BatchNormalization()(lstm2)
-
+    #Maxpool along sequence axis
+    maxpool1 = L.GlobalMaxPooling1D()(batch_out1)
     preds = L.Dense(21, activation="relu", name="dense")(maxpool1)
 
     model = M.Model(x_in, preds, name="CNN")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01),metrics=['mae'])
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.05),metrics=['mae'])
     return model
 
 

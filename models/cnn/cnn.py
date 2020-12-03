@@ -170,38 +170,40 @@ class DataGenerator(keras.utils.Sequence):
         self.region_days = region_days
         self.train_days = train_days
         self.forecast_days = forecast_days
+        self.cum_region_days = np.cumsum(self.region_days-self.train_days-self.forecast_days)
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.on_epoch_end()
 
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(max(self.region_days)-self.train_days-self.forecast_days)
+        return int(np.sum(self.region_days-self.train_days-self.forecast_days))
 
     def __getitem__(self, index):
         'Generate one batch of data'
         # Generate indexes of the batch
-        batch_indices = self.indices+index
+        batch_index = self.indices+index
+        region_index = np.argwhere(self.cum_region_days>batch_index)[0][0]
+        #Increase the right region index
+        self.region_indices[region_index]+=1
         # Generate data
-        X_batch, y_batch = self.__data_generation(batch_indices)
+        X_batch, y_batch = self.__data_generation(region_index,self.region_indices[region_index])
 
         return X_batch, y_batch
 
     def on_epoch_end(self): #Will be done at epoch 0 also
         'Resets indices after each epoch'
-        self.indices = np.repeat(self.train_days,self.X_train_fold.shape[0])
+        self.indices = 0
+        self.region_indices = np.repeat(self.train_days-1,self.X_train_fold.shape[0])
 
-
-
-    def __data_generation(self, batch_indices):
+    def __data_generation(self, region_index,batch_end_day):
         'Generates data containing batch_size samples'
+        #Get the region
         X_batch = []
         y_batch = []
 
-        for i in range(self.X_train_fold.shape[0]):
-            days_i = min(self.region_days[i]-self.forecast_days-self.train_days,batch_indices[i])
-            X_batch.append(self.X_train_fold[i][days_i:days_i+self.train_days])
-            y_batch.append(self.y_train_fold[i][days_i+self.train_days:days_i+self.train_days+self.forecast_days])
+        X_batch.append(self.X_train_fold[region_index][:batch_end_day])
+        y_batch.append(self.y_train_fold[region_index][batch_end_day:batch_end_day+self.forecast_days])
 
         return np.array(X_batch), np.array(y_batch)
 
@@ -222,17 +224,6 @@ def test(net, X_test,y_test,populations,regions):
     plt.xlabel('True')
     plt.ylabel('Pred')
     plt.show()
-
-#Custom loss
-#============================#
-def qloss(y_true, y_pred):
-    # Pinball loss for multiple quantiles
-    qs = [0.2, 0.50, 0.8]
-    q = tf.constant(np.array([qs]), dtype=tf.float32)
-    e = y_true - y_pred
-    v = tf.maximum(q*e, (q-1)*e)
-    return K.mean(v)
-
 
 
 #####BUILD NET#####
@@ -292,7 +283,7 @@ for cr in range(len(X)):
 num_days = np.array(num_days)
 
 #Get net parameters
-BATCH_SIZE=int(len(X)*0.8)
+BATCH_SIZE=1
 EPOCHS=100
 dilation_rate = 3
 kernel_size = 5
