@@ -186,6 +186,7 @@ class DataGenerator(keras.utils.Sequence):
         region_index = np.argwhere(self.cum_region_days>batch_index)[0][0]
         #Increase the right region index
         self.region_indices[region_index]+=1
+        print(self.region_indices[region_index])
         # Generate data
         X_batch, y_batch = self.__data_generation(region_index,self.region_indices[region_index])
 
@@ -241,23 +242,23 @@ def build_net():
     in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x_in)
 
     batch_out1 = L.BatchNormalization()(in_conv)
-    #Output (batch, steps(len), filters), filters = channels in next
+    activation1 = L.Activation('relu')(batch_out1)
 
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(batch_out1)
+    maxpool1 = L.GlobalMaxPooling1D()(activation1)
 
     #flat1 = L.Flatten()(maxpool1)  #Flatten
     preds = L.Dense(21, activation="relu", name="p2")(maxpool1)
 
     model = M.Model(x_in, preds, name="CNN")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01),metrics=['mae'])
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01))
     return model
 
 
 #####MAIN#####
 args = parser.parse_args()
 #Seed
-seed_everything(42) #The answer it is
+seed_everything(0) #The answer it is
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -284,7 +285,7 @@ num_days = np.array(num_days)
 
 #Get net parameters
 BATCH_SIZE=1
-EPOCHS=100
+EPOCHS=10
 dilation_rate = 3
 kernel_size = 5
 filters = 32
