@@ -47,9 +47,20 @@ def seed_everything(seed=2020):
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-def get_params(param_combo):
-    '''Get parameters for neural net
+def read_net_params(params_file):
+    '''Read and return net parameters
     '''
+    net_params = {} #Save information for net
+
+    with open(params_file) as file:
+        for line in file:
+            line = line.rstrip() #Remove newlines
+            line = line.split("=") #Split on "="
+
+            net_params[line[0]] = line[1]
+
+
+    return net_params
 
 def get_features(adjusted_data, train_days, forecast_days, outdir):
     '''Get the selected features
@@ -283,12 +294,13 @@ for cr in range(len(X)):
 num_days = np.array(num_days)
 
 #Get net parameters
+net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
 EPOCHS=50
-dilation_rate = 3
-kernel_size = 5
-filters = 32
-lr = 0.01
+dilation_rate = net_params['dilation_rate']#3
+kernel_size = net_params['kernel_size'] #5
+filters = net_params['filters'] #32
+lr = net_params['lr'] #0.01
 #Make net
 
 net = build_net()
