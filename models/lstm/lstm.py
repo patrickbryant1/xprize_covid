@@ -234,9 +234,9 @@ def build_net():
 
     x_in = keras.Input(shape= (None,32))
     #Initial convolution
-    in_conv = L.Bidirectional(L.LSTM(16, return_sequences=True))(x_in)
+    in_pass = L.Bidirectional(L.LSTM(16, return_sequences=True))(x_in)
 
-    batch_out1 = L.BatchNormalization()(in_conv)
+    batch_out1 = L.BatchNormalization()(in_pass)
     activation1 = L.Activation('relu')(batch_out1)
 
     #Maxpool along sequence axis
