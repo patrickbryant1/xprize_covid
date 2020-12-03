@@ -1,0 +1,4 @@
+filters=32
+dilation_rate=6
+kernel_size=5
+lr=0.001

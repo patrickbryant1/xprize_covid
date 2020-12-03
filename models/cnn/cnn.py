@@ -8,8 +8,6 @@ import os
 import numpy as np
 import random
 import pandas as pd
-import matplotlib
-import matplotlib.pyplot as plt
 
 from sklearn.model_selection import KFold
 
@@ -35,8 +33,8 @@ parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
-#parser.add_argument('--param_combo', nargs=1, type= int,
-                  #default=sys.stdin, help = 'Parameter combo.')
+parser.add_argument('--param_combo', nargs=1, type= str,
+                  default=sys.stdin, help = 'Parameter combo.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -46,6 +44,21 @@ def seed_everything(seed=2020):
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
     tf.random.set_seed(seed)
+
+def read_net_params(params_file):
+    '''Read and return net parameters
+    '''
+    net_params = {} #Save information for net
+
+    with open(params_file) as file:
+        for line in file:
+            line = line.rstrip() #Remove newlines
+            line = line.split("=") #Split on "="
+
+            net_params[line[0]] = line[1]
+
+
+    return net_params
 
 def get_features(adjusted_data, train_days, forecast_days, outdir):
     '''Get the selected features
@@ -133,27 +146,17 @@ def split_for_training(sel, train_days, forecast_days):
             country_region_data = country_region_data.reset_index()
 
             #Check if data
-            if len(country_region_data)<1:
+            if len(country_region_data)<train_days+forecast_days+1:
+                print('Not enough data for',country_region_data['CountryName'].values[0])
                 continue
 
-            country_index = country_region_data.loc[0,'Country_index']
             region_index = country_region_data.loc[0,'Region_index']
-            death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
-            case_death_delay = country_region_data.loc[0,'case_death_delay']
-            gross_net_income = country_region_data.loc[0,'gross_net_income']
-            population_density = country_region_data.loc[0,'population_density']
-            pdi = country_region_data.loc[0,'pdi'] #Power distance
-            idv = country_region_data.loc[0, 'idv'] #Individualism
-            mas = country_region_data.loc[0,'mas'] #Masculinity
-            uai = country_region_data.loc[0,'uai'] #Uncertainty
-            ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
-            ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-            population = country_region_data.loc[0,'population']
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
             else:
                 regions.append(country_region_data.loc[0,'CountryName'])
 
+            population = country_region_data.loc[0,'population']
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay'})
 
@@ -162,10 +165,9 @@ def split_for_training(sel, train_days, forecast_days):
             #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
-            #Loop through and get the data
-            for di in range(len(country_region_data)-(train_days+forecast_days-1)):
-                X.append(np.array(country_region_data.loc[di:di+train_days-1]))
-                y.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
+            #Get the data
+            X.append(np.array(country_region_data))
+            y.append(np.array(country_region_data['smoothed_cases']))
 
             #Save population
             populations.append(population)
@@ -174,39 +176,49 @@ def split_for_training(sel, train_days, forecast_days):
 
 class DataGenerator(keras.utils.Sequence):
     '''Generates data for Keras'''
-    def __init__(self, X_train_fold, y_train_fold, batch_size=1, shuffle=True):
+    def __init__(self, X_train_fold, y_train_fold, region_days, train_days,forecast_days, batch_size=1, shuffle=True):
         'Initialization'
         self.X_train_fold = X_train_fold
         self.y_train_fold = y_train_fold
+        self.region_days = region_days
+        self.train_days = train_days
+        self.forecast_days = forecast_days
+        self.cum_region_days = np.cumsum(self.region_days-self.train_days-self.forecast_days)
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.on_epoch_end()
 
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(np.floor(len(self.X_train_fold) / self.batch_size))
+        return int(np.sum(self.region_days-self.train_days-self.forecast_days))
 
     def __getitem__(self, index):
         'Generate one batch of data'
         # Generate indexes of the batch
-        batch_indices = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        #domain_index = np.take(range((len(self.X_train_fold))),indexes)
-
+        batch_index = self.indices+index
+        region_index = np.argwhere(self.cum_region_days>batch_index)[0][0]
+        #Increase the right region index
+        self.region_indices[region_index]+=1
         # Generate data
-        X_batch, y_batch = self.__data_generation(batch_indices)
+        X_batch, y_batch = self.__data_generation(region_index,self.region_indices[region_index])
 
         return X_batch, y_batch
 
     def on_epoch_end(self): #Will be done at epoch 0 also
-        'Updates indexes after each epoch'
-        self.indexes = np.arange(len(self.X_train_fold))
-        np.random.shuffle(self.indexes)
+        'Resets indices after each epoch'
+        self.indices = 0
+        self.region_indices = np.repeat(self.train_days-1,self.X_train_fold.shape[0])
 
-
-    def __data_generation(self, batch_indices):
+    def __data_generation(self, region_index,batch_end_day):
         'Generates data containing batch_size samples'
+        #Get the region
+        X_batch = []
+        y_batch = []
 
-        return self.X_train_fold[batch_indices],self.y_train_fold[batch_indices]
+        X_batch.append(self.X_train_fold[region_index][:batch_end_day])
+        y_batch.append(self.y_train_fold[region_index][batch_end_day:batch_end_day+self.forecast_days])
+
+        return np.array(X_batch), np.array(y_batch)
 
 #####LOSSES AND SCORES#####
 def test(net, X_test,y_test,populations,regions):
@@ -226,64 +238,35 @@ def test(net, X_test,y_test,populations,regions):
     plt.ylabel('Pred')
     plt.show()
 
-#Custom loss
-#============================#
-def qloss(y_true, y_pred):
-    # Pinball loss for multiple quantiles
-    qs = [0.2, 0.50, 0.8]
-    q = tf.constant(np.array([qs]), dtype=tf.float32)
-    e = y_true - y_pred
-    v = tf.maximum(q*e, (q-1)*e)
-    return K.mean(v)
-
-
 
 #####BUILD NET#####
-def build_net(input_dim):
+def build_net():
     '''Build the net using Keras
     '''
 
-    def resnet(x, num_res_blocks):
-        """Builds a resnet with 1D convolutions of the defined depth.
-        """
 
-
-        # Instantiate the stack of residual units
-        #Similar to ProtCNN, but they used batch_size = 64, 2000 filters and kernel size of 21
-        for res_block in range(num_res_blocks):
-            batch_out1 = L.BatchNormalization()(x) #Bacth normalize, focus on segment
-            activation1 = L.Activation('relu')(batch_out1)
-            conv_out1 = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(activation1)
-            batch_out2 = L.BatchNormalization()(conv_out1) #Bacth normalize, focus on segment
-            activation2 = L.Activation('relu')(batch_out2)
-            #Downsample - half filters
-            conv_out2 = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(activation2)
-            x = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x)
-            x = L.add([x, conv_out2]) #Skip connection
-
-        return x
-
-    x_in = keras.Input(shape = input_dim)
+    x_in = keras.Input(shape= (None,32))
     #Initial convolution
-    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, input_shape=(21,32), padding ="same")(x_in)
-    batch_out1 = L.BatchNormalization()(in_conv)
-    #Output (batch, steps(len), filters), filters = channels in next
-    #x1 = resnet(in_conv, 1)
-    #Maxpool along sequence axis
-    maxpool1 = L.MaxPooling1D(pool_size=21)(batch_out1)
+    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x_in)
 
-    flat1 = L.Flatten()(maxpool1)  #Flatten
-    preds = L.Dense(1, activation="relu", name="p2")(flat1)
+    batch_out1 = L.BatchNormalization()(in_conv)
+    activation1 = L.Activation('relu')(batch_out1)
+
+    #Maxpool along sequence axis
+    maxpool1 = L.GlobalMaxPooling1D()(activation1)
+
+    #flat1 = L.Flatten()(maxpool1)  #Flatten
+    preds = L.Dense(21, activation="relu", name="p2")(maxpool1)
 
     model = M.Model(x_in, preds, name="CNN")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01),metrics=['mae'])
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
     return model
 
 
 #####MAIN#####
 args = parser.parse_args()
 #Seed
-seed_everything(42) #The answer it is
+seed_everything(0) #The answer it is
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -302,19 +285,22 @@ outdir = args.outdir[0]
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
 X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days,outdir)
-
-#Select day
-y= y[:,days_ahead-1]
+#Get number of days in X
+num_days = []
+for cr in range(len(X)):
+    num_days.append(X[cr].shape[0])
+num_days = np.array(num_days)
 
 #Get net parameters
-BATCH_SIZE=256
-EPOCHS=100
-dilation_rate = 3
-kernel_size = 5
-filters = 5
+net_params = read_net_params(args.param_combo[0])
+BATCH_SIZE=1
+EPOCHS=1
+filters = int(net_params['filters']) #32
+dilation_rate = int(net_params['dilation_rate'])#3
+kernel_size = int(net_params['kernel_size']) #5
+lr = float(net_params['lr']) #0.01
 #Make net
-
-net = build_net(X.shape[1:])
+net = build_net()
 print(net.summary())
 #KFOLD
 NFOLD = 5
@@ -322,27 +308,28 @@ kf = KFold(n_splits=NFOLD)
 fold=0
 
 #Save errors
-errors = []
+train_errors = []
+valid_errors = []
 corrs = []
 for tr_idx, val_idx in kf.split(X):
     fold+=1
-    tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
+    #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
-    net = build_net(X.shape[1:])
+    net = build_net()
     #Data generation
-    training_generator = DataGenerator(X[tr_idx], y[tr_idx], BATCH_SIZE)
-    valid_generator = DataGenerator(X[val_idx], y[val_idx], BATCH_SIZE)
+    training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
+    valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
 
-    net.fit(training_generator,
+    history = net.fit(training_generator,
             validation_data=valid_generator,
-            epochs=EPOCHS,
-            callbacks = [tensorboard]
+            epochs=EPOCHS
             )
-
-    preds = net.predict(X[val_idx])
-    preds[preds<0]=0
-    errors.append(np.average(np.absolute(preds[:,1]-y[val_idx])))
-    corrs.append(pearsonr(preds[:,1],y[val_idx])[0])
-print(np.average(errors))
-np.average(corrs)
-pdb.set_trace()
+    #Save loss and accuracy
+    train_errors.append(np.array(history.history['loss']))
+    valid_errors.append(np.array(history.history['val_loss']))
+    #Evaluate correlation on a random pick
+    random_pred = net.predict(np.array([X[tr_idx][100]])[:,:-21,:])
+    true = 
+    pdb.set_trace()
+np.save(outdir+'losses.npy', losses)
+np.save(outdir+'acc.npy', acc)
