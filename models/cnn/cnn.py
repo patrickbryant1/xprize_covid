@@ -155,7 +155,7 @@ def split_for_training(sel, train_days, forecast_days):
             #Get the data
             X.append(np.array(country_region_data))
             y.append(np.array(country_region_data['smoothed_cases']))
-            pdb.set_trace()
+
             #Save population
             populations.append(population)
 
@@ -179,7 +179,6 @@ class DataGenerator(keras.utils.Sequence):
         'Generate one batch of data'
         # Generate indexes of the batch
         batch_indices = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        #domain_index = np.take(range((len(self.X_train_fold))),indexes)
 
         # Generate data
         X_batch, y_batch = self.__data_generation(batch_indices)
@@ -194,6 +193,10 @@ class DataGenerator(keras.utils.Sequence):
 
     def __data_generation(self, batch_indices):
         'Generates data containing batch_size samples'
+        X_batch = []
+        y_batch = []
+
+        pdb.set_trace()
 
         return self.X_train_fold[batch_indices],self.y_train_fold[batch_indices]
 
@@ -237,32 +240,17 @@ def build_net(input_dim):
         """
 
 
-        # Instantiate the stack of residual units
-        #Similar to ProtCNN, but they used batch_size = 64, 2000 filters and kernel size of 21
-        for res_block in range(num_res_blocks):
-            batch_out1 = L.BatchNormalization()(x) #Bacth normalize, focus on segment
-            activation1 = L.Activation('relu')(batch_out1)
-            conv_out1 = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(activation1)
-            batch_out2 = L.BatchNormalization()(conv_out1) #Bacth normalize, focus on segment
-            activation2 = L.Activation('relu')(batch_out2)
-            #Downsample - half filters
-            conv_out2 = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(activation2)
-            x = L.Conv1D(filters = int(filters/2), kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x)
-            x = L.add([x, conv_out2]) #Skip connection
-
-        return x
-
     x_in = keras.Input(shape = input_dim)
     #Initial convolution
-    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, input_shape=(21,32), padding ="same")(x_in)
+    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x_in)
     batch_out1 = L.BatchNormalization()(in_conv)
     #Output (batch, steps(len), filters), filters = channels in next
-    #x1 = resnet(in_conv, 1)
-    #Maxpool along sequence axis
-    maxpool1 = L.MaxPooling1D(pool_size=21)(batch_out1)
 
-    flat1 = L.Flatten()(maxpool1)  #Flatten
-    preds = L.Dense(1, activation="relu", name="p2")(flat1)
+    #Maxpool along sequence axis
+    maxpool1 = L.GlobalMaxPooling1D()(batch_out1)
+
+    #flat1 = L.Flatten()(maxpool1)  #Flatten
+    preds = L.Dense(21, activation="relu", name="p2")(maxpool1)
 
     model = M.Model(x_in, preds, name="CNN")
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01),metrics=['mae'])
@@ -292,18 +280,15 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
 X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days,outdir)
 
-#Select day
-y= y[:,days_ahead-1]
-
 #Get net parameters
-BATCH_SIZE=256
+BATCH_SIZE=int(len(X)*0.8)
 EPOCHS=100
 dilation_rate = 3
 kernel_size = 5
-filters = 5
+filters = 32
 #Make net
 
-net = build_net(X.shape[1:])
+net = build_net((None,32))
 print(net.summary())
 #KFOLD
 NFOLD = 5
@@ -317,7 +302,7 @@ for tr_idx, val_idx in kf.split(X):
     fold+=1
     tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
-    net = build_net(X.shape[1:])
+    net = build_net((None,32))
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx], BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx], BATCH_SIZE)
