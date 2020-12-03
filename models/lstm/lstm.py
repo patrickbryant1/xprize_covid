@@ -170,38 +170,40 @@ class DataGenerator(keras.utils.Sequence):
         self.region_days = region_days
         self.train_days = train_days
         self.forecast_days = forecast_days
+        self.cum_region_days = np.cumsum(self.region_days-self.train_days-self.forecast_days)
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.on_epoch_end()
 
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(max(self.region_days)-self.train_days-self.forecast_days)
+        return int(np.sum(self.region_days-self.train_days-self.forecast_days))
 
     def __getitem__(self, index):
         'Generate one batch of data'
         # Generate indexes of the batch
-        batch_indices = self.indices+index
+        batch_index = self.indices+index
+        region_index = np.argwhere(self.cum_region_days>batch_index)[0][0]
+        #Increase the right region index
+        self.region_indices[region_index]+=1
         # Generate data
-        X_batch, y_batch = self.__data_generation(batch_indices)
+        X_batch, y_batch = self.__data_generation(region_index,self.region_indices[region_index])
 
         return X_batch, y_batch
 
     def on_epoch_end(self): #Will be done at epoch 0 also
         'Resets indices after each epoch'
-        self.indices = np.repeat(self.train_days,self.X_train_fold.shape[0])
+        self.indices = 0
+        self.region_indices = np.repeat(self.train_days-1,self.X_train_fold.shape[0])
 
-
-
-    def __data_generation(self, batch_indices):
+    def __data_generation(self, region_index,batch_end_day):
         'Generates data containing batch_size samples'
+        #Get the region
         X_batch = []
         y_batch = []
 
-        for i in range(self.X_train_fold.shape[0]):
-            days_i = min(self.region_days[i]-self.forecast_days-self.train_days,batch_indices[i])
-            X_batch.append(self.X_train_fold[i][days_i:days_i+self.train_days])
-            y_batch.append(self.y_train_fold[i][days_i+self.train_days:days_i+self.train_days+self.forecast_days])
+        X_batch.append(self.X_train_fold[region_index][:batch_end_day])
+        y_batch.append(self.y_train_fold[region_index][batch_end_day:batch_end_day+self.forecast_days])
 
         return np.array(X_batch), np.array(y_batch)
 
@@ -223,9 +225,6 @@ def test(net, X_test,y_test,populations,regions):
     plt.ylabel('Pred')
     plt.show()
 
-#Custom loss
-#============================#
-
 
 #####BUILD NET#####
 def build_net():
@@ -235,22 +234,24 @@ def build_net():
 
     x_in = keras.Input(shape= (None,32))
     #Initial convolution
+    in_conv = L.Bidirectional(L.LSTM(16, return_sequences=True))(x_in)
 
-    lstm1 = L.LSTM(16, activation="tanh", name="l1", return_sequences=True)(x_in)
-    batch_out1 = L.BatchNormalization()(lstm1)
+    batch_out1 = L.BatchNormalization()(in_conv)
+    activation1 = L.Activation('relu')(batch_out1)
+
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(batch_out1)
-    preds = L.Dense(21, activation="relu", name="dense")(maxpool1)
+    maxpool1 = L.GlobalMaxPooling1D()(activation1)
+    preds = L.Dense(21, activation="relu", name="p2")(maxpool1 )
 
     model = M.Model(x_in, preds, name="CNN")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.05),metrics=['mae'])
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01))
     return model
 
 
 #####MAIN#####
 args = parser.parse_args()
 #Seed
-seed_everything(42) #The answer it is
+seed_everything(0) #The answer it is
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -276,8 +277,8 @@ for cr in range(len(X)):
 num_days = np.array(num_days)
 
 #Get net parameters
-BATCH_SIZE=int(len(X)*0.8)
-EPOCHS=100
+BATCH_SIZE=1
+EPOCHS=10
 dilation_rate = 3
 kernel_size = 5
 filters = 32

@@ -186,7 +186,6 @@ class DataGenerator(keras.utils.Sequence):
         region_index = np.argwhere(self.cum_region_days>batch_index)[0][0]
         #Increase the right region index
         self.region_indices[region_index]+=1
-        print(self.region_indices[region_index])
         # Generate data
         X_batch, y_batch = self.__data_generation(region_index,self.region_indices[region_index])
 
@@ -231,10 +230,6 @@ def test(net, X_test,y_test,populations,regions):
 def build_net():
     '''Build the net using Keras
     '''
-
-    def resnet(x, num_res_blocks):
-        """Builds a resnet with 1D convolutions of the defined depth.
-        """
 
 
     x_in = keras.Input(shape= (None,32))
