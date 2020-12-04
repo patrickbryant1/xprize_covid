@@ -108,6 +108,7 @@ def get_features(adjusted_data, train_days, forecast_days, outdir):
                             'population']
 
         sel = adjusted_data[selected_features]
+        pdb.set_trace()
         X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
         np.save(outdir+'X.npy',X)
@@ -161,8 +162,8 @@ def split_for_training(sel, train_days, forecast_days):
             'RegionName', 'death_to_case_scale', 'case_death_delay'})
 
             #Normalize the cases by 100'000 population
-            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
-            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Get the data

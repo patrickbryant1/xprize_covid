@@ -10,6 +10,7 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
+from sklearn import preprocessing
 from sklearn.model_selection import KFold
 from scipy.stats import pearsonr
 from scipy import stats
@@ -32,6 +33,24 @@ parser.add_argument('--forecast_days', nargs=1, type= int,
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
+def normalize_data(sel):
+    '''Normalize and transform data
+    '''
+
+    to_log = ['smoothed_cases','cumulative_smoothed_cases','rescaled_cases','cumulative_rescaled_cases','population_density', 'population']
+    for var in to_log:
+        sel[var] = np.log10(sel[var]+0.001)
+
+    #GNI: group into 3: 0-20k,20-40k,40k+
+    index1 = sel[sel['gross_net_income']<20000].index
+    above = sel[sel['gross_net_income']>20000]
+    index2 = above[above['gross_net_income']<40000].index
+    index3 = sel[sel['gross_net_income']>40000].index
+    sel.at[index1,'gross_net_income']=0
+    sel.at[index2,'gross_net_income']=1
+    sel.at[index3,'gross_net_income']=2
+
+    return sel
 
 def get_features(adjusted_data,train_days,forecast_days,outdir):
     '''Get the selected features
@@ -80,6 +99,8 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
 
     except:
         sel = adjusted_data[selected_features]
+        #Normalize
+        sel = normalize_data(sel)
         X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
         np.save(outdir+'X.npy',X)
@@ -146,10 +167,10 @@ def split_for_training(sel,train_days,forecast_days):
              'mas', 'uai', 'ltowvs', 'ivr','population'})
 
             #Normalize the cases by 100'000 population
-            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
-            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
-            country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
-            country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
+            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
+            #country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
+            #country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
             X_region = []
             y_region = []
