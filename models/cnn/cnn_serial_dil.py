@@ -266,7 +266,7 @@ def build_net():
     x = L.Activation('relu')(x)
 
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(x)
+    maxpool1 = L.GlobalAveragePooling1D()(x)
 
     preds = L.Dense(21, activation="relu", name="p2")(maxpool1)
 
