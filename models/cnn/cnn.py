@@ -318,7 +318,7 @@ num_days = np.array(num_days)
 #Get net parameters
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
-EPOCHS=1
+EPOCHS=50
 filters = int(net_params['filters']) #32
 dilation_rate = int(net_params['dilation_rate'])#3
 kernel_size = int(net_params['kernel_size']) #5
@@ -352,9 +352,6 @@ for tr_idx, val_idx in kf.split(X):
     #Save loss and accuracy
     train_errors.append(np.array(history.history['loss']))
     valid_errors.append(np.array(history.history['val_loss']))
-    #Evaluate correlation on a random pick
-    random_pred = net.predict(np.array([X[tr_idx][100]])[:,:-21,:])
-    true = y[tr_idx][100][-21:]
-    pdb.set_trace()
-np.save(outdir+'losses.npy', losses)
-np.save(outdir+'acc.npy', acc)
+
+np.save(outdir+'train_errors.npy', np.array(train_errors))
+np.save(outdir+'valid_errors.npy', np.array(valid_errors))
