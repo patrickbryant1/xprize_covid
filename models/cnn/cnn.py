@@ -267,16 +267,19 @@ def build_net():
 
 
     x_in = keras.Input(shape= (None,32))
-    #Initial convolution
-    in_conv = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x_in)
+    #Convolutions
+    def get_conv_net(x,num_convolutional_layers):
+        for n in range(num_convolutional_layers):
+            x = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x)
+            x = L.BatchNormalization()(x)
+            x = L.Activation('relu')(x)
 
-    batch_out1 = L.BatchNormalization()(in_conv)
-    activation1 = L.Activation('relu')(batch_out1)
+        return x
 
+    x = get_conv_net(x_in,num_convolutional_layers)
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(activation1)
+    maxpool1 = L.GlobalMaxPooling1D()(x)
 
-    #flat1 = L.Flatten()(maxpool1)  #Flatten
     preds = L.Dense(21, activation="relu", name="p2")(maxpool1)
 
     model = M.Model(x_in, preds, name="CNN")
@@ -320,6 +323,7 @@ filters = int(net_params['filters']) #32
 dilation_rate = int(net_params['dilation_rate'])#3
 kernel_size = int(net_params['kernel_size']) #5
 lr = float(net_params['lr']) #0.01
+num_convolutional_layers = int(net_params['num_convolutional_layers'])
 #Make net
 net = build_net()
 print(net.summary())
