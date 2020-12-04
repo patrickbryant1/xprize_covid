@@ -157,7 +157,7 @@ def split_for_training(sel,train_days,forecast_days):
                 xi = np.array(country_region_data.loc[di:di+train_days-1])[:,13]
                 period_change = xi[-1]-xi[0]
                 #Add
-                X_region.append(np.append(xi, period_change)) #[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                X_region.append(np.append(xi[0], [xi[-1],period_change])) #[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                 y_region.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
             #Save X and y for region
@@ -203,7 +203,7 @@ def fit_model(X, y, NFOLD, outdir):
 
         #Fit each day
         for day in range(y_train[0].shape[1]):
-            reg = LinearSVR().fit(X_train_extracted, y_train_extracted[:,day])
+            reg = LinearSVR(max_iter=100000).fit(X_train_extracted, y_train_extracted[:,day])
             pred = reg.predict(X_valid_extracted)
 
             #Ensure non-negative

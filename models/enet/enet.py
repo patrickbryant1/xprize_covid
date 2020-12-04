@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 
 from scipy.stats import pearsonr
 from sklearn.linear_model import ElasticNet
+from sklearn.model_selection import KFold
 import numpy as np
 
 
@@ -22,81 +23,100 @@ parser = argparse.ArgumentParser(description = '''Enet regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
-
+parser.add_argument('--start_date', nargs=1, type= str,
+                  default=sys.stdin, help = 'Date to start from.')
+parser.add_argument('--train_days', nargs=1, type= int,
+                  default=sys.stdin, help = 'Days to include in fitting.')
+parser.add_argument('--forecast_days', nargs=1, type= int,
+                  default=sys.stdin, help = 'Days to forecast.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
+def normalize_data(sel):
+    '''Normalize and transform data
+    '''
 
-def get_features(adjusted_data, outdir):
+    # to_log = ['smoothed_cases','cumulative_smoothed_cases','rescaled_cases','cumulative_rescaled_cases','population_density', 'population']
+    # for var in to_log:
+    #     sel[var] = np.log10(sel[var]+0.001)
+
+    #GNI: group into 3: 0-20k,20-40k,40k+
+    index1 = sel[sel['gross_net_income']<20000].index
+    above = sel[sel['gross_net_income']>20000]
+    index2 = above[above['gross_net_income']<40000].index
+    index3 = sel[sel['gross_net_income']>40000].index
+    sel.at[index1,'gross_net_income']=0
+    sel.at[index2,'gross_net_income']=1
+    sel.at[index3,'gross_net_income']=2
+
+    return sel
+
+def get_features(adjusted_data,train_days,forecast_days,outdir):
     '''Get the selected features
     '''
 
-
+    selected_features = ['C1_School closing',
+                        'C2_Workplace closing',
+                        'C3_Cancel public events',
+                        'C4_Restrictions on gatherings',
+                        'C5_Close public transport',
+                        'C6_Stay at home requirements',
+                        'C7_Restrictions on internal movement',
+                        'C8_International travel controls',
+                        'H1_Public information campaigns',
+                        'H2_Testing policy',
+                        'H3_Contact tracing',
+                        'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
+                        'Country_index',
+                        'Region_index',
+                        'CountryName',
+                        'RegionName',
+                        'smoothed_cases',
+                        'cumulative_smoothed_cases',
+                        'rescaled_cases',
+                        'cumulative_rescaled_cases',
+                        'death_to_case_scale',
+                        'case_death_delay',
+                        'gross_net_income',
+                        'population_density',
+                        'monthly_temperature',
+                        'retail_and_recreation',
+                        'grocery_and_pharmacy',
+                        'parks',
+                        'transit_stations',
+                        'workplaces',
+                        'residential',
+                        'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
+                        'population']
 
     #Get features
     try:
-        X_train = np.load(outdir+'X_train.npy', allow_pickle=True)
-        y_train = np.load(outdir+'y_train.npy', allow_pickle=True)
-        X_test = np.load(outdir+'X_test.npy', allow_pickle=True)
-        y_test = np.load(outdir+'y_test.npy', allow_pickle=True)
+        X = np.load(outdir+'X.npy', allow_pickle=True)
+        y = np.load(outdir+'y.npy', allow_pickle=True)
         populations = np.load(outdir+'populations.npy', allow_pickle=True)
         regions = np.load(outdir+'regions.npy', allow_pickle=True)
 
     except:
-        selected_features = ['C1_School closing',
-                            'C2_Workplace closing',
-                            'C3_Cancel public events',
-                            'C4_Restrictions on gatherings',
-                            'C5_Close public transport',
-                            'C6_Stay at home requirements',
-                            'C7_Restrictions on internal movement',
-                            'C8_International travel controls',
-                            'H1_Public information campaigns',
-                            'H2_Testing policy',
-                            'H3_Contact tracing',
-                            'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
-                            'Country_index',
-                            'Region_index',
-                            'CountryName',
-                            'RegionName',
-                            'rescaled_cases',
-                            'cumulative_rescaled_cases',
-                            'death_to_case_scale',
-                            'case_death_delay',
-                            'gross_net_income',
-                            'population_density',
-                            'monthly_temperature',
-                            'retail_and_recreation',
-                            'grocery_and_pharmacy',
-                            'parks',
-                            'transit_stations',
-                            'workplaces',
-                            'residential',
-                            'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
-                            'PC1','PC2',
-                            'population']
-
         sel = adjusted_data[selected_features]
-
-        X_train,y_train,X_test,y_test,populations,regions = split_for_training(sel)
+        #Normalize
+        sel = normalize_data(sel)
+        X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
-        np.save(outdir+'X_train.npy',X_train)
-        np.save(outdir+'y_train.npy',y_train)
-        np.save(outdir+'X_test.npy',X_test)
-        np.save(outdir+'y_test.npy',y_test)
+        np.save(outdir+'X.npy',X)
+        np.save(outdir+'y.npy',y)
         np.save(outdir+'populations.npy',populations)
         np.save(outdir+'regions.npy',regions)
 
 
-    return X_train,y_train,X_test,y_test,populations,regions
 
-def split_for_training(sel):
+    return X,y,populations,regions
+
+def split_for_training(sel,train_days,forecast_days):
     '''Split the data for training and testing
     '''
-    X_train = [] #Inputs
-    y_train = [] #Targets
-    X_test = [] #Inputs
-    y_test = [] #Targets
+    X = [] #Inputs
+    y = [] #Targets
+
     countries = sel['Country_index'].unique()
     populations = []
     regions = []
@@ -106,18 +126,19 @@ def split_for_training(sel):
         country_regions = country_data['Region_index'].unique()
         for ri in country_regions:
             country_region_data = country_data[country_data['Region_index']==ri]
-            #Select data 14 days before 0 cases
+            #Select data 14 days before above 0 cases
             try:
-                si = max(0,country_region_data[country_region_data['cumulative_rescaled_cases']>0].index[0]-14)
+                si = max(0,country_region_data[country_region_data['cumulative_smoothed_cases']>0].index[0]-14)
                 country_region_data = country_region_data.loc[si:]
             except:
-                print(len(country_region_data[country_region_data['cumulative_rescaled_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
+                print(len(country_region_data[country_region_data['cumulative_smoothed_cases']>0]),'cases for',country_region_data['CountryName'].unique()[0])
                 continue
 
             country_region_data = country_region_data.reset_index()
 
             #Check if data
-            if len(country_region_data)<1:
+            if len(country_region_data)<train_days+forecast_days+1:
+                print('Not enough data for',country_region_data['CountryName'].values[0])
                 continue
 
             country_index = country_region_data.loc[0,'Country_index']
@@ -132,8 +153,8 @@ def split_for_training(sel):
             uai = country_region_data.loc[0,'uai'] #Uncertainty
             ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
             ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-            PC1 =  country_region_data.loc[0,'PC1'] #Principal components 1 and 2 of last 90 days of cases
-            PC2 =  country_region_data.loc[0,'PC2']
+            #PC1 =  country_region_data.loc[0,'PC1'] #Principal components 1 and 2 of last 90 days of cases
+            #PC2 =  country_region_data.loc[0,'PC2']
             population = country_region_data.loc[0,'population']
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
@@ -142,119 +163,89 @@ def split_for_training(sel):
 
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr','PC1','PC2','population'})
+             'mas', 'uai', 'ltowvs', 'ivr','population'})
 
             #Normalize the cases by 100'000 population
-            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']#/(population/100000)
-            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']#/(population/100000)
-
-            #Loop through and get the first 21 days of data
-            for di in range(len(country_region_data)-41):
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
+            country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
+            country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
+            #Loop through and get the data
+            X_region = []
+            y_region = []
+            for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
-                xi = np.array(country_region_data.loc[di:di+20]).flatten()
-                change_21 = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
+                xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
+                period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_train.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,change_21,pdi, idv, mas, uai, ltowvs, ivr, PC1, PC2, population]))
-                y_train.append(np.array(country_region_data.loc[di+21:di+21+20]['rescaled_cases']))
+                X_region.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                y_region.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
-            #Get the last 3 weeks as test
-            X_test.append(X_train.pop())
-            y_test.append(y_train.pop())
+            #Save X and y for region
+            X.append(np.array(X_region))
+            y.append(np.array(y_region))
             #Save population
             populations.append(population)
 
+    return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
-    return np.array(X_train), np.array(y_train),np.array(X_test), np.array(y_test), np.array(populations), np.array(regions)
-
-def evaluate(preds,coefs,intercepts,y_test,outdir,regions,populations):
-    '''Evaluate the model
+def fit_model(X, y, NFOLD, outdir):
+    '''Fit the linear model
     '''
+    #Fit the model
 
-    #2.Evaluate the test cases
-    #Evaluate model
-    results_file = open(outdir+'results.txt','w')
-    total_regional_cum_error = []
-    total_regional_mae = []
-    total_regional_mae_per_100000 = []
-    total_regional_2week_mae = []
-    all_regional_corr = []
-    #Evaluate the test cases
-    for ri in range(len(regions)):
-        #Plot
-        region_error = np.cumsum(np.absolute(preds[:,ri]-y_test[ri,:]))[-1]
-        total_regional_cum_error.append(region_error)
-        total_regional_mae.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])))
-        total_regional_mae_per_100000.append(np.average(np.absolute(preds[:,ri]-y_test[ri,:])/(populations[ri]/100000)))
-        total_regional_2week_mae.append(np.average(np.absolute(preds[:,ri][:14]-y_test[ri,:][:14])))
-        region_corr = pearsonr(preds[:,ri],y_test[ri,:])[0]
-        all_regional_corr.append(region_corr)
-        # fig, ax = plt.subplots(figsize=(6/2.54, 4/2.54))
-        # plt.plot(range(1,22),preds[:,ri],label='pred',color='grey')
-        # plt.plot(range(1,22),y_test[ri,:],label='true',color='g')
-        # plt.title(regions[ri]+'\nPopulation:'+str(np.round(populations[ri]/1000000,1))+' millions\nCumulative error:'+str(np.round(region_error))+' PCC:'+str(np.round(region_corr,2)))
-        # plt.xlabel('Day')
-        # plt.ylabel('Cases')
-        # ax.spines['top'].set_visible(False)
-        # ax.spines['right'].set_visible(False)
-        # fig.tight_layout()
-        # plt.savefig(outdir+'regions/'+regions[ri]+'.png',format='png')
-        # plt.close()
-        results_file.write(regions[ri]+': '+str(region_corr)+'\n')
+    #KFOLD
+    kf = KFold(n_splits=NFOLD, random_state=42,shuffle=True)
+    #Perform K-fold CV
+    FOLD=0
+    for tr_idx, val_idx in kf.split(X):
 
-    #Convert to arrays
-    total_regional_cum_error = np.array(total_regional_cum_error)
-    total_regional_mae = np.array(total_regional_mae)
-    all_regional_corr = np.array(all_regional_corr)
-    #Calculate error
-    results_file.write('Total 2week mae: '+str(np.sum(total_regional_2week_mae))+'\n')
-    results_file.write('Total mae: '+str(np.sum(total_regional_mae))+'\n')
-    results_file.write('Total mae per 100000: '+str(np.sum(total_regional_mae_per_100000))+'\n')
-    results_file.write('Total cumulative error: '+str(np.sum(total_regional_cum_error))+'\n')
-    #Evaluate all regions with at least 10 observed cases
-    for t in [1,100,1000,10000]:
-        results_file.write('Total normalized mae for regions with over '+str(t)+' observed cases: '+str(np.sum(total_regional_mae[np.where(np.sum(y_test,axis=1)>t)]/(np.sum(y_test[np.where(np.sum(y_test,axis=1)>t)],axis=1))))+'\n')
+        FOLD+=1
+        X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
+        corrs = []
+        errors = []
+        coefs = []
+        intercepts = []
+        #Extract train and valid data by country region
+        X_train_extracted = X_train[0]
+        y_train_extracted = y_train[0]
 
-    #Set NaNs to 0
-    all_regional_corr[np.isnan(all_regional_corr)]=0
-    results_file.write('Average correlation: '+str(np.average(all_regional_corr)))
-    results_file.close()
+        for cr in range(1,len(X_train)):
+            X_train_extracted = np.append(X_train_extracted,X_train[cr],axis=0)
+            y_train_extracted = np.append(y_train_extracted,y_train[cr],axis=0)
 
-    #Look at coefs
-    #The first are repeats 21 times, then single_features follow: [country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,population]
-    #--> get the last features, then divide into 21 portions
-    single_feature_names=['country_index','region_index','death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','PC1','PC2','population']
-    #days pred,days behind - this goes from -21 to 1,features
-    repeat_feature_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
-    'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
-    'rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
-    all_feature_names = single_feature_names+repeat_feature_names*21
-    for i in range(coefs.shape[0]):
-        fig,ax=plt.subplots(figsize=(18,6))
-        plt.bar(range(coefs.shape[1]),coefs[i,:],)
-        #for j in range(coefs.shape[1]):
-        #    plt.text(j,coefs[i,j],all_feature_names[j],fontsize=12)
+        X_valid_extracted = X_valid[0]
+        y_valid_extracted = y_valid[0]
+        for cr in range(1,len(X_valid)):
+            X_valid_extracted = np.append(X_valid_extracted,X_valid[cr],axis=0)
+            y_valid_extracted = np.append(y_valid_extracted,y_valid[cr],axis=0)
 
-        plt.title('Day '+str(i+1))
-        plt.tight_layout()
-        plt.savefig(outdir+'coefs_'+str(i+1)+'.png',format='png',dpi=300)
-        plt.close()
+        #Fit each day
+        for day in range(y_train[0].shape[1]):
+            reg = ElasticNet().fit(X_train_extracted, y_train_extracted[:,day])
+            pred = reg.predict(X_valid_extracted)
+
+            #Ensure non-negative
+            pred[pred<0]=0
+            true = y_valid_extracted[:,day]
+            av_er = np.average(np.absolute(pred-true))
+
+            R,p = pearsonr(pred,true)
+            print('Fold',FOLD,'Day',day,'Average error',av_er,'PCC',R)
+            #Save
+            corrs.append(R)
+            errors.append(av_er)
+            coefs.append(reg.coef_)
+            intercepts.append(reg.intercept_)
 
 
+        #Save
+        np.save(outdir+'corrs'+str(FOLD)+'.npy',np.array(corrs))
+        np.save(outdir+'errors'+str(FOLD)+'.npy',np.array(errors))
+        np.save(outdir+'coefs'+str(FOLD)+'.npy',np.array(coefs))
+        np.save(outdir+'intercepts'+str(FOLD)+'.npy',np.array(intercepts))
 
-def fit_model(X_train,y_train,X_test):
-    '''Create a GPR model in pymc3
-    '''
-    print('Fitting...')
-    reg =  ElasticNet().fit(X_train,y_train)
-    pred = reg.predict(X_test)
-    #No negative predictions are allowed
-    pred[pred<0]=0
-    #Save the coefficients of the fitted regressor
-    coefs = reg.coef_
-    intercept = reg.intercept_
-
-
-    return pred,coefs,intercept
+    return None
 
 
 
@@ -271,33 +262,17 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                         "Region_index":int},
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
+
+start_date = args.start_date[0]
+train_days = args.train_days[0]
+forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
+#Use only data from start date
+adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 
-#Get features
-X_train,y_train,X_test,y_test,populations,regions  = get_features(adjusted_data,outdir)
 
+#Get data
+X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
 
-#Fit models
-try:
-    preds = np.load(outdir+'preds.npy',allow_pickle=True)
-    coefficients=np.load(outdir+'coefficients.npy',allow_pickle=True)
-    intercepts = np.load(outdir+'intercepts.npy',allow_pickle=True)
-except:
-    preds = []
-    coefficients = []
-    intercepts = []
-    for day in range(y_train.shape[1]):
-        pred,coefs,intercept = fit_model(X_train,y_train[:,day],X_test)
-        preds.append(pred)
-        coefficients.append(coefs)
-        intercepts.append(intercept)
-
-        print(day,'error', np.round(np.average(np.absolute(pred-y_test[:,day]))))
-    #Save
-    np.save(outdir+'preds.npy', preds)
-    np.save(outdir+'coefficients.npy',coefficients)
-    np.save(outdir+'intercepts.npy',intercepts)
-
-pdb.set_trace()
-#Evaluate fit
-evaluate(preds,coefficients,intercepts,y_test,outdir,regions,populations)
+#Fit model
+corrs, errors, coefs, intercepts = fit_model(X,y,5,outdir)

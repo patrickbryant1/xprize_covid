@@ -317,7 +317,7 @@ net = build_net()
 print(net.summary())
 #KFOLD
 NFOLD = 5
-kf = KFold(n_splits=NFOLD)
+kf = KFold(n_splits=NFOLD, random_state=42,shuffle=True)
 fold=0
 
 #Save errors
