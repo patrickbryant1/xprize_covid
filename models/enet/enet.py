@@ -222,7 +222,7 @@ def fit_model(X, y, NFOLD, outdir):
 
         #Fit each day
         for day in range(y_train[0].shape[1]):
-            reg = ElasticNet(tol=0.001,warm_start=True, selection='random',max_iter=10000).fit(X_train_extracted, y_train_extracted[:,day])
+            reg = ElasticNet(tol=0.001,warm_start=True, selection='random').fit(X_train_extracted, y_train_extracted[:,day])
             pred = reg.predict(X_valid_extracted)
 
             #Ensure non-negative

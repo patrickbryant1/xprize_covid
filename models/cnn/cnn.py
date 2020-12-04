@@ -252,7 +252,7 @@ def build_net(input_shape):
 
     x_in = keras.Input(shape= input_shape)
     #Convolutions
-    def get_conv_net(x,num_convolutional_layers):
+    def get_conv_net(x,num_convolutional_layers,dilation_rate):
         for n in range(num_convolutional_layers):
             x = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x)
             x = L.BatchNormalization()(x)
@@ -260,20 +260,23 @@ def build_net(input_shape):
 
         return x
 
-    x = get_conv_net(x_in,num_convolutional_layers)
-
+    x1= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
+    x2= get_conv_net(x_in,num_convolutional_layers,dilation_rate*2)
+    attention = L.Attention()([x1,x2])
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(x)
+    maxpool1 = L.GlobalMaxPooling1D()(attention)
 
     #Attention layer - information will be redistributed in the backwards pass
-    attention = L.Dense(1, activation='tanh')(maxpool1) #Normalize and extract info with tanh activated weight matrix (hidden attention weights)
-    attention = L.Flatten()(attention) #Make 1D
-    attention = L.Activation('softmax')(attention) #Softmax on all activations (normalize activations)
-    attention = L.RepeatVector(filters)(attention) #Repeats the input "num_nodes" times.
-    attention = L.Permute([2, 1])(attention) #Permutes the dimensions of the input according to a given pattern. (permutes pos 2 and 1 of attention)
+    # attention = L.Dense(1, activation='tanh')(maxpool1) #Normalize and extract info with tanh activated weight matrix (hidden attention weights)
+    # attention = L.Flatten()(attention) #Make 1D
+    # attention = L.Activation('softmax')(attention) #Softmax on all activations (normalize activations)
+    # attention = L.RepeatVector(filters)(attention) #Repeats the input "num_nodes" times.
+    # attention = L.Permute([2, 1])(attention) #Permutes the dimensions of the input according to a given pattern. (permutes pos 2 and 1 of attention)
 
-    preds = L.Dense(21, activation="relu", name="p2")(attention)
 
+    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values
+    #preds2 = L.Dense(21, activation="linear", name="p2")(attention)  #Errors
+    #preds = L.Concatenate(axis=1)([preds1,preds2])
     model = M.Model(x_in, preds, name="CNN")
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
     return model
@@ -310,7 +313,7 @@ num_days = np.array(num_days)
 #Get net parameters
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
-EPOCHS=1
+EPOCHS=5
 filters = int(net_params['filters']) #32
 dilation_rate = int(net_params['dilation_rate'])#3
 kernel_size = int(net_params['kernel_size']) #5
