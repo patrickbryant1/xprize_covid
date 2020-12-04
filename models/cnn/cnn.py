@@ -33,6 +33,8 @@ parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
 parser.add_argument('--param_combo', nargs=1, type= str,
                   default=sys.stdin, help = 'Parameter combo.')
+parser.add_argument('--datadir', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to data directory. Include /in end')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -77,16 +79,16 @@ def normalize_data(sel):
 
     return sel
 
-def get_features(adjusted_data, train_days, forecast_days, outdir):
+def get_features(adjusted_data, train_days, forecast_days, datadir):
     '''Get the selected features
     '''
 
     #Get features
     try:
-        X = np.load(outdir+'X.npy', allow_pickle=True)
-        y = np.load(outdir+'y.npy', allow_pickle=True)
-        populations = np.load(outdir+'populations.npy', allow_pickle=True)
-        regions = np.load(outdir+'regions.npy', allow_pickle=True)
+        X = np.load(datadir+'X.npy', allow_pickle=True)
+        y = np.load(datadir+'y.npy', allow_pickle=True)
+        populations = np.load(datadir+'populations.npy', allow_pickle=True)
+        regions = np.load(datadir+'regions.npy', allow_pickle=True)
 
 
     except:
@@ -129,10 +131,10 @@ def get_features(adjusted_data, train_days, forecast_days, outdir):
         sel = normalize_data(sel)
         X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
-        np.save(outdir+'X.npy',X)
-        np.save(outdir+'y.npy',y)
-        np.save(outdir+'populations.npy',populations)
-        np.save(outdir+'regions.npy',regions)
+        np.save(datadir+'X.npy',X)
+        np.save(datadir+'y.npy',y)
+        np.save(datadir+'populations.npy',populations)
+        np.save(datadir+'regions.npy',regions)
 
 
 
@@ -301,11 +303,12 @@ adjusted_data = adjusted_data.fillna(0)
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
+datadir = args.datadir[0]
 outdir = args.outdir[0]
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
-X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days,outdir)
+X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days, datadir)
 #Get number of days in X
 num_days = []
 for cr in range(len(X)):
