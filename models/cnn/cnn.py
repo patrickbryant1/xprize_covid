@@ -25,8 +25,6 @@ parser = argparse.ArgumentParser(description = '''A CNN regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
-parser.add_argument('--days_ahead', nargs=1, type= int,
-                  default=sys.stdin, help = 'Number of days ahead to fit')
 parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
 parser.add_argument('--train_days', nargs=1, type= int,
@@ -300,7 +298,6 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                         "Region_index":int},
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
-days_ahead = args.days_ahead[0]
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
