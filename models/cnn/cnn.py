@@ -60,6 +60,25 @@ def read_net_params(params_file):
 
     return net_params
 
+def normalize_data(sel):
+    '''Normalize and transform data
+    '''
+
+    # to_log = ['smoothed_cases','cumulative_smoothed_cases','rescaled_cases','cumulative_rescaled_cases','population_density', 'population']
+    # for var in to_log:
+    #     sel[var] = np.log10(sel[var]+0.001)
+
+    #GNI: group into 3: 0-20k,20-40k,40k+
+    index1 = sel[sel['gross_net_income']<20000].index
+    above = sel[sel['gross_net_income']>20000]
+    index2 = above[above['gross_net_income']<40000].index
+    index3 = sel[sel['gross_net_income']>40000].index
+    sel.at[index1,'gross_net_income']=0
+    sel.at[index2,'gross_net_income']=1
+    sel.at[index3,'gross_net_income']=2
+
+    return sel
+
 def get_features(adjusted_data, train_days, forecast_days, outdir):
     '''Get the selected features
     '''
@@ -108,7 +127,8 @@ def get_features(adjusted_data, train_days, forecast_days, outdir):
                             'population']
 
         sel = adjusted_data[selected_features]
-        pdb.set_trace()
+        #Normalize
+        sel = normalize_data(sel)
         X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
         np.save(outdir+'X.npy',X)

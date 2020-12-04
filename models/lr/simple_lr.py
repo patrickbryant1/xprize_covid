@@ -37,9 +37,9 @@ def normalize_data(sel):
     '''Normalize and transform data
     '''
 
-    to_log = ['smoothed_cases','cumulative_smoothed_cases','rescaled_cases','cumulative_rescaled_cases','population_density', 'population']
-    for var in to_log:
-        sel[var] = np.log10(sel[var]+0.001)
+    # to_log = ['smoothed_cases','cumulative_smoothed_cases','rescaled_cases','cumulative_rescaled_cases','population_density', 'population']
+    # for var in to_log:
+    #     sel[var] = np.log10(sel[var]+0.001)
 
     #GNI: group into 3: 0-20k,20-40k,40k+
     index1 = sel[sel['gross_net_income']<20000].index
@@ -167,10 +167,10 @@ def split_for_training(sel,train_days,forecast_days):
              'mas', 'uai', 'ltowvs', 'ivr','population'})
 
             #Normalize the cases by 100'000 population
-            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
-            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
-            #country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
-            #country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
+            country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
+            country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
             X_region = []
             y_region = []
@@ -210,6 +210,7 @@ def fit_model(X, y, NFOLD, outdir):
         #Extract train and valid data by country region
         X_train_extracted = X_train[0]
         y_train_extracted = y_train[0]
+
         for cr in range(1,len(X_train)):
             X_train_extracted = np.append(X_train_extracted,X_train[cr],axis=0)
             y_train_extracted = np.append(y_train_extracted,y_train[cr],axis=0)
@@ -220,16 +221,17 @@ def fit_model(X, y, NFOLD, outdir):
             X_valid_extracted = np.append(X_valid_extracted,X_valid[cr],axis=0)
             y_valid_extracted = np.append(y_valid_extracted,y_valid[cr],axis=0)
 
-
         #Fit each day
         for day in range(y_train[0].shape[1]):
             reg = LinearRegression().fit(X_train_extracted, y_train_extracted[:,day])
             pred = reg.predict(X_valid_extracted)
-            #No negative predictions are allowed
-            pred[pred<0]=0
-            av_er = np.average(np.absolute(pred-y_valid_extracted[:,day]))
 
-            R,p = pearsonr(pred,y_valid_extracted[:,day])
+            #Ensure non-negative
+            pred[pred<0]=0
+            true = y_valid_extracted[:,day]
+            av_er = np.average(np.absolute(pred-true))
+
+            R,p = pearsonr(pred,true)
             print('Fold',FOLD,'Day',day,'Average error',av_er,'PCC',R)
             #Save
             corrs.append(R)

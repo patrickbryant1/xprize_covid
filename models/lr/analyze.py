@@ -52,6 +52,7 @@ def evaluate_model(corrs, errors, coefs, intercepts,outdir):
     #Calculate error
     results_file.write('Total 2week mae: '+str(np.sum(np.average(errors,axis=0)[:14]))+'\n')
     results_file.write('Total mae per 100000: '+str(np.sum(np.average(errors,axis=0)))+'\n')
+    results_file.write('Std in total mae per 100000: '+str(np.sum(np.std(errors,axis=0)))+'\n')
     results_file.write('Average mae per 100000: '+str(np.average(np.average(errors,axis=0)))+'\n')
     results_file.write('Average std in mae per 100000: '+str(np.average(np.std(errors,axis=0)))+'\n')
     results_file.write('Average PCC: '+str(np.average(np.average(corrs,axis=0)))+'\n')
