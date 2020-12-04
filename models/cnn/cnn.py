@@ -288,7 +288,7 @@ def build_net():
 #####MAIN#####
 args = parser.parse_args()
 #Seed
-seed_everything(0) #The answer it is
+#seed_everything(0) #The answer it is
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
