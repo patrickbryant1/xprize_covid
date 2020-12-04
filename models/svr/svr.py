@@ -10,9 +10,9 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 
-
 from scipy.stats import pearsonr
 from sklearn.svm import LinearSVR
+from sklearn.model_selection import KFold
 import numpy as np
 
 
@@ -79,8 +79,6 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
 
     except:
         sel = adjusted_data[selected_features]
-        #Normalize
-        sel = normalize_data(sel)
         X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
         np.save(outdir+'X.npy',X)
@@ -156,11 +154,10 @@ def split_for_training(sel,train_days,forecast_days):
             y_region = []
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
                 #Get change over the past 21 days
-                pdb.set_trace()
-                xi = np.array(country_region_data.loc[di:di+train_days-1])[13].flatten()
-                period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
+                xi = np.array(country_region_data.loc[di:di+train_days-1])[:,13]
+                period_change = xi[-1]-xi[0]
                 #Add
-                X_region.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                X_region.append(np.append(xi, period_change)) #[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                 y_region.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
             #Save X and y for region
