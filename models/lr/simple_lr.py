@@ -154,8 +154,8 @@ def split_for_training(sel,train_days,forecast_days):
             uai = country_region_data.loc[0,'uai'] #Uncertainty
             ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
             ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-            PC1 =  country_region_data.loc[0,'PC1'] #Principal components 1 and 2 of last 90 days of cases
-            PC2 =  country_region_data.loc[0,'PC2']
+            #PC1 =  country_region_data.loc[0,'PC1'] #Principal components 1 and 2 of last 90 days of cases
+            #PC2 =  country_region_data.loc[0,'PC2']
             population = country_region_data.loc[0,'population']
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
@@ -179,7 +179,7 @@ def split_for_training(sel,train_days,forecast_days):
                 xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
                 period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                X_region.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, PCA1, PCA2, population]))
+                X_region.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                 y_region.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
             #Save X and y for region
