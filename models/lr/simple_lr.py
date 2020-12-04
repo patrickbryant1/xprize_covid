@@ -196,7 +196,7 @@ def fit_model(X, y, NFOLD, outdir):
     #Fit the model
 
     #KFOLD
-    kf = KFold(n_splits=NFOLD, random_state=42, shuffle=True)
+    kf = KFold(n_splits=NFOLD)
     #Perform K-fold CV
     FOLD=0
     for tr_idx, val_idx in kf.split(X):

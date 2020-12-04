@@ -318,7 +318,7 @@ num_days = np.array(num_days)
 #Get net parameters
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
-EPOCHS=50
+EPOCHS=1
 filters = int(net_params['filters']) #32
 dilation_rate = int(net_params['dilation_rate'])#3
 kernel_size = int(net_params['kernel_size']) #5
@@ -329,7 +329,7 @@ net = build_net()
 print(net.summary())
 #KFOLD
 NFOLD = 5
-kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
+kf = KFold(n_splits=NFOLD,shuffle=True, random_state=0)
 fold=0
 
 #Save errors
