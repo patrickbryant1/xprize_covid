@@ -179,7 +179,7 @@ def split_for_training(sel, train_days, forecast_days):
 
             population = country_region_data.loc[0,'population']
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
-            'RegionName', 'death_to_case_scale', 'case_death_delay'})
+            'RegionName', 'death_to_case_scale', 'case_death_delay','population'})
 
             #Normalize the cases by 100'000 population
             country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
@@ -217,11 +217,12 @@ class DataGenerator(keras.utils.Sequence):
         'Generate one batch of data'
         # Generate indexes of the batch
         batch_index = self.indices+index
-        region_index = np.argwhere(self.cum_region_days>batch_index)[0][0]
-        #Increase the right region index
-        self.region_indices[region_index]+=1
+        #Select a random region
+        region_index = np.random.choice(self.X_train_fold.shape[0],1)[0] #np.argwhere(self.cum_region_days>batch_index)[0][0]
+        #Select a random start date
+        batch_end_day = np.random.choice(range(self.train_days,self.region_days[region_index]-self.forecast_days),1)[0]
         # Generate data
-        X_batch, y_batch = self.__data_generation(region_index,self.region_indices[region_index])
+        X_batch, y_batch = self.__data_generation(region_index,batch_end_day)
 
         return X_batch, y_batch
 
@@ -242,31 +243,14 @@ class DataGenerator(keras.utils.Sequence):
         return np.array(X_batch), np.array(y_batch)
 
 #####LOSSES AND SCORES#####
-def test(net, X_test,y_test,populations,regions):
-    '''Test the net on the last 3 weeks of data
-    '''
-
-    test_preds=net.predict(np.array(X_test))
-    R,p = pearsonr(test_preds[:,1],y_test)
-    print('PCC:',R)
-    order = np.argsort(y_test)
-    plt.plot(y_test[order],test_preds[:,1][order],color='grey')
-    plt.plot(y_test[order],y_test[order],color='k',linestyle='--')
-    plt.fill_between(y_test[order],test_preds[:,0][order],test_preds[:,2][order],color='grey',alpha=0.5)
-    plt.xlim([min(y_test),max(y_test)])
-    plt.ylim([min(y_test),max(y_test)])
-    plt.xlabel('True')
-    plt.ylabel('Pred')
-    plt.show()
-
 
 #####BUILD NET#####
-def build_net():
+def build_net(input_shape):
     '''Build the net using Keras
     '''
 
 
-    x_in = keras.Input(shape= (None,32))
+    x_in = keras.Input(shape= input_shape)
     #Convolutions
     def get_conv_net(x,num_convolutional_layers):
         for n in range(num_convolutional_layers):
@@ -277,10 +261,18 @@ def build_net():
         return x
 
     x = get_conv_net(x_in,num_convolutional_layers)
+
     #Maxpool along sequence axis
     maxpool1 = L.GlobalMaxPooling1D()(x)
 
-    preds = L.Dense(21, activation="relu", name="p2")(maxpool1)
+    #Attention layer - information will be redistributed in the backwards pass
+    attention = L.Dense(1, activation='tanh')(maxpool1) #Normalize and extract info with tanh activated weight matrix (hidden attention weights)
+    attention = L.Flatten()(attention) #Make 1D
+    attention = L.Activation('softmax')(attention) #Softmax on all activations (normalize activations)
+    attention = L.RepeatVector(filters)(attention) #Repeats the input "num_nodes" times.
+    attention = L.Permute([2, 1])(attention) #Permutes the dimensions of the input according to a given pattern. (permutes pos 2 and 1 of attention)
+
+    preds = L.Dense(21, activation="relu", name="p2")(attention)
 
     model = M.Model(x_in, preds, name="CNN")
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
@@ -325,7 +317,9 @@ kernel_size = int(net_params['kernel_size']) #5
 lr = float(net_params['lr']) #0.01
 num_convolutional_layers = int(net_params['num_convolutional_layers'])
 #Make net
-net = build_net()
+
+input_shape = (None, X[0].shape[1])
+net = build_net(input_shape)
 print(net.summary())
 #KFOLD
 NFOLD = 5
@@ -340,7 +334,7 @@ for tr_idx, val_idx in kf.split(X):
     fold+=1
     #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold)
-    net = build_net()
+    net = build_net(input_shape)
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
