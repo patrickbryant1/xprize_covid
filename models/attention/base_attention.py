@@ -251,25 +251,13 @@ def build_net(input_shape):
 
 
     x_in = keras.Input(shape= input_shape)
-    #Convolutions
-    def get_conv_net(x,num_convolutional_layers,dilation_rate):
-        for n in range(num_convolutional_layers):
-            x = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x)
-            x = L.BatchNormalization()(x)
-            x = L.Activation('relu')(x)
 
-        return x
-    #Try skipping the convolutions by doing variable length attention
-    #x1= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
-    #x2= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
     attention = L.Attention()([x_in,x_in]) #looking at xin in relation to itself
-    d1 = L.Dense(10, activation="relu")(attention)
+    d1 = L.Dense(num_nodes, activation="relu")(attention)
     attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves
     #Maxpool along sequence axis
     maxpool1 = L.GlobalMaxPooling1D()(attention)
-    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values
-    #preds2 = L.Dense(21, activation="linear", name="p2")(attention)  #Errors
-    #preds = L.Concatenate(axis=1)([preds1,preds2])
+    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values)
     model = M.Model(x_in, preds, name="CNN")
     #Maybe make the loss stochsatic? Choose 3 positions to optimize
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
@@ -308,19 +296,16 @@ num_days = np.array(num_days)
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
 EPOCHS=5
-filters = int(net_params['filters']) #32
-dilation_rate = int(net_params['dilation_rate'])#3
-kernel_size = int(net_params['kernel_size']) #5
+num_nodes = int(net_params['num_nodes']) #32
 lr = float(net_params['lr']) #0.01
-num_convolutional_layers = int(net_params['num_convolutional_layers'])
-#Make net
 
+#Make net
 input_shape = (None, X[0].shape[1])
 net = build_net(input_shape)
 print(net.summary())
 #KFOLD
 NFOLD = 5
-kf = KFold(n_splits=NFOLD,shuffle=True, random_state=0)
+kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
 fold=0
 
 #Save errors

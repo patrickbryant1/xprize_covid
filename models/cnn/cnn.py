@@ -318,7 +318,7 @@ net = build_net(input_shape)
 print(net.summary())
 #KFOLD
 NFOLD = 5
-kf = KFold(n_splits=NFOLD,shuffle=True, random_state=0)
+kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
 fold=0
 
 #Save errors
