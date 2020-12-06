@@ -9,15 +9,13 @@ import numpy as np
 import random
 import pandas as pd
 
-from sklearn.model_selection import KFold
-
 import tensorflow as tf
 from tensorflow import keras
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
 import tensorflow.keras.models as M
 from tensorflow.keras.callbacks import TensorBoard
-from scipy.stats import pearsonr
+#from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
@@ -343,8 +341,7 @@ train_errors = []
 valid_errors = []
 corrs = []
 for fold in range(NFOLD):
-    tr_idx, val_idx = train_split[f], val_split[f]
-    pdb.set_trace()
+    tr_idx, val_idx = train_split[fold], val_split[fold]
     #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
     print("FOLD", fold+1)
     net = build_net(input_shape)
