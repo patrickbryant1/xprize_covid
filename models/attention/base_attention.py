@@ -246,6 +246,11 @@ def build_net(input_shape):
 
     x_in = keras.Input(shape= input_shape)
 
+    #1. Dot product of [a,b] = scores
+    #2. Distribution = softmax(scores)
+    #3. Attention = dot product of [distribution,b] = the impact on b from a, related to the distribution of axb.
+    #4. If a=b, then the attention is the relation of a on itself
+
     attention = L.Attention(name='Attention')([x_in,x_in]) #looking at xin in relation to itself
     #d1 = L.Dense(10, activation="relu")(attention)
     #attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves

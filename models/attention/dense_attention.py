@@ -317,7 +317,7 @@ num_days = np.array(num_days)
 #Get net parameters
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
-EPOCHS=5
+EPOCHS=20
 num_nodes = int(net_params['num_nodes']) #32
 lr = float(net_params['lr']) #0.01
 
