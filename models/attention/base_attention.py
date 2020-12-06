@@ -246,15 +246,15 @@ def build_net(input_shape):
 
     x_in = keras.Input(shape= input_shape)
 
-    attention = L.Attention()([x_in,x_in]) #looking at xin in relation to itself
-    d1 = L.Dense(10, activation="relu")(attention)
-    attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves
-    cat = L.concatenate([d1,attention])
+    attention = L.Attention(name='Attention')([x_in,x_in]) #looking at xin in relation to itself
+    #d1 = L.Dense(10, activation="relu")(attention)
+    #attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves
+    #cat = L.concatenate([d1,attention])
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(cat)
+    maxpool1 = L.GlobalMaxPooling1D()(attention)
 
     preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values)
-    model = M.Model(x_in, preds, name="CNN")
+    model = M.Model(x_in, preds, name="Attention_model")
     #Maybe make the loss stochsatic? Choose 3 positions to optimize
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
     return model

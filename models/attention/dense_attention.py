@@ -267,7 +267,6 @@ class DataGenerator(keras.utils.Sequence):
 #####LOSSES AND SCORES#####
 
 #####BUILD NET#####
-numpy.random.seed(42)
 def build_net(input_shape):
     '''Build the net using Keras
     '''
@@ -275,12 +274,13 @@ def build_net(input_shape):
 
     x_in = keras.Input(shape= input_shape)
     d1 = L.Dense(num_nodes, activation="relu")(x_in)
+    #The attention layer will enable to distribute information between the first and second entries (using the second as keys)
     attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves
-    cat = L.Concatenate()([d1,attention])
+    #cat = L.Concatenate()([d1,attention])
     #Maxpool along sequence axis
-    #maxpool1 = L.GlobalMaxPooling1D()(attention)
-    preds = L.Dense(21, activation="relu", name="p1")(cat) #Values)
-    model = M.Model(x_in, preds, name="Dense Attention")
+    maxpool1 = L.GlobalMaxPooling1D()(attention)
+    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values)
+    model = M.Model(x_in, preds, name="Dense_attention")
     #Maybe make the loss stochsatic? Choose 3 positions to optimize
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
     return model
@@ -289,7 +289,7 @@ def build_net(input_shape):
 #####MAIN#####
 args = parser.parse_args()
 #Seed
-#seed_everything(0) #The answer it is
+np.random.seed(42)
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
