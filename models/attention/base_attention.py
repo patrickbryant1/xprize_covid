@@ -21,7 +21,7 @@ from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''A CNN regression model.''')
+parser = argparse.ArgumentParser(description = '''An attention regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -260,9 +260,11 @@ def build_net(input_shape):
 
         return x
     #Try skipping the convolutions by doing variable length attention
-    x1= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
+    #x1= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
     #x2= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
-    attention = L.Attention()([x1,x1])
+    attention = L.Attention()([x_in,x_in]) #looking at xin in relation to itself
+    d1 = L.Dense(10, activation="relu")(attention)
+    attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves
     #Maxpool along sequence axis
     maxpool1 = L.GlobalMaxPooling1D()(attention)
     preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values
