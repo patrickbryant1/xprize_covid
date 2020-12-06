@@ -256,15 +256,17 @@ def build_net(input_shape):
     d1 = L.Dense(num_nodes, activation="relu")(attention)
     attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(attention)
-    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values)
-    model = M.Model(x_in, preds, name="CNN")
+    cat = L.Concatenate()([d1,attention])
+    #maxpool1 = L.GlobalMaxPooling1D()(attention)
+    preds = L.Dense(21, activation="relu", name="p1")(cat) #Values)
+    model = M.Model(x_in, preds, name="Base attention")
     #Maybe make the loss stochsatic? Choose 3 positions to optimize
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
     return model
 
 
 #####MAIN#####
+numpy.random.seed(42)
 args = parser.parse_args()
 #Seed
 #seed_everything(0) #The answer it is

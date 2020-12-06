@@ -267,6 +267,7 @@ class DataGenerator(keras.utils.Sequence):
 #####LOSSES AND SCORES#####
 
 #####BUILD NET#####
+numpy.random.seed(42)
 def build_net(input_shape):
     '''Build the net using Keras
     '''
@@ -274,12 +275,12 @@ def build_net(input_shape):
 
     x_in = keras.Input(shape= input_shape)
     d1 = L.Dense(num_nodes, activation="relu")(x_in)
-    d2 = L.Dense(num_nodes, activation="relu")(d1)
-    attention = L.Attention()([d1,d2]) #looking at the activations in relation to themselves
+    attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves
+    cat = L.Concatenate()([d1,attention])
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(attention)
-    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values)
-    model = M.Model(x_in, preds, name="CNN")
+    #maxpool1 = L.GlobalMaxPooling1D()(attention)
+    preds = L.Dense(21, activation="relu", name="p1")(cat) #Values)
+    model = M.Model(x_in, preds, name="Dense Attention")
     #Maybe make the loss stochsatic? Choose 3 positions to optimize
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
     return model
