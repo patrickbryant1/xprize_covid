@@ -39,12 +39,6 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 #######FUNCTIONS#######
-def seed_everything(seed=2020):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-
 def read_net_params(params_file):
     '''Read and return net parameters
     '''
@@ -195,6 +189,30 @@ def split_for_training(sel, train_days, forecast_days):
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
+def kfold(num_regions, NFOLD):
+    '''Generate a K-fold split using numpy (can't import sklearn everywhere)
+    '''
+    all_i = np.arange(num_regions)
+    train_split = []
+    val_split = []
+    fetched_i = []
+    #Check
+    check = np.zeros(num_regions)
+    #Go through ll folds
+    for f in range(NFOLD):
+        remaining_i = np.setdiff1d(all_i,np.array(fetched_i))
+        val_i = np.random.choice(remaining_i,int(num_regions/NFOLD),replace=False)
+        train_i = np.setdiff1d(all_i,val_i)
+        #Save
+        val_split.append(val_i)
+        train_split.append(train_i)
+        fetched_i.extend(val_i)
+        check[val_i]+=1
+
+    return np.array(train_split), np.array(val_split)
+
+
+
 class DataGenerator(keras.utils.Sequence):
     '''Generates data for Keras'''
     def __init__(self, X_train_fold, y_train_fold, region_days, train_days,forecast_days, batch_size=1, shuffle=True):
@@ -276,8 +294,6 @@ def build_net(input_shape):
 
 #####MAIN#####
 args = parser.parse_args()
-#Seed
-#seed_everything(0) #The answer it is
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -318,17 +334,19 @@ net = build_net(input_shape)
 print(net.summary())
 #KFOLD
 NFOLD = 5
-kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
+#kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
+train_split, val_split = kfold(len(X),NFOLD)
 fold=0
 
 #Save errors
 train_errors = []
 valid_errors = []
 corrs = []
-for tr_idx, val_idx in kf.split(X):
-    fold+=1
+for fold in range(NFOLD):
+    tr_idx, val_idx = train_split[f], val_split[f]
+    pdb.set_trace()
     #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
-    print("FOLD", fold)
+    print("FOLD", fold+1)
     net = build_net(input_shape)
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
