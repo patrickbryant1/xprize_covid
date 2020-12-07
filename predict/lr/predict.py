@@ -193,9 +193,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             if current_date+ np.timedelta64(21, 'D') >= start_date:
 
                 #Append the predicted dates
-                days_ahead =  current_date+ np.timedelta64(21, 'D')-start_date
-                pdb.set_trace()
-                geo_preds.extend(pred[-days_ahead.days:])
+                days_for_pred =  current_date+ np.timedelta64(21, 'D')-start_date
+                geo_preds.extend(pred[-days_for_pred.days:])
                 #print(current_date.strftime('%Y-%m-%d'), pred)
             else:
                 print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")

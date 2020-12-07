@@ -572,6 +572,16 @@ cultural_descriptors = pd.read_csv(args.cultural_descriptors[0],sep=';')
 cultural_descriptors=cultural_descriptors.replace('#NULL!',0)
 outdir = args.outdir[0]
 
+#Save the NPIS for testing
+oxford_data[['CountryName', 'RegionName',
+           'Date', 'C1_School closing','C2_Workplace closing',
+           'C3_Cancel public events','C4_Restrictions on gatherings',
+            'C5_Close public transport','C6_Stay at home requirements',
+            'C7_Restrictions on internal movement','C8_International travel controls',
+            'H1_Public information campaigns',
+                'H2_Testing policy',
+                'H3_Contact tracing',
+                'H6_Facial Coverings']].to_csv(outdir+'hitorical_ip.csv',index=False)
 #Parse the data
 try:
     oxford_data = pd.read_csv(outdir+'adjusted_data.csv',
@@ -582,7 +592,9 @@ try:
            "Country_index":int,
            "Region_index":int},
     error_bad_lines=False)
+    pdb.set_trace()
     oxford_data = oxford_data.fillna(0)
+
 
 except:
 
