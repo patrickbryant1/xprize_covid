@@ -9,17 +9,19 @@ import numpy as np
 import random
 import pandas as pd
 
+from sklearn.model_selection import KFold
+
 import tensorflow as tf
 from tensorflow import keras
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
 import tensorflow.keras.models as M
 from tensorflow.keras.callbacks import TensorBoard
-#from scipy.stats import pearsonr
+from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''A CNN regression model.''')
+parser = argparse.ArgumentParser(description = '''An attention regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -187,30 +189,6 @@ def split_for_training(sel, train_days, forecast_days):
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
-def kfold(num_regions, NFOLD):
-    '''Generate a K-fold split using numpy (can't import sklearn everywhere)
-    '''
-    all_i = np.arange(num_regions)
-    train_split = []
-    val_split = []
-    fetched_i = []
-    #Check
-    check = np.zeros(num_regions)
-    #Go through ll folds
-    for f in range(NFOLD):
-        remaining_i = np.setdiff1d(all_i,np.array(fetched_i))
-        val_i = np.random.choice(remaining_i,int(num_regions/NFOLD),replace=False)
-        train_i = np.setdiff1d(all_i,val_i)
-        #Save
-        val_split.append(val_i)
-        train_split.append(train_i)
-        fetched_i.extend(val_i)
-        check[val_i]+=1
-
-    return np.array(train_split), np.array(val_split)
-
-
-
 class DataGenerator(keras.utils.Sequence):
     '''Generates data for Keras'''
     def __init__(self, X_train_fold, y_train_fold, region_days, train_days,forecast_days, batch_size=1, shuffle=True):
@@ -267,24 +245,21 @@ def build_net(input_shape):
 
 
     x_in = keras.Input(shape= input_shape)
-    #Convolutions
-    def get_conv_net(x,num_convolutional_layers,dilation_rate):
-        for n in range(num_convolutional_layers):
-            x = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x)
-            x = L.BatchNormalization()(x)
-            x = L.Activation('relu')(x)
 
-        return x
-    #Try skipping the convolutions by doing variable length attention
-    x1= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
-    #x2= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
-    attention = L.Attention()([x1,x1])
+    #1. Dot product of [a,b] = scores
+    #2. Distribution = softmax(scores)
+    #3. Attention = dot product of [distribution,b] = the impact on b from a, related to the distribution of axb.
+    #4. If a=b, then the attention is the relation of a on itself
+
+    attention = L.Attention(name='Attention')([x_in,x_in]) #looking at xin in relation to itself
+    #d1 = L.Dense(10, activation="relu")(attention)
+    #attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves
+    #cat = L.concatenate([d1,attention])
     #Maxpool along sequence axis
     maxpool1 = L.GlobalMaxPooling1D()(attention)
-    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values
-    #preds2 = L.Dense(21, activation="linear", name="p2")(attention)  #Errors
-    #preds = L.Concatenate(axis=1)([preds1,preds2])
-    model = M.Model(x_in, preds, name="CNN")
+
+    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values)
+    model = M.Model(x_in, preds, name="Attention_model")
     #Maybe make the loss stochsatic? Choose 3 positions to optimize
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
     return model
@@ -292,6 +267,9 @@ def build_net(input_shape):
 
 #####MAIN#####
 args = parser.parse_args()
+#Seed
+np.random.seed(42)
+
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -320,30 +298,26 @@ num_days = np.array(num_days)
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
 EPOCHS=5
-filters = int(net_params['filters']) #32
-dilation_rate = int(net_params['dilation_rate'])#3
-kernel_size = int(net_params['kernel_size']) #5
+num_nodes = int(net_params['num_nodes']) #32
 lr = float(net_params['lr']) #0.01
-num_convolutional_layers = int(net_params['num_convolutional_layers'])
-#Make net
 
+#Make net
 input_shape = (None, X[0].shape[1])
 net = build_net(input_shape)
 print(net.summary())
 #KFOLD
 NFOLD = 5
-#kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
-train_split, val_split = kfold(len(X),NFOLD)
+kf = KFold(n_splits=NFOLD,shuffle=True, random_state=0)
 fold=0
 
 #Save errors
 train_errors = []
 valid_errors = []
 corrs = []
-for fold in range(NFOLD):
-    tr_idx, val_idx = train_split[fold], val_split[fold]
+for tr_idx, val_idx in kf.split(X):
+    fold+=1
     #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
-    print("FOLD", fold+1)
+    print("FOLD", fold)
     net = build_net(input_shape)
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)

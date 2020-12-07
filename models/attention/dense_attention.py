@@ -15,11 +15,11 @@ import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
 import tensorflow.keras.models as M
 from tensorflow.keras.callbacks import TensorBoard
-#from scipy.stats import pearsonr
+from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''A CNN regression model.''')
+parser = argparse.ArgumentParser(description = '''An attention regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -37,6 +37,12 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 #######FUNCTIONS#######
+def seed_everything(seed=2020):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+
 def read_net_params(params_file):
     '''Read and return net parameters
     '''
@@ -187,6 +193,7 @@ def split_for_training(sel, train_days, forecast_days):
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
+
 def kfold(num_regions, NFOLD):
     '''Generate a K-fold split using numpy (can't import sklearn everywhere)
     '''
@@ -208,7 +215,6 @@ def kfold(num_regions, NFOLD):
         check[val_i]+=1
 
     return np.array(train_split), np.array(val_split)
-
 
 
 class DataGenerator(keras.utils.Sequence):
@@ -267,24 +273,14 @@ def build_net(input_shape):
 
 
     x_in = keras.Input(shape= input_shape)
-    #Convolutions
-    def get_conv_net(x,num_convolutional_layers,dilation_rate):
-        for n in range(num_convolutional_layers):
-            x = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x)
-            x = L.BatchNormalization()(x)
-            x = L.Activation('relu')(x)
-
-        return x
-    #Try skipping the convolutions by doing variable length attention
-    x1= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
-    #x2= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
-    attention = L.Attention()([x1,x1])
+    d1 = L.Dense(num_nodes, activation="relu")(x_in)
+    #The attention layer will enable to distribute information between the first and second entries (using the second as keys)
+    attention = L.Attention()([d1,d1]) #looking at the activations in relation to themselves
+    #cat = L.Concatenate()([d1,attention])
     #Maxpool along sequence axis
     maxpool1 = L.GlobalMaxPooling1D()(attention)
-    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values
-    #preds2 = L.Dense(21, activation="linear", name="p2")(attention)  #Errors
-    #preds = L.Concatenate(axis=1)([preds1,preds2])
-    model = M.Model(x_in, preds, name="CNN")
+    preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values)
+    model = M.Model(x_in, preds, name="Dense_attention")
     #Maybe make the loss stochsatic? Choose 3 positions to optimize
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=lr))
     return model
@@ -292,6 +288,8 @@ def build_net(input_shape):
 
 #####MAIN#####
 args = parser.parse_args()
+#Seed
+np.random.seed(42)
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -319,14 +317,11 @@ num_days = np.array(num_days)
 #Get net parameters
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
-EPOCHS=5
-filters = int(net_params['filters']) #32
-dilation_rate = int(net_params['dilation_rate'])#3
-kernel_size = int(net_params['kernel_size']) #5
+EPOCHS=20
+num_nodes = int(net_params['num_nodes']) #32
 lr = float(net_params['lr']) #0.01
-num_convolutional_layers = int(net_params['num_convolutional_layers'])
-#Make net
 
+#Make net
 input_shape = (None, X[0].shape[1])
 net = build_net(input_shape)
 print(net.summary())
@@ -334,7 +329,6 @@ print(net.summary())
 NFOLD = 5
 #kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
 train_split, val_split = kfold(len(X),NFOLD)
-fold=0
 
 #Save errors
 train_errors = []
