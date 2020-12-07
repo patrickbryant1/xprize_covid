@@ -1,12 +1,18 @@
-# Copyright 2020 (c) Cognizant Digital Business, Evolutionary AI. All rights reserved. Issued under the Apache 2.0 License.
-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import argparse
 
 def load_model():
     '''Load the model
     '''
-    intercepts = np.load('./intercepts', allow_pickle=True)
-    coefficients = np.load('./coefficients', allow_pickle=True)
+    intercepts = []
+    coefs = []
+    #Fetch intercepts and coefficients
+    for i in range(1,6):
+        intercepts.append(np.load('./model/intercepts'+str(i)+'.npy', allow_pickle=True))
+        coefs.append(np.load('./coefficients'+str(i)+'.npy', allow_pickle=True))
+
+    return np.array(intercepts), np.array(coefficients)
 
 def predict(start_date: str,
             end_date: str,
@@ -48,7 +54,7 @@ def predict(start_date: str,
     ips_df = hist_ips_df[(hist_ips_df.Date >= start_date) & (hist_ips_df.Date <= end_date)]
 
     #1. Load the model
-    model = load_model()
+    intercepts, coefficients = load_model()
 
     #2. Load the additional data
     data_path = '../../data/adjusted_data.csv'
@@ -120,6 +126,7 @@ def predict(start_date: str,
             # Prepare data - make check so that enough previous data exists
             X_aditional = adjusted_additional_g[-NB_LOOKBACK_DAYS:]
             X_npis = adjusted_ip_g[-NB_LOOKBACK_DAYS:]
+            pdb.set_trace()
             X = np.concatenate([X_aditional.flatten(),
                                 X_npis.flatten()])
 
