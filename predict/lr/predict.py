@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import argparse
+import pandas as pd
+import numpy as np
 
 def load_model():
     '''Load the model
@@ -14,10 +16,7 @@ def load_model():
 
     return np.array(intercepts), np.array(coefficients)
 
-def predict(start_date: str,
-            end_date: str,
-            path_to_ips_file: str,
-            output_file_path) -> None:
+def predict(start_date, end_date, path_to_ips_file, output_file_path):
     """
     Will be called like:
     python predict.py -s start_date -e end_date -ip path_to_ip_file -o path_to_output_file
@@ -58,7 +57,7 @@ def predict(start_date: str,
 
     #2. Load the additional data
     data_path = '../../data/adjusted_data.csv'
-    adjusted_data = pd.read_csv(,
+    adjusted_data = pd.read_csv(data_path,
                      parse_dates=['Date'],
                      encoding="ISO-8859-1",
                      dtype={"RegionName": str,
@@ -136,11 +135,9 @@ def predict(start_date: str,
             # Add if it's a requested date
             if current_date >= start_date:
                 geo_preds.append(pred)
-                if verbose:
-                    print(f"{current_date.strftime('%Y-%m-%d')}: {pred}")
+                print(current_date.strftime('%Y-%m-%d'), pred)
             else:
-                if verbose:
-                    print(f"{current_date.strftime('%Y-%m-%d')}: {pred} - Skipped (intermediate missing daily cases)")
+                print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")
 
             # Append the prediction and npi's for the next x predicted days
             # in order to rollout predictions for further days.
@@ -172,7 +169,7 @@ def predict(start_date: str,
     os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
     # Save to a csv file
     preds_df.to_csv(output_file_path, index=False)
-    print(f"Saved predictions to {output_file_path}")
+    print("Saved predictions to", output_file_path)
     raise NotImplementedError
 
 
@@ -200,6 +197,6 @@ if __name__ == '__main__':
                         required=True,
                         help="The path to the CSV file where predictions should be written")
     args = parser.parse_args()
-    print(f"Generating predictions from {args.start_date} to {args.end_date}...")
+    print("Generating predictions from", args.start_date, "to", args.end_date,"...")
     predict(args.start_date, args.end_date, args.ip_file, args.output_file)
     print("Done!")
