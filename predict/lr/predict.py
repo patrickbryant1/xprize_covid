@@ -33,6 +33,10 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     with columns "CountryName,RegionName,Date,PredictedDailyNewCases"
     """
     # !!! YOUR CODE HERE !!!
+    ID_COLS = ['CountryName',
+               'RegionName',
+               'GeoID',
+               'Date']
     NPI_COLS = ['C1_School closing',
                     'C2_Workplace closing',
                     'C3_Cancel public events',
@@ -58,6 +62,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                               error_bad_lines=True)
 
     # Add GeoID column that combines CountryName and RegionName for easier manipulation of data",
+    hist_ips_df['RegionName'] = hist_ips_df['RegionName'].fillna(0)
     hist_ips_df['GeoID'] = hist_ips_df['CountryName'] + '__' + hist_ips_df['RegionName'].astype(str)
     # Fill any missing NPIs by assuming they are the same as previous day
     for npi_col in NPI_COLS:
@@ -65,7 +70,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
     # Intervention plans to forecast for: those between start_date and end_date
     ips_df = hist_ips_df[(hist_ips_df.Date >= start_date) & (hist_ips_df.Date <= end_date)]
-
+    ips_df.GeoID.unique()
     #2. Load the model
     intercepts, coefs = load_model()
 
@@ -79,9 +84,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                             "Country_index":int,
                             "Region_index":int},
                      error_bad_lines=False)
-    adjusted_data = adjusted_data.fillna(0)
     # Add RegionID column that combines CountryName and RegionName for easier manipulation of data
     adjusted_data['GeoID'] = adjusted_data['CountryName'] + '__' + adjusted_data['RegionName'].astype(str)
+    adjusted_data = adjusted_data.fillna(0)
 
     #4. Run the predictor
     additional_features = ['smoothed_cases',
@@ -113,10 +118,20 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         ips_gdf = ips_df[ips_df.GeoID == g]
          # Pull out all relevant data for g
         adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
+
+
+        #Check the timelag to the last known date
+        last_known_date = adjusted_data_gdf.Date.max()
+        #It may be that the start date is much ahead of the last known date, where input will have to be predicted
+        # Start predicting from start_date, unless there's a gap since last known date
+        current_date = min(last_known_date + np.timedelta64(1, 'D'), start_date)
+        #Select everything from df up tp current date
+        adjusted_data_gdf = adjusted_data_gdf[adjusted_data_gdf['Date']<current_date]
         adjusted_data_gdf = adjusted_data_gdf.reset_index()
         #Check if enough data to predict
         if len(adjusted_data_gdf)<21:
             print('Not enough data for',g)
+            pdb.set_trace()
             continue
         #Get no-repeat features
         country_index = adjusted_data_gdf.loc[0,'Country_index']
@@ -144,13 +159,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:11]])
         #Get future NPIs
         future_npis = np.array(ips_gdf[NPI_COLS])
-        #Check the timelag to the last known date
-        last_known_date = adjusted_data_gdf.Date.max()
-        #It may be that the start date is much ahead of the last known date, where input will have to be predicted
-        # Make prediction for each day
+
+        # Make prediction for each requested day
         geo_preds = []
-        # Start predicting from start_date, unless there's a gap since last known date
-        current_date = min(last_known_date + np.timedelta64(1, 'D'), start_date)
         days_ahead = 0
         while current_date <= end_date:
             # Prepare data - make check so that enough previous data exists
@@ -166,39 +177,52 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
             # Make the prediction (reshape so that sklearn is happy)
             pred = np.dot(coefs,X)+intercepts
-            pred = max(0, pred)  # Do not allow predicting negative cases
-            pdb.set_trace()
+            # Do not allow predicting negative cases
+            pred[pred<0]=0
+            #Do not allow predicting more cases than 80 % of population
+            pred[pred>(0.8*population/100000)]=0.8*population/100000
+            std_pred = np.std(pred,axis=0)
+            pred = np.average(pred,axis=0)
+
             # Add if it's a requested date
             if current_date >= start_date:
-                geo_preds.append(pred)
+                geo_preds.extend(pred)
                 print(current_date.strftime('%Y-%m-%d'), pred)
             else:
                 print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")
 
             # Append the prediction and npi's for the next x predicted days
             # in order to rollout predictions for further days.
-            future_additional = np.repeat(adjusted_additional_g,len(pred))
-            future_additional[0,:]=pred #add predicted cases
-            future_additional[1,:]=np.cumsum(pred) #add predicted cumulative cases
+            future_additional = np.repeat(np.array([adjusted_additional_g[-1,:]]),len(pred),axis=0)
+            future_additional[:,0]=pred #add predicted cases
+            future_additional[:,1]=np.cumsum(pred) #add predicted cumulative cases
+            #!!!!!!!!!!!!!!!
             #Look up monthly temperature for predicted dates: 'monthly_temperature'
+            #!!!!!!!!!!!!!!!
             adjusted_additional_g = np.append(adjusted_additional_g, future_additional)
-            adjusted_ip_g = np.append(adjusted_ip_g, future_npis[days_ahead:days_ahead + 21], axis=0)
+            historical_npis_g = np.append(historical_npis_g, future_npis[days_ahead:days_ahead + 21], axis=0)
 
             # Move to next period
             current_date = current_date + np.timedelta64(21, 'D')
             days_ahead += 21
 
 
+        # Create geo_pred_df with pred column
+        geo_pred_df = ips_gdf[ID_COLS].copy()
+        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)])*(population/100000)
 
+        #Check
+        adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
+        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']*(population/100000)
+        geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
+        geo_pred_df['population']=population
 
+        #Save
+        geo_pred_dfs.append(geo_pred_df)
 
-
-
-
-        # Make prediction for each day
-        geo_preds = []
-
-
+    # Combine all predictions into a single dataframe
+    pred_df = pd.concat(geo_pred_dfs)
+    pdb.set_trace()
     #4. Obtain output
 
     # Create the output path
