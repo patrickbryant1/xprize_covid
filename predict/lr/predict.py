@@ -172,6 +172,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:] #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
             #Get change over the past NB_LOOKBACK_DAYS
             period_change = X_additional[-1,1]-X_additional[0,1]
+
             #Get NPIS
             X_npis = historical_npis_g[-NB_LOOKBACK_DAYS:]
             X = np.concatenate([X_additional.flatten(),
@@ -189,8 +190,12 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             pred = np.average(pred,axis=0)
 
             # Add if it's a requested date
-            if current_date >= start_date:
-                geo_preds.extend(pred)
+            if current_date+ np.timedelta64(21, 'D') >= start_date:
+
+                #Append the predicted dates
+                days_ahead =  current_date+ np.timedelta64(21, 'D')-start_date
+                pdb.set_trace()
+                geo_preds.extend(pred[-days_ahead.days:])
                 #print(current_date.strftime('%Y-%m-%d'), pred)
             else:
                 print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")
@@ -203,7 +208,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #!!!!!!!!!!!!!!!
             #Look up monthly temperature for predicted dates: 'monthly_temperature'
             #!!!!!!!!!!!!!!!
-            adjusted_additional_g = np.append(adjusted_additional_g, future_additional)
+            adjusted_additional_g = np.append(adjusted_additional_g, future_additional,axis=0)
             historical_npis_g = np.append(historical_npis_g, future_npis[days_ahead:days_ahead + 21], axis=0)
 
             # Move to next period
