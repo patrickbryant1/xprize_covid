@@ -3,6 +3,8 @@
 import argparse
 import pandas as pd
 import numpy as np
+import os
+import sys
 import pdb
 
 def load_model():
@@ -62,7 +64,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                               error_bad_lines=True)
 
     # Add GeoID column that combines CountryName and RegionName for easier manipulation of data",
-    hist_ips_df['RegionName'] = hist_ips_df['RegionName'].fillna(0)
+    #hist_ips_df['RegionName'] = hist_ips_df['RegionName'].fillna(0)
     hist_ips_df['GeoID'] = hist_ips_df['CountryName'] + '__' + hist_ips_df['RegionName'].astype(str)
     # Fill any missing NPIs by assuming they are the same as previous day
     for npi_col in NPI_COLS:
@@ -85,6 +87,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                             "Region_index":int},
                      error_bad_lines=False)
     # Add RegionID column that combines CountryName and RegionName for easier manipulation of data
+
+    adjusted_data['RegionName'] = adjusted_data['RegionName'].replace('0', np.nan)
     adjusted_data['GeoID'] = adjusted_data['CountryName'] + '__' + adjusted_data['RegionName'].astype(str)
     adjusted_data = adjusted_data.fillna(0)
 
@@ -187,7 +191,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             # Add if it's a requested date
             if current_date >= start_date:
                 geo_preds.extend(pred)
-                print(current_date.strftime('%Y-%m-%d'), pred)
+                #print(current_date.strftime('%Y-%m-%d'), pred)
             else:
                 print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")
 
@@ -220,17 +224,19 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         #Save
         geo_pred_dfs.append(geo_pred_df)
 
-    # Combine all predictions into a single dataframe
-    pred_df = pd.concat(geo_pred_dfs)
-    pdb.set_trace()
-    #4. Obtain output
 
-    # Create the output path
-    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+    #4. Obtain output
+    # Combine all predictions into a single dataframe - remember to only select the requied columns later
+    pred_df = pd.concat(geo_pred_dfs)
     # Save to a csv file
-    preds_df.to_csv(output_file_path, index=False)
+    #All
+    pred_df.to_csv('all_'+output_file_path, index=False)
+    #Only the required columns
+    pred_df.drop(columns={'GeoID','smoothed_cases','population'}).to_csv(output_file_path, index=False)
     print("Saved predictions to", output_file_path)
-    raise NotImplementedError
+
+    return None
+
 
 
 # !!! PLEASE DO NOT EDIT. THIS IS THE OFFICIAL COMPETITION API !!!
