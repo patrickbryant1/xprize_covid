@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn import preprocessing
 from sklearn.model_selection import KFold
-from sklearn.cluster import KMeans
 from scipy.stats import pearsonr
 from scipy import stats
 import numpy as np
@@ -31,6 +30,8 @@ parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
+parser.add_argument('--region', nargs=1, type= int,
+                  default=sys.stdin, help = 'Region.')                  
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -53,17 +54,11 @@ def normalize_data(sel):
 
     return sel
 
-def cluster_regions(adjusted_data):
-    '''Cluster regions based on PCA of the last 90 days of data
-    '''
-    pcs = np.array([adjusted_data['PC1'], adjusted_data['PC2']])
-    KMeans(pcs)
-    pdb.set_trace()
+
 def get_features(adjusted_data,train_days,forecast_days,outdir):
     '''Get the selected features
     '''
-    #Cluster
-    adjusted_data = cluster_regions(adjusted_data)
+
     selected_features = ['C1_School closing',
                         'C2_Workplace closing',
                         'C3_Cancel public events',
@@ -273,11 +268,13 @@ adjusted_data = adjusted_data.fillna(0)
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
+region = args.region[0]
 outdir = args.outdir[0]
 
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-
+#Select only US data
+adjusted_data = adjusted_data[adjusted_data]
 #Get data
 X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
 
