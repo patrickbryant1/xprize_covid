@@ -18,7 +18,7 @@ from tensorflow import keras
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
 import tensorflow.keras.models as M
-from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
 from scipy.stats import pearsonr
 
 import pdb
@@ -35,6 +35,8 @@ parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
 #parser.add_argument('--param_combo', nargs=1, type= int,
                   #default=sys.stdin, help = 'Parameter combo.')
+parser.add_argument('--datadir', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to data directory. Include /in end')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -304,7 +306,7 @@ num_days = np.array(num_days)
 
 #Get net parameters
 BATCH_SIZE=1
-EPOCHS=10
+EPOCHS=1
 #Make net
 
 #Make net

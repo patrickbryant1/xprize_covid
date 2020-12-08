@@ -16,7 +16,7 @@ from tensorflow import keras
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
 import tensorflow.keras.models as M
-from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
 from scipy.stats import pearsonr
 
 import pdb
@@ -180,6 +180,10 @@ def split_for_training(sel, train_days, forecast_days):
             country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
+            #Add daily change
+            country_region_data['rescaled_cases_daily_change']=np.append(np.zeros(1),np.array(country_region_data['rescaled_cases'])[1:]-np.array(country_region_data['rescaled_cases'])[:-1])
+            country_region_data['smoothed_cases_daily_change']=np.append(np.zeros(1),np.array(country_region_data['smoothed_cases'])[1:]-np.array(country_region_data['smoothed_cases'])[:-1])
+
             #Get the data
             X.append(np.array(country_region_data))
             y.append(np.array(country_region_data['smoothed_cases']))
@@ -188,6 +192,28 @@ def split_for_training(sel, train_days, forecast_days):
             populations.append(population)
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
+
+def kfold(num_regions, NFOLD):
+    '''Generate a K-fold split using numpy (can't import sklearn everywhere)
+    '''
+    all_i = np.arange(num_regions)
+    train_split = []
+    val_split = []
+    fetched_i = []
+    #Check
+    check = np.zeros(num_regions)
+    #Go through ll folds
+    for f in range(NFOLD):
+        remaining_i = np.setdiff1d(all_i,np.array(fetched_i))
+        val_i = np.random.choice(remaining_i,int(num_regions/NFOLD),replace=False)
+        train_i = np.setdiff1d(all_i,val_i)
+        #Save
+        val_split.append(val_i)
+        train_split.append(train_i)
+        fetched_i.extend(val_i)
+        check[val_i]+=1
+
+    return np.array(train_split), np.array(val_split)
 
 class DataGenerator(keras.utils.Sequence):
     '''Generates data for Keras'''
@@ -298,34 +324,45 @@ num_days = np.array(num_days)
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
 EPOCHS=5
-num_nodes = int(net_params['num_nodes']) #32
+#num_nodes = int(net_params['num_nodes']) #32
 lr = float(net_params['lr']) #0.01
 
 #Make net
 input_shape = (None, X[0].shape[1])
 net = build_net(input_shape)
 print(net.summary())
+#Save model for future use
+#from tensorflow.keras.models import model_from_json
+#serialize model to JSON
+model_json = net.to_json()
+with open(outdir+"model.json", "w") as json_file:
+	json_file.write(model_json)
+
 #KFOLD
 NFOLD = 5
-kf = KFold(n_splits=NFOLD,shuffle=True, random_state=0)
+#kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
+train_split, val_split = kfold(len(X),NFOLD)
 fold=0
 
 #Save errors
 train_errors = []
 valid_errors = []
-corrs = []
-for tr_idx, val_idx in kf.split(X):
-    fold+=1
+for fold in range(NFOLD):
+    tr_idx, val_idx = train_split[fold], val_split[fold]
     #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
-    print("FOLD", fold)
+    print("FOLD", fold+1)
     net = build_net(input_shape)
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
+    #Checkpoint
+    filepath=outdir+"weights/fold"+str(fold+1)+"_weights_epoch_{epoch:02d}_{val_loss:.2f}.hdf5"
+    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
 
     history = net.fit(training_generator,
             validation_data=valid_generator,
-            epochs=EPOCHS
+            epochs=EPOCHS,
+            callbacks = [checkpoint]
             )
     #Save loss and accuracy
     train_errors.append(np.array(history.history['loss']))

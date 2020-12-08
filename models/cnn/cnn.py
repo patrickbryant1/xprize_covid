@@ -275,7 +275,7 @@ def build_net(input_shape):
     def get_conv_net(x,num_convolutional_layers,dilation_rate):
         for n in range(num_convolutional_layers):
             x = L.Conv1D(filters = filters, kernel_size = kernel_size, dilation_rate = dilation_rate, padding ="same")(x)
-            x = L.BatchNormalization()(x)
+            #x = L.BatchNormalization()(x)
             x = L.Activation('relu')(x)
 
         return x
