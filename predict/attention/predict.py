@@ -22,14 +22,14 @@ def load_model():
     coefs = []
     #Fetch model weights
     all_weights = glob.glob('./model/fold*')
-    #Load model
-    global model
-    json_file = open('./model/model.json', 'r')
-    model_json = json_file.read()
-    model = model_from_json(model_json)
+
     #Add weights to model
     all_models = []
     for weights in all_weights:
+        #Load model
+        json_file = open('./model/model.json', 'r')
+        model_json = json_file.read()
+        model = model_from_json(model_json)
         model.load_weights(weights)
         all_models.append(model)
 
@@ -114,6 +114,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                             'cumulative_smoothed_cases',
                             'rescaled_cases',
                             'cumulative_rescaled_cases',
+                            'rescaled_cases_daily_change',
+                            'smoothed_cases_daily_change',
                             'monthly_temperature',
                             'retail_and_recreation',
                             'grocery_and_pharmacy',
@@ -125,7 +127,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                             'population_density',
                             'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr']
 
-    NB_LOOKBACK_DAYS=21
+    #NB_LOOKBACK_DAYS=21
     # Make predictions for each country,region pair
     geo_pred_dfs = []
     for g in ips_df.GeoID.unique():
@@ -158,8 +160,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
         adjusted_data_gdf['cumulative_smoothed_cases']=adjusted_data_gdf['cumulative_smoothed_cases']/(population/100000)
         #Add daily change
-        country_region_data['rescaled_cases_daily_change']=np.append(np.zeros(1),np.array(country_region_data['rescaled_cases'])[1:]-np.array(country_region_data['rescaled_cases'])[:-1])
-        country_region_data['smoothed_cases_daily_change']=np.append(np.zeros(1),np.array(country_region_data['smoothed_cases'])[1:]-np.array(country_region_data['smoothed_cases'])[:-1])
+        adjusted_data_gdf['rescaled_cases_daily_change']=np.append(np.zeros(1),np.array(adjusted_data_gdf['rescaled_cases'])[1:]-np.array(adjusted_data_gdf['rescaled_cases'])[:-1])
+        adjusted_data_gdf['smoothed_cases_daily_change']=np.append(np.zeros(1),np.array(adjusted_data_gdf['smoothed_cases'])[1:]-np.array(adjusted_data_gdf['smoothed_cases'])[:-1])
 
         #Get historical NPIs
         historical_npis_g = np.array(adjusted_data_gdf[NPI_COLS])
@@ -167,25 +169,26 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         adjusted_additional_g = np.array(adjusted_data_gdf[additional_features])
         #Get future NPIs
         future_npis = np.array(ips_gdf[NPI_COLS])
-
+        # Prepare data
+        #Additional features
+        X_additional = adjusted_additional_g
+        #Get NPIS
+        X_npis = historical_npis_g
         # Make prediction for each requested day
         geo_preds = []
         days_ahead = 0
         while current_date <= end_date:
-            # Prepare data - make check so that enough previous data exists
-            X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:] #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
+            X = np.concatenate([X_additional,X_npis],axis=1)
+            # Make the prediction
+            pred = []
+            for m in all_models:
+                pred.append(m.predict(np.array([X[-60:,:]]))[0])
+            pred = np.array(pred)
 
-            #Get NPIS
-            X_npis = historical_npis_g[-NB_LOOKBACK_DAYS:]
-            X = np.concatenate([X_additional.flatten(),
-                                X_npis.flatten()])
-            pdb.set_trace()
-            # Make the prediction (reshape so that sklearn is happy)
-            pred = np.dot(coefs,X)+intercepts
             # Do not allow predicting negative cases
             pred[pred<0]=0
-            #Do not allow predicting more cases than 80 % of population
-            pred[pred>(0.8*population/100000)]=0.8*population/100000
+            #Do not allow predicting more cases than 20 % of population at a given day
+            pred[pred>(0.2*population/100000)]=0.2*population/100000
             std_pred = np.std(pred,axis=0)
             pred = np.average(pred,axis=0)
 
@@ -238,6 +241,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #Only the required columns
     pred_df.drop(columns={'GeoID','smoothed_cases','population'}).to_csv(output_file_path, index=False)
     print("Saved predictions to", output_file_path)
+    pdb.set_trace()
 
     return None
 
