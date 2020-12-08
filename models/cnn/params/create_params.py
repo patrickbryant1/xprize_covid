@@ -11,6 +11,7 @@ dilation_rate = [3,6,12]
 kernel_size = [5,10,15]
 lr = [0.1,0.01,0.001]
 num_convolutional_layers=[1,2,3]
+attention=[0,1]
 
 
 for fil in filters:
@@ -18,10 +19,12 @@ for fil in filters:
 		for k in kernel_size:
 			for l in lr:
 				for nc in num_convolutional_layers:
-					name = str(fil)+'_'+str(dr)+'_'+str(k)+'_'+str(l)+'_'+str(nc)+'.params'
-					with open(name, "w") as file:
-						file.write('filters='+str(fil)+'\n')
-						file.write('dilation_rate='+str(dr)+'\n')
-						file.write('kernel_size='+str(k)+'\n')
-						file.write('lr='+str(l)+'\n')
-						file.write('num_convolutional_layers='+str(nc)+'\n')
+					for at in attention:
+						name = str(fil)+'_'+str(dr)+'_'+str(k)+'_'+str(l)+'_'+str(nc)+'_'+str(at)+'.params'
+						with open(name, "w") as file:
+							file.write('filters='+str(fil)+'\n')
+							file.write('dilation_rate='+str(dr)+'\n')
+							file.write('kernel_size='+str(k)+'\n')
+							file.write('lr='+str(l)+'\n')
+							file.write('num_convolutional_layers='+str(nc)+'\n')
+							file.write('attention='+str(at)+'\n')

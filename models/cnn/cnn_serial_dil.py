@@ -278,6 +278,7 @@ def build_net():
 #####MAIN#####
 args = parser.parse_args()
 #Seed
+np.random.seed(42)
 #seed_everything(0) #The answer it is
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],

@@ -14,7 +14,7 @@ from tensorflow import keras
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
 import tensorflow.keras.models as M
-from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
 #from scipy.stats import pearsonr
 
 import pdb
@@ -178,6 +178,10 @@ def split_for_training(sel, train_days, forecast_days):
             country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
+            #Add daily change
+            country_region_data['rescaled_cases_daily_change']=np.append(np.zeros(1),np.array(country_region_data['rescaled_cases'])[1:]-np.array(country_region_data['rescaled_cases'])[:-1])
+            country_region_data['smoothed_cases_daily_change']=np.append(np.zeros(1),np.array(country_region_data['smoothed_cases'])[1:]-np.array(country_region_data['smoothed_cases'])[:-1])
+
             #Get the data
             X.append(np.array(country_region_data))
             y.append(np.array(country_region_data['smoothed_cases']))
@@ -278,9 +282,12 @@ def build_net(input_shape):
     #Try skipping the convolutions by doing variable length attention
     x1= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
     #x2= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
-    attention = L.Attention()([x1,x1])
-    #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(attention)
+    if use_attention==True:
+        attention = L.Attention()([x1,x1])
+        #Maxpool along sequence axis
+        maxpool1 = L.GlobalMaxPooling1D()(attention)
+    else:
+        maxpool1 = L.GlobalMaxPooling1D()(x1)
     preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values
     #preds2 = L.Dense(21, activation="linear", name="p2")(attention)  #Errors
     #preds = L.Concatenate(axis=1)([preds1,preds2])
@@ -292,6 +299,7 @@ def build_net(input_shape):
 
 #####MAIN#####
 args = parser.parse_args()
+np.random.seed(42)
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -319,17 +327,25 @@ num_days = np.array(num_days)
 #Get net parameters
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
-EPOCHS=5
+EPOCHS=20
 filters = int(net_params['filters']) #32
 dilation_rate = int(net_params['dilation_rate'])#3
 kernel_size = int(net_params['kernel_size']) #5
 lr = float(net_params['lr']) #0.01
 num_convolutional_layers = int(net_params['num_convolutional_layers'])
-#Make net
+use_attention = bool(int(net_params['attention']))
 
+#Make net
 input_shape = (None, X[0].shape[1])
 net = build_net(input_shape)
 print(net.summary())
+#Save model for future use
+#from tensorflow.keras.models import model_from_json
+#serialize model to JSON
+model_json = net.to_json()
+with open(outdir+"model.json", "w") as json_file:
+	json_file.write(model_json)
+
 #KFOLD
 NFOLD = 5
 #kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
@@ -339,7 +355,6 @@ fold=0
 #Save errors
 train_errors = []
 valid_errors = []
-corrs = []
 for fold in range(NFOLD):
     tr_idx, val_idx = train_split[fold], val_split[fold]
     #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
@@ -348,10 +363,14 @@ for fold in range(NFOLD):
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
+    #Checkpoint
+    filepath=outdir+"weights/fold"+str(fold+1)+"_weights_epoch_{epoch:02d}_{val_loss:.2f}.hdf5"
+    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
 
     history = net.fit(training_generator,
             validation_data=valid_generator,
-            epochs=EPOCHS
+            epochs=EPOCHS,
+            callbacks = [checkpoint]
             )
     #Save loss and accuracy
     train_errors.append(np.array(history.history['loss']))
