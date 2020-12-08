@@ -33,6 +33,8 @@ parser.add_argument('--mobility_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to Google mobility data.')
 parser.add_argument('--cultural_descriptors', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to Hofstede cultural descriptors.')
+parser.add_argument('--world_areas', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to csv with ISO3 to world area.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -570,6 +572,7 @@ mobility_data = pd.read_csv(args.mobility_data[0],parse_dates=['date'])
 cultural_descriptors = pd.read_csv(args.cultural_descriptors[0],sep=';')
 #Replace the #NULL! with 0
 cultural_descriptors=cultural_descriptors.replace('#NULL!',0)
+world_areas = pd.read_csv(args.world_areas[0])
 outdir = args.outdir[0]
 
 #Save the NPIS for testing
@@ -580,7 +583,7 @@ oxford_data[['CountryName', 'RegionName',
             'C7_Restrictions on internal movement','C8_International travel controls',
             'H1_Public information campaigns','H2_Testing policy',
             'H3_Contact tracing','H6_Facial Coverings']].to_csv(outdir+'hitorical_ip.csv',index=False)
-pdb.set_trace()
+
 #Parse the data
 try:
     oxford_data = pd.read_csv(outdir+'adjusted_data.csv',
@@ -591,15 +594,18 @@ try:
            "Country_index":int,
            "Region_index":int},
     error_bad_lines=False)
-    pdb.set_trace()
-    oxford_data = oxford_data.fillna(0)
+
 
 
 except:
+    #Add world area to ocford data
 
+    oxford_data = pd.merge(oxford_data,world_areas,on='CountryCode', how='left')
+    #Parse regions
     oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,
                                 gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors)
     oxford_data = oxford_data.fillna(0)
+    #Look at country epidemic curves
     oxford_data = cluster_countries(oxford_data,outdir)
     #Save the adjusted data
     oxford_data.to_csv(outdir+'adjusted_data.csv')
