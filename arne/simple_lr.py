@@ -24,13 +24,13 @@ parser = argparse.ArgumentParser(description = '''Simple linear regression model
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
-parser.add_argument('--start_date', nargs=1, type= str,
+parser.add_argument('--start_date', nargs=1, type= str,required=True,
                   default=sys.stdin, help = 'Date to start from.')
-parser.add_argument('--train_days', nargs=1, type= int,
+parser.add_argument('--train_days', nargs=1, type= int,required=True,
                   default=sys.stdin, help = 'Days to include in fitting.')
-parser.add_argument('--forecast_days', nargs=1, type= int,
+parser.add_argument('--forecast_days', nargs=1, type= int,required=True,
                   default=sys.stdin, help = 'Days to forecast.')
-parser.add_argument('--outdir', nargs=1, type= str,
+parser.add_argument('--outdir', nargs=1, type= str,required=True,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
@@ -92,7 +92,7 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
                         'workplaces',
                         'residential',
                         'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
-                        'population']
+                         'population',"smoothed_cases","smoothed_deaths"]
 
     #Get features
     try:
@@ -123,7 +123,7 @@ def split_for_training(sel,train_days,forecast_days):
     '''
     X = [] #Inputs
     y = [] #Targets
-    casecolumns=
+    casecolumns=["smoothed_cases","smoothed_deaths"]
     countries = sel['Country_index'].unique()
     populations = []
     regions = []
@@ -142,6 +142,7 @@ def split_for_training(sel,train_days,forecast_days):
                 continue
 
             # New features added by AE
+            tiny=1.e-20
             for key in casecolumns:
                 #print (key)
                 country_region_data[key+"_diff7"]=country_region_data[key].diff(7)
