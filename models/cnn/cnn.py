@@ -14,7 +14,7 @@ from tensorflow import keras
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as L
 import tensorflow.keras.models as M
-from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
 #from scipy.stats import pearsonr
 
 import pdb
@@ -338,6 +338,13 @@ use_attention = bool(int(net_params['attention']))
 input_shape = (None, X[0].shape[1])
 net = build_net(input_shape)
 print(net.summary())
+#Save model for future use
+#from tensorflow.keras.models import model_from_json
+#serialize model to JSON
+model_json = net.to_json()
+with open(outdir+"model.json", "w") as json_file:
+	json_file.write(model_json)
+
 #KFOLD
 NFOLD = 5
 #kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
@@ -356,10 +363,14 @@ for fold in range(NFOLD):
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
+    #Checkpoint
+    filepath=outdir+"weights/fold"+str(fold+1)+"_weights_epoch_{epoch:02d}_{val_loss:.2f}.hdf5"
+    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='max')
 
     history = net.fit(training_generator,
             validation_data=valid_generator,
-            epochs=EPOCHS
+            epochs=EPOCHS,
+            callbacks = [checkpoint]
             )
     #Save loss and accuracy
     train_errors.append(np.array(history.history['loss']))

@@ -52,7 +52,7 @@ def get_results(param_df, results_dir):
     val_std = []
     for i in range(len(combos)):
         tr = np.load(results_dir+'COMBO'+str(i+1)+'/train_errors.npy',allow_pickle=True)
-        val = np.load(results_dir+'COMBO'+str(i+1)+'/train_errors.npy',allow_pickle=True)
+        val = np.load(results_dir+'COMBO'+str(i+1)+'/valid_errors.npy',allow_pickle=True)
 
         #Take min from each fold
         train_loss.append(np.average(np.min(tr,axis=1)))
@@ -64,8 +64,16 @@ def get_results(param_df, results_dir):
     param_df['train_std'] = train_std
     param_df['val_mae'] = val_loss
     param_df['val_std'] = val_std
-    pdb.set_trace()
+    param_df['val_mae_std'] = param_df['val_mae']+param_df['val_std']
+    return param_df
 
+def visualize(param_df, outdir):
+    '''Visualize results
+    '''
+    fig,ax = plt.subplots(figsize=(10,10))
+    sns.pairplot(param_df)
+    plt.tight_layout()
+    plt.savefig(outdir+'params_loss.png', format='png', dpi=100)
 
 #####MAIN#####
 args = parser.parse_args()
@@ -77,4 +85,9 @@ outdir = args.outdir[0]
 #Parse params
 param_df = parse_params(params_file, params_order)
 #Get results
-get_results(param_df, results_dir)
+param_df = get_results(param_df, results_dir)
+print(param_df[param_df['val_mae_std']==min(param_df['val_mae_std'])])
+print(param_df[param_df['val_mae']==min(param_df['val_mae'])])
+print(param_df[param_df['val_std']==min(param_df['val_std'])])
+#Display
+visualize(param_df, outdir)
