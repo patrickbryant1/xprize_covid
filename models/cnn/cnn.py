@@ -354,7 +354,6 @@ fold=0
 #Save errors
 train_errors = []
 valid_errors = []
-corrs = []
 for fold in range(NFOLD):
     tr_idx, val_idx = train_split[fold], val_split[fold]
     #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))

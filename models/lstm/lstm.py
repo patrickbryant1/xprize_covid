@@ -41,22 +41,35 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 #######FUNCTIONS#######
-def seed_everything(seed=2020):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
+def normalize_data(sel):
+    '''Normalize and transform data
+    '''
 
-def get_features(adjusted_data, train_days, forecast_days, outdir):
+    # to_log = ['smoothed_cases','cumulative_smoothed_cases','rescaled_cases','cumulative_rescaled_cases','population_density', 'population']
+    # for var in to_log:
+    #     sel[var] = np.log10(sel[var]+0.001)
+
+    #GNI: group into 3: 0-20k,20-40k,40k+
+    index1 = sel[sel['gross_net_income']<20000].index
+    above = sel[sel['gross_net_income']>20000]
+    index2 = above[above['gross_net_income']<40000].index
+    index3 = sel[sel['gross_net_income']>40000].index
+    sel.at[index1,'gross_net_income']=0
+    sel.at[index2,'gross_net_income']=1
+    sel.at[index3,'gross_net_income']=2
+
+    return sel
+
+def get_features(adjusted_data, train_days, forecast_days, datadir):
     '''Get the selected features
     '''
 
     #Get features
     try:
-        X = np.load(outdir+'X.npy', allow_pickle=True)
-        y = np.load(outdir+'y.npy', allow_pickle=True)
-        populations = np.load(outdir+'populations.npy', allow_pickle=True)
-        regions = np.load(outdir+'regions.npy', allow_pickle=True)
+        X = np.load(datadir+'X.npy', allow_pickle=True)
+        y = np.load(datadir+'y.npy', allow_pickle=True)
+        populations = np.load(datadir+'populations.npy', allow_pickle=True)
+        regions = np.load(datadir+'regions.npy', allow_pickle=True)
 
 
     except:
@@ -95,12 +108,14 @@ def get_features(adjusted_data, train_days, forecast_days, outdir):
                             'population']
 
         sel = adjusted_data[selected_features]
+        #Normalize
+        sel = normalize_data(sel)
         X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
-        np.save(outdir+'X.npy',X)
-        np.save(outdir+'y.npy',y)
-        np.save(outdir+'populations.npy',populations)
-        np.save(outdir+'regions.npy',regions)
+        np.save(datadir+'X.npy',X)
+        np.save(datadir+'y.npy',y)
+        np.save(datadir+'populations.npy',populations)
+        np.save(datadir+'regions.npy',regions)
 
 
 
@@ -145,13 +160,17 @@ def split_for_training(sel, train_days, forecast_days):
 
             population = country_region_data.loc[0,'population']
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
-            'RegionName', 'death_to_case_scale', 'case_death_delay'})
+            'RegionName', 'death_to_case_scale', 'case_death_delay','population'})
 
             #Normalize the cases by 100'000 population
-            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
-            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
+            #Add daily change
+            country_region_data['rescaled_cases_daily_change']=np.append(np.zeros(1),np.array(country_region_data['rescaled_cases'])[1:]-np.array(country_region_data['rescaled_cases'])[:-1])
+            country_region_data['smoothed_cases_daily_change']=np.append(np.zeros(1),np.array(country_region_data['smoothed_cases'])[1:]-np.array(country_region_data['smoothed_cases'])[:-1])
+
             #Get the data
             X.append(np.array(country_region_data))
             y.append(np.array(country_region_data['smoothed_cases']))
@@ -160,6 +179,30 @@ def split_for_training(sel, train_days, forecast_days):
             populations.append(population)
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
+
+def kfold(num_regions, NFOLD):
+    '''Generate a K-fold split using numpy (can't import sklearn everywhere)
+    '''
+    all_i = np.arange(num_regions)
+    train_split = []
+    val_split = []
+    fetched_i = []
+    #Check
+    check = np.zeros(num_regions)
+    #Go through ll folds
+    for f in range(NFOLD):
+        remaining_i = np.setdiff1d(all_i,np.array(fetched_i))
+        val_i = np.random.choice(remaining_i,int(num_regions/NFOLD),replace=False)
+        train_i = np.setdiff1d(all_i,val_i)
+        #Save
+        val_split.append(val_i)
+        train_split.append(train_i)
+        fetched_i.extend(val_i)
+        check[val_i]+=1
+
+    return np.array(train_split), np.array(val_split)
+
+
 
 class DataGenerator(keras.utils.Sequence):
     '''Generates data for Keras'''
@@ -183,11 +226,12 @@ class DataGenerator(keras.utils.Sequence):
         'Generate one batch of data'
         # Generate indexes of the batch
         batch_index = self.indices+index
-        region_index = np.argwhere(self.cum_region_days>batch_index)[0][0]
-        #Increase the right region index
-        self.region_indices[region_index]+=1
+        #Select a random region
+        region_index = np.random.choice(self.X_train_fold.shape[0],1)[0] #np.argwhere(self.cum_region_days>batch_index)[0][0]
+        #Select a random start date
+        batch_end_day = np.random.choice(range(self.train_days,self.region_days[region_index]-self.forecast_days),1)[0]
         # Generate data
-        X_batch, y_batch = self.__data_generation(region_index,self.region_indices[region_index])
+        X_batch, y_batch = self.__data_generation(region_index,batch_end_day)
 
         return X_batch, y_batch
 
@@ -208,31 +252,14 @@ class DataGenerator(keras.utils.Sequence):
         return np.array(X_batch), np.array(y_batch)
 
 #####LOSSES AND SCORES#####
-def test(net, X_test,y_test,populations,regions):
-    '''Test the net on the last 3 weeks of data
-    '''
-
-    test_preds=net.predict(np.array(X_test))
-    R,p = pearsonr(test_preds[:,1],y_test)
-    print('PCC:',R)
-    order = np.argsort(y_test)
-    plt.plot(y_test[order],test_preds[:,1][order],color='grey')
-    plt.plot(y_test[order],y_test[order],color='k',linestyle='--')
-    plt.fill_between(y_test[order],test_preds[:,0][order],test_preds[:,2][order],color='grey',alpha=0.5)
-    plt.xlim([min(y_test),max(y_test)])
-    plt.ylim([min(y_test),max(y_test)])
-    plt.xlabel('True')
-    plt.ylabel('Pred')
-    plt.show()
 
 
 #####BUILD NET#####
-def build_net():
+def build_net(input_shape):
     '''Build the net using Keras
     '''
 
-
-    x_in = keras.Input(shape= (None,32))
+    x_in = keras.Input(shape= input_shape)
     #Initial convolution
     in_pass = L.Bidirectional(L.LSTM(16, return_sequences=True))(x_in)
 
@@ -261,58 +288,67 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                         "Region_index":int},
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
-days_ahead = args.days_ahead[0]
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
+datadir = args.datadir[0]
 outdir = args.outdir[0]
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get features
-X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days,outdir)
+X,y,populations,regions  = get_features(adjusted_data,train_days,forecast_days, datadir)
 #Get number of days in X
 num_days = []
 for cr in range(len(X)):
     num_days.append(X[cr].shape[0])
 num_days = np.array(num_days)
 
+
 #Get net parameters
 BATCH_SIZE=1
 EPOCHS=10
-dilation_rate = 3
-kernel_size = 5
-filters = 32
 #Make net
 
-net = build_net()
+#Make net
+input_shape = (None, X[0].shape[1])
+net = build_net(input_shape)
 print(net.summary())
+#Save model for future use
+#from tensorflow.keras.models import model_from_json
+#serialize model to JSON
+model_json = net.to_json()
+with open(outdir+"model.json", "w") as json_file:
+	json_file.write(model_json)
+
 #KFOLD
 NFOLD = 5
-kf = KFold(n_splits=NFOLD)
+#kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
+train_split, val_split = kfold(len(X),NFOLD)
 fold=0
 
 #Save errors
-errors = []
-corrs = []
-for tr_idx, val_idx in kf.split(X):
-    fold+=1
-    tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
-    print("FOLD", fold)
-    net = build_net()
+train_errors = []
+valid_errors = []
+for fold in range(NFOLD):
+    tr_idx, val_idx = train_split[fold], val_split[fold]
+    #tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
+    print("FOLD", fold+1)
+    net = build_net(input_shape)
     #Data generation
     training_generator = DataGenerator(X[tr_idx], y[tr_idx],num_days[tr_idx],train_days,forecast_days, BATCH_SIZE)
     valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
+    #Checkpoint
+    filepath=outdir+"weights/fold"+str(fold+1)+"_weights_epoch_{epoch:02d}_{val_loss:.2f}.hdf5"
+    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='max')
 
-    net.fit(training_generator,
+    history = net.fit(training_generator,
             validation_data=valid_generator,
             epochs=EPOCHS,
-            callbacks = [tensorboard]
+            callbacks = [checkpoint]
             )
+    #Save loss and accuracy
+    train_errors.append(np.array(history.history['loss']))
+    valid_errors.append(np.array(history.history['val_loss']))
 
-    preds = net.predict(X[val_idx])
-    preds[preds<0]=0
-    errors.append(np.average(np.absolute(preds[:,1]-y[val_idx])))
-    corrs.append(pearsonr(preds[:,1],y[val_idx])[0])
-print(np.average(errors))
-np.average(corrs)
-pdb.set_trace()
+np.save(outdir+'train_errors.npy', np.array(train_errors))
+np.save(outdir+'valid_errors.npy', np.array(valid_errors))
