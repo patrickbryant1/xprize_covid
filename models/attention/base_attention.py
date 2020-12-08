@@ -9,7 +9,7 @@ import numpy as np
 import random
 import pandas as pd
 
-from sklearn.model_selection import KFold
+#from sklearn.model_selection import KFold
 
 import tensorflow as tf
 from tensorflow import keras
