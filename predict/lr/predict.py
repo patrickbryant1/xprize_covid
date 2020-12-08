@@ -217,11 +217,11 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
         # Create geo_pred_df with pred column
         geo_pred_df = ips_gdf[ID_COLS].copy()
-        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)])*(population/100000)
+        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)]) #*(population/100000)
 
         #Check
         adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
-        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']*(population/100000)
+        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases'] #*(population/100000)
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
         geo_pred_df['population']=population
 
