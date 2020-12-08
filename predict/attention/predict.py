@@ -182,7 +182,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             # Make the prediction
             pred = []
             for m in all_models:
-                pred.append(m.predict(np.array([X[-60:,:]]))[0])
+                pred.append(m.predict(np.array([X[-7:,:]]))[0])
             pred = np.array(pred)
 
             # Do not allow predicting negative cases
@@ -241,7 +241,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #Only the required columns
     pred_df.drop(columns={'GeoID','smoothed_cases','population'}).to_csv(output_file_path, index=False)
     print("Saved predictions to", output_file_path)
-    pdb.set_trace()
+
 
     return None
 
