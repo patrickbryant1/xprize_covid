@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn import preprocessing
 from sklearn.model_selection import KFold
+from sklearn.cluster import KMeans
 from scipy.stats import pearsonr
 from scipy import stats
 import numpy as np
@@ -52,10 +53,17 @@ def normalize_data(sel):
 
     return sel
 
+def cluster_regions(adjusted_data):
+    '''Cluster regions based on PCA of the last 90 days of data
+    '''
+    pcs = np.array([adjusted_data['PC1'], adjusted_data['PC2']])
+    KMeans(pcs)
+    pdb.set_trace()
 def get_features(adjusted_data,train_days,forecast_days,outdir):
     '''Get the selected features
     '''
-
+    #Cluster
+    adjusted_data = cluster_regions(adjusted_data)
     selected_features = ['C1_School closing',
                         'C2_Workplace closing',
                         'C3_Cancel public events',
