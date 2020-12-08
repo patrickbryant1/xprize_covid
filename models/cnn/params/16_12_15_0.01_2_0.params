@@ -1,0 +1,6 @@
+filters=16
+dilation_rate=12
+kernel_size=15
+lr=0.01
+num_convolutional_layers=2
+attention=0

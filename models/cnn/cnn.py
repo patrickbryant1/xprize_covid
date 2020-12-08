@@ -278,9 +278,12 @@ def build_net(input_shape):
     #Try skipping the convolutions by doing variable length attention
     x1= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
     #x2= get_conv_net(x_in,num_convolutional_layers,dilation_rate)
-    attention = L.Attention()([x1,x1])
-    #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(attention)
+    if use_attention==True:
+        attention = L.Attention()([x1,x1])
+        #Maxpool along sequence axis
+        maxpool1 = L.GlobalMaxPooling1D()(attention)
+    else:
+        maxpool1 = L.GlobalMaxPooling1D()(x1)
     preds = L.Dense(21, activation="relu", name="p1")(maxpool1) #Values
     #preds2 = L.Dense(21, activation="linear", name="p2")(attention)  #Errors
     #preds = L.Concatenate(axis=1)([preds1,preds2])
@@ -325,8 +328,9 @@ dilation_rate = int(net_params['dilation_rate'])#3
 kernel_size = int(net_params['kernel_size']) #5
 lr = float(net_params['lr']) #0.01
 num_convolutional_layers = int(net_params['num_convolutional_layers'])
-#Make net
+use_attention = bool(int(net_params['attention']))
 
+#Make net
 input_shape = (None, X[0].shape[1])
 net = build_net(input_shape)
 print(net.summary())
