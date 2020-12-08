@@ -299,6 +299,7 @@ def build_net(input_shape):
 
 #####MAIN#####
 args = parser.parse_args()
+np.random.seed(42)
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -364,7 +365,7 @@ for fold in range(NFOLD):
     valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
     #Checkpoint
     filepath=outdir+"weights/fold"+str(fold+1)+"_weights_epoch_{epoch:02d}_{val_loss:.2f}.hdf5"
-    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='max')
+    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
 
     history = net.fit(training_generator,
             validation_data=valid_generator,

@@ -27,8 +27,6 @@ parser = argparse.ArgumentParser(description = '''A LSTM regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
-parser.add_argument('--days_ahead', nargs=1, type= int,
-                  default=sys.stdin, help = 'Number of days ahead to fit')
 parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
 parser.add_argument('--train_days', nargs=1, type= int,
@@ -261,24 +259,24 @@ def build_net(input_shape):
 
     x_in = keras.Input(shape= input_shape)
     #Initial convolution
-    in_pass = L.Bidirectional(L.LSTM(16, return_sequences=True))(x_in)
+    lstm_out = L.LSTM(16, return_sequences=True)(x_in)
 
-    batch_out1 = L.BatchNormalization()(in_pass)
-    activation1 = L.Activation('relu')(batch_out1)
-
+    attention = L.Attention()([lstm_out,lstm_out])
     #Maxpool along sequence axis
-    maxpool1 = L.GlobalMaxPooling1D()(activation1)
+    maxpool1 = L.GlobalMaxPooling1D()(attention)
+
     preds = L.Dense(21, activation="relu", name="p2")(maxpool1 )
 
     model = M.Model(x_in, preds, name="CNN")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.01))
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adagrad(lr=0.001))
     return model
 
 
 #####MAIN#####
 args = parser.parse_args()
 #Seed
-seed_everything(0) #The answer it is
+np.random.seed(42)
+#Get data and params
 adjusted_data = pd.read_csv(args.adjusted_data[0],
                  parse_dates=['Date'],
                  encoding="ISO-8859-1",
@@ -339,7 +337,7 @@ for fold in range(NFOLD):
     valid_generator = DataGenerator(X[val_idx], y[val_idx],num_days[val_idx],train_days,forecast_days, BATCH_SIZE)
     #Checkpoint
     filepath=outdir+"weights/fold"+str(fold+1)+"_weights_epoch_{epoch:02d}_{val_loss:.2f}.hdf5"
-    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='max')
+    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
 
     history = net.fit(training_generator,
             validation_data=valid_generator,
