@@ -319,7 +319,7 @@ num_days = np.array(num_days)
 #Get net parameters
 net_params = read_net_params(args.param_combo[0])
 BATCH_SIZE=1
-EPOCHS=5
+EPOCHS=20
 filters = int(net_params['filters']) #32
 dilation_rate = int(net_params['dilation_rate'])#3
 kernel_size = int(net_params['kernel_size']) #5
