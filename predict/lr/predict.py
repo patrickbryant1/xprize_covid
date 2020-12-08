@@ -14,8 +14,11 @@ def load_model():
     coefs = []
     #Fetch intercepts and coefficients
     for i in range(1,6):
-        intercepts.append(np.load('./model/intercepts'+str(i)+'.npy', allow_pickle=True))
-        coefs.append(np.load('./model/coefs'+str(i)+'.npy', allow_pickle=True))
+        try:
+            intercepts.append(np.load('./model/intercepts'+str(i)+'.npy', allow_pickle=True))
+            coefs.append(np.load('./model/coefs'+str(i)+'.npy', allow_pickle=True))
+        except:
+            print('Missing fold',i)
 
     return np.array(intercepts), np.array(coefs)
 
@@ -87,7 +90,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                             "Region_index":int},
                      error_bad_lines=False)
     # Add RegionID column that combines CountryName and RegionName for easier manipulation of data
-
+    #Select only world area data
+    world_areas = {1:"Europe & Central Asia"}
+    adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[1]]
     adjusted_data['RegionName'] = adjusted_data['RegionName'].replace('0', np.nan)
     adjusted_data['GeoID'] = adjusted_data['CountryName'] + '__' + adjusted_data['RegionName'].astype(str)
     adjusted_data = adjusted_data.fillna(0)
@@ -116,7 +121,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     NB_LOOKBACK_DAYS=21
     # Make predictions for each country,region pair
     geo_pred_dfs = []
-    for g in ips_df.GeoID.unique():
+    for g in adjusted_data.GeoID.unique():
         print('Predicting for', g)
         #Get intervention plan for g
         ips_gdf = ips_df[ips_df.GeoID == g]
