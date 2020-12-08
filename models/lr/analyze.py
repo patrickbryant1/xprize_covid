@@ -35,6 +35,8 @@ def get_model_output(NFOLD,indir):
     coefs = []
     intercepts = []
     for f in range(1,NFOLD+1):
+        #if f==2:
+        #    continue
         corrs.append(np.load(outdir+'corrs'+str(f)+'.npy',allow_pickle=True))
         errors.append(np.load(outdir+'errors'+str(f)+'.npy',allow_pickle=True))
         coefs.append(np.load(outdir+'coefs'+str(f)+'.npy',allow_pickle=True))
@@ -82,17 +84,35 @@ def evaluate_model(corrs, errors, coefs, intercepts,outdir):
     'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
     'smoothed_cases', 'cumulative_smoothed_cases','rescaled_cases', 'cumulative_rescaled_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential']
 
-    repeat_feature_names= repeat_feature_names*21
-    all_features = repeat_feature_names+single_feature_names
+
     for day in range(coefs.shape[1]):
         coef_av = np.average(coefs[:,day,:],axis=0)
-        plt.bar(range(coefs.shape[2]),coef_av,color='b')
-        for ci in range(len(coef_av)):
-            plt.text(ci,coef_av[ci],all_features[ci])
+        #Normalize features
+        coef_av = coef_av/max(np.absolute(coef_av))
+        sq_features = []
+        ri = 0
+        for i in range(21):
+            sq_features.append(np.array(coef_av[ri:ri+len(repeat_feature_names)]))
+            ri+=len(repeat_feature_names)
+        sq_features =np.array(sq_features)
+        fig,ax = plt.subplots(figsize=(5,5))
+        plt.imshow(sq_features.T)
+        plt.xticks(np.arange(21),labels=np.arange(-21,0,1))
+        plt.yticks(np.arange(len(repeat_feature_names)),labels=repeat_feature_names)
         plt.title('Day '+str(day+1))
-        plt.xlabel('Feature')
-        plt.ylabel('Value')
-        plt.savefig(outdir+'coefficients/coefs'+str(day+1)+'.png',format='png')
+        plt.clim(-1,1)
+        plt.tight_layout()
+        plt.savefig(outdir+'coefficients/repeat_coefs'+str(day+1)+'.png',format='png')
+        plt.close()
+
+        fig,ax = plt.subplots(figsize=(2.5,4))
+        plt.imshow(np.array([coef_av[ri+2:]]).T)
+        plt.yticks(np.arange(len(single_feature_names)-2),labels=single_feature_names[2:])
+        plt.xticks([])
+        plt.clim(-1,1)
+        plt.colorbar()
+        plt.tight_layout()
+        plt.savefig(outdir+'coefficients/single_coefs'+str(day+1)+'.png',format='png')
         plt.close()
 
 

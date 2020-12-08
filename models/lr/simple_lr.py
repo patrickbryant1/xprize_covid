@@ -30,8 +30,8 @@ parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
-parser.add_argument('--region', nargs=1, type= int,
-                  default=sys.stdin, help = 'Region.')                  
+parser.add_argument('--world_area', nargs=1, type= int,
+                  default=sys.stdin, help = 'World area.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -193,19 +193,45 @@ def split_for_training(sel,train_days,forecast_days):
 
     return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
-def fit_model(X, y, NFOLD, outdir):
+def kfold(num_regions, NFOLD):
+    '''Generate a K-fold split using numpy (can't import sklearn everywhere)
+    '''
+    all_i = np.arange(num_regions)
+    train_split = []
+    val_split = []
+    fetched_i = []
+    #Check
+    check = np.zeros(num_regions)
+    #Go through ll folds
+    for f in range(NFOLD):
+        remaining_i = np.setdiff1d(all_i,np.array(fetched_i))
+        val_i = np.random.choice(remaining_i,int(num_regions/NFOLD),replace=False)
+        train_i = np.setdiff1d(all_i,val_i)
+        #Save
+        val_split.append(val_i)
+        train_split.append(train_i)
+        fetched_i.extend(val_i)
+        check[val_i]+=1
+
+    return np.array(train_split), np.array(val_split)
+
+def fit_model(X, y, NFOLD, regions, outdir):
     '''Fit the linear model
     '''
     #Fit the model
 
     #KFOLD
-    kf = KFold(n_splits=NFOLD)
-    #Perform K-fold CV
-    FOLD=0
-    for tr_idx, val_idx in kf.split(X):
+    NFOLD = 5
+    #kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
+    train_split, val_split = kfold(len(X),NFOLD)
 
-        FOLD+=1
-        X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
+    #Save errors
+    train_errors = []
+    valid_errors = []
+    for fold in range(NFOLD):
+        tr_idx, val_idx = train_split[fold], val_split[fold]
+        print('Regions',regions[val_idx])
+        X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx],X[val_idx], y[val_idx]
         corrs = []
         errors = []
         coefs = []
@@ -235,7 +261,7 @@ def fit_model(X, y, NFOLD, outdir):
             av_er = np.average(np.absolute(pred-true))
 
             R,p = pearsonr(pred,true)
-            print('Fold',FOLD,'Day',day,'Average error',av_er,'PCC',R)
+            print('Fold',fold+1,'Day',day,'Average error',av_er,'PCC',R)
             #Save
             corrs.append(R)
             errors.append(av_er)
@@ -244,10 +270,10 @@ def fit_model(X, y, NFOLD, outdir):
 
 
         #Save
-        np.save(outdir+'corrs'+str(FOLD)+'.npy',np.array(corrs))
-        np.save(outdir+'errors'+str(FOLD)+'.npy',np.array(errors))
-        np.save(outdir+'coefs'+str(FOLD)+'.npy',np.array(coefs))
-        np.save(outdir+'intercepts'+str(FOLD)+'.npy',np.array(intercepts))
+        np.save(outdir+'corrs'+str(fold+1)+'.npy',np.array(corrs))
+        np.save(outdir+'errors'+str(fold+1)+'.npy',np.array(errors))
+        np.save(outdir+'coefs'+str(fold+1)+'.npy',np.array(coefs))
+        np.save(outdir+'intercepts'+str(fold+1)+'.npy',np.array(intercepts))
 
     return None
 
@@ -268,15 +294,17 @@ adjusted_data = adjusted_data.fillna(0)
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
-region = args.region[0]
+world_area = args.world_area[0]
 outdir = args.outdir[0]
 
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-#Select only US data
-adjusted_data = adjusted_data[adjusted_data]
+#Select only world area data
+world_areas = {1:"Europe & Central Asia"}
+adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
+
 #Get data
 X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
-
+print('Number of regions',len(X))
 #Fit model
-corrs, errors, coefs, intercepts = fit_model(X,y,5,outdir)
+corrs, errors, coefs, intercepts = fit_model(X,y,5,regions,outdir)
