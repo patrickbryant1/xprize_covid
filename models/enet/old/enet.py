@@ -9,18 +9,17 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-from sklearn.linear_model import ElasticNet
-from sklearn import preprocessing
-from sklearn.model_selection import KFold
-from scipy.stats import pearsonr
-from scipy import stats
-import numpy as np
 
+
+from scipy.stats import pearsonr
+from sklearn.linear_model import ElasticNet
+from sklearn.model_selection import KFold
+import numpy as np
 
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''Elastic Net linear regression model.''')
+parser = argparse.ArgumentParser(description = '''Enet regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -30,8 +29,6 @@ parser.add_argument('--train_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
-parser.add_argument('--world_area', nargs=1, type= int,
-                  default=sys.stdin, help = 'World area.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -53,7 +50,6 @@ def normalize_data(sel):
     sel.at[index3,'gross_net_income']=2
 
     return sel
-
 
 def get_features(adjusted_data,train_days,forecast_days,outdir):
     '''Get the selected features
@@ -77,8 +73,8 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
                         'RegionName',
                         'smoothed_cases',
                         'cumulative_smoothed_cases',
-                        #'rescaled_cases',
-                        #'cumulative_rescaled_cases',
+                        'rescaled_cases',
+                        'cumulative_rescaled_cases',
                         'death_to_case_scale',
                         'case_death_delay',
                         'gross_net_income',
@@ -95,36 +91,31 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
 
     #Get features
     try:
-        X_high = np.load(outdir+'X_high.npy', allow_pickle=True)
-        y_high = np.load(outdir+'y_high.npy', allow_pickle=True)
-        X_low = np.load(outdir+'X_low.npy', allow_pickle=True)
-        y_low = np.load(outdir+'y_low.npy', allow_pickle=True)
-
+        X = np.load(outdir+'X.npy', allow_pickle=True)
+        y = np.load(outdir+'y.npy', allow_pickle=True)
+        populations = np.load(outdir+'populations.npy', allow_pickle=True)
+        regions = np.load(outdir+'regions.npy', allow_pickle=True)
 
     except:
         sel = adjusted_data[selected_features]
         #Normalize
         sel = normalize_data(sel)
-        X_high,y_high,X_low,y_low = split_for_training(sel,train_days,forecast_days)
-
+        X,y,populations,regions = split_for_training(sel,train_days,forecast_days)
         #Save
-        np.save(outdir+'X_high.npy',X_high)
-        np.save(outdir+'y_high.npy',y_high)
-        np.save(outdir+'X_low.npy',X_low)
-        np.save(outdir+'y_low.npy',y_low)
+        np.save(outdir+'X.npy',X)
+        np.save(outdir+'y.npy',y)
+        np.save(outdir+'populations.npy',populations)
+        np.save(outdir+'regions.npy',regions)
 
 
 
-
-    return X_high,y_high,X_low,y_low
+    return X,y,populations,regions
 
 def split_for_training(sel,train_days,forecast_days):
     '''Split the data for training and testing
     '''
-    X_high = [] #Input periods where input/target period reaches at least _high cases
-    y_high = [] #Targets
-    X_low = [] #Input periods where input/target period reaches at most _high cases
-    y_low = []
+    X = [] #Inputs
+    y = [] #Targets
 
     countries = sel['Country_index'].unique()
     populations = []
@@ -174,60 +165,29 @@ def split_for_training(sel,train_days,forecast_days):
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
              'mas', 'uai', 'ltowvs', 'ivr','population'})
 
-            #Normalize the cases by _high'000 population
-            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/_high000)
-            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/_high000)
+            #Normalize the cases by 100'000 population
+            country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
+            country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
-
+            X_region = []
+            y_region = []
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
-
-                #Get all features
-                xi = np.array(country_region_data.loc[di:di+train_days-1])
-                #Get change over the past train days
-                period_change = xi[-1,13]-xi[0,13]
-                xi = np.average(xi,axis=0)
-
-                #Normalize the cases with the input period mean
-                yi = np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])
-                yi = np.average(yi) #divide by average observed or total observe in period?
-
+                #Get change over the past 21 days
+                xi = np.array(country_region_data.loc[di:di+train_days-1]).flatten()
+                period_change = xi[-country_region_data.shape[1]:][13]-xi[:country_region_data.shape[1]][13]
                 #Add
-                #Check the highest daily cases in the period
+                X_region.append(np.append(xi,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                y_region.append(np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases']))
 
-                if np.average(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>5:
-                    X_high.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                    y_high.append(yi)
-                else:
-                    X_low.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                    y_low.append(yi)
+            #Save X and y for region
+            X.append(np.array(X_region))
+            y.append(np.array(y_region))
+            #Save population
+            populations.append(population)
 
-
-
-    return np.array(X_high), np.array(y_high),np.array(X_low), np.array(y_low)
-
-def kfold(num_regions, NFOLD):
-    '''Generate a K-fold split using numpy (can't import sklearn everywhere)
-    '''
-    all_i = np.arange(num_regions)
-    train_split = []
-    val_split = []
-    fetched_i = []
-    #Check
-    check = np.zeros(num_regions)
-    #Go through ll folds
-    for f in range(NFOLD):
-        remaining_i = np.setdiff1d(all_i,np.array(fetched_i))
-        val_i = np.random.choice(remaining_i,int(num_regions/NFOLD),replace=False)
-        train_i = np.setdiff1d(all_i,val_i)
-        #Save
-        val_split.append(val_i)
-        train_split.append(train_i)
-        fetched_i.extend(val_i)
-        check[val_i]+=1
-
-    return np.array(train_split), np.array(val_split)
+    return np.array(X), np.array(y), np.array(populations), np.array(regions)
 
 def fit_model(X, y, NFOLD, outdir):
     '''Fit the linear model
@@ -235,51 +195,58 @@ def fit_model(X, y, NFOLD, outdir):
     #Fit the model
 
     #KFOLD
-    NFOLD = 5
-    #kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
-    train_split, val_split = kfold(len(X),NFOLD)
+    kf = KFold(n_splits=NFOLD, random_state=42,shuffle=True)
+    #Perform K-fold CV
+    FOLD=0
+    for tr_idx, val_idx in kf.split(X):
 
-    #Save errors
-    train_errors = []
-    valid_errors = []
-    for fold in range(NFOLD):
-        tr_idx, val_idx = train_split[fold], val_split[fold]
-        print('Number of valid points',len(val_idx))
-        #Extract train and valid data
-        X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx],X[val_idx], y[val_idx]
+        FOLD+=1
+        X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx], X[val_idx], y[val_idx]
         corrs = []
         errors = []
         coefs = []
         intercepts = []
+        #Extract train and valid data by country region
+        X_train_extracted = X_train[0]
+        y_train_extracted = y_train[0]
 
-        reg = ElasticNet().fit(X_train, y_train)
-        pred = reg.predict(X_valid)
+        for cr in range(1,len(X_train)):
+            X_train_extracted = np.append(X_train_extracted,X_train[cr],axis=0)
+            y_train_extracted = np.append(y_train_extracted,y_train[cr],axis=0)
 
-        #Ensure non-negative
-        pred[pred<0]=0
-        true = y_valid
-        av_er = np.average(np.absolute(pred-true))
+        X_valid_extracted = X_valid[0]
+        y_valid_extracted = y_valid[0]
+        for cr in range(1,len(X_valid)):
+            X_valid_extracted = np.append(X_valid_extracted,X_valid[cr],axis=0)
+            y_valid_extracted = np.append(y_valid_extracted,y_valid[cr],axis=0)
 
-        R,p = pearsonr(pred,true)
-        print('Fold',fold+1,'Average error',av_er,'PCC',R)
-        plt.scatter(true,pred,s=1)
-        plt.xlabel('True')
-        plt.ylabel('Pred')
-        plt.show()
+        #Fit each day
+        for day in range(y_train[0].shape[1]):
+            reg = ElasticNet(tol=0.001,warm_start=True, selection='random').fit(X_train_extracted, y_train_extracted[:,day])
+            pred = reg.predict(X_valid_extracted)
+
+            #Ensure non-negative
+            pred[pred<0]=0
+            true = y_valid_extracted[:,day]
+            av_er = np.average(np.absolute(pred-true))
+
+            R,p = pearsonr(pred,true)
+            print('Fold',FOLD,'Day',day,'Average error',av_er,'PCC',R)
+            #Save
+            corrs.append(R)
+            errors.append(av_er)
+            coefs.append(reg.coef_)
+            intercepts.append(reg.intercept_)
+
+
         #Save
-        corrs.append(R)
-        errors.append(av_er)
-        coefs.append(reg.coef_)
-        intercepts.append(reg.intercept_)
-
-
-        #Save
-        np.save(outdir+'corrs'+str(fold+1)+'.npy',np.array(corrs))
-        np.save(outdir+'errors'+str(fold+1)+'.npy',np.array(errors))
-        np.save(outdir+'coefs'+str(fold+1)+'.npy',np.array(coefs))
-        np.save(outdir+'intercepts'+str(fold+1)+'.npy',np.array(intercepts))
+        np.save(outdir+'corrs'+str(FOLD)+'.npy',np.array(corrs))
+        np.save(outdir+'errors'+str(FOLD)+'.npy',np.array(errors))
+        np.save(outdir+'coefs'+str(FOLD)+'.npy',np.array(coefs))
+        np.save(outdir+'intercepts'+str(FOLD)+'.npy',np.array(intercepts))
 
     return None
+
 
 
 #####MAIN#####
@@ -295,23 +262,17 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                         "Region_index":int},
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
+
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
-world_area = args.world_area[0]
 outdir = args.outdir[0]
-
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-#Select only world area data
-world_areas = {1:"Europe & Central Asia"}
-#adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
-#Get data
-X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,outdir)
 
-print('Number periods in high cases selection',len(y_high))
-print('Number periods in low cases selection',len(y_low))
+
+#Get data
+X,y,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
 
 #Fit model
-fit_model(X_high,y_high,5,outdir+'high/')
-fit_model(X_low,y_low,5,outdir+'low/')
+corrs, errors, coefs, intercepts = fit_model(X,y,5,outdir)
