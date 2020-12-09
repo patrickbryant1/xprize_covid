@@ -188,8 +188,8 @@ def split_for_training(sel,train_days,forecast_days):
                 #Get all features
                 xi = np.array(country_region_data.loc[di:di+train_days-1])
                 #Replace 0 with 0.1
-                xi[:,12][xi[:,12]<=0]=1
-                xi[:,13][xi[:,13]<=0]=1
+                xi[:,12][xi[:,12]<=0]=0.1
+                xi[:,13][xi[:,13]<=0]=0.1
                 #Normalize the cases with the period medians
                 sm_norm = max(np.median(xi[:,12]),1)
                 sm_cum_norm = max(np.median(xi[:,13]),1)
@@ -318,8 +318,8 @@ world_areas = {1:"Europe & Central Asia"}
 #Get data
 X_high,y_high,X_low,y_low,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
 
-print('Number periods in above _high cases selection',len(y_high))
-print('Number periods in below _high cases selection',len(y_low))
+print('Number periods in high cases selection',len(y_high))
+print('Number periods in low cases selection',len(y_low))
 
 #Fit model
 fit_model(X_high,y_high,5,outdir+'high/')

@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+import matplotlib.pyplot as plt
 import pdb
 
 def load_model():
@@ -12,19 +13,19 @@ def load_model():
     '''
     low_intercepts = []
     low_coefs = []
-    above100_intercepts = []
-    above100_coefs = []
+    high_intercepts = []
+    high_coefs = []
     #Fetch intercepts and coefficients
     for i in range(1,6):
         try:
             low_intercepts.append(np.load('./model/log/low/intercepts'+str(i)+'.npy', allow_pickle=True))
             low_coefs.append(np.load('./model/log/low/coefs'+str(i)+'.npy', allow_pickle=True))
-            above100_intercepts.append(np.load('./model/log/above100/intercepts'+str(i)+'.npy', allow_pickle=True))
-            above100_coefs.append(np.load('./model/log/above100/coefs'+str(i)+'.npy', allow_pickle=True))
+            high_intercepts.append(np.load('./model/log/high/intercepts'+str(i)+'.npy', allow_pickle=True))
+            high_coefs.append(np.load('./model/log/high/coefs'+str(i)+'.npy', allow_pickle=True))
         except:
             print('Missing fold',i)
 
-    return np.array(low_intercepts), np.array(low_coefs),np.array(above100_intercepts), np.array(above100_coefs)
+    return np.array(low_intercepts), np.array(low_coefs),np.array(high_intercepts), np.array(high_coefs)
 
 def predict(start_date, end_date, path_to_ips_file, output_file_path):
     """
@@ -81,7 +82,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     ips_df = hist_ips_df[(hist_ips_df.Date >= start_date) & (hist_ips_df.Date <= end_date)]
 
     #2. Load the model
-    low_intercepts, low_coefs, above100_intercepts, above100_coefs = load_model()
+    low_intercepts, low_coefs, high_intercepts, high_coefs = load_model()
 
     #3. Load the additional data
     data_path = '../../data/adjusted_data.csv'
@@ -155,6 +156,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         ivr = adjusted_data_gdf.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
         population = adjusted_data_gdf.loc[0,'population']
 
+        #Normalize cases to per 100'000 pop
+        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
+        adjusted_data_gdf['cumulative_smoothed_cases']=adjusted_data_gdf['cumulative_smoothed_cases']/(population/100000)
 
         #Get historical NPIs
         historical_npis_g = np.array(adjusted_data_gdf[NPI_COLS])
@@ -177,8 +181,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             sm_cum_norm = max(np.median(X_additional[:,1]),1)
 
             #Replace 0 with 0.1
-            X_additional[:,0][X_additional[:,0]<=0]=1
-            X_additional[:,1][X_additional[:,1]<=0]=1
+            X_additional[:,0][X_additional[:,0]<=0]=0.1
+            X_additional[:,1][X_additional[:,1]<=0]=0.1
             X_additional[:,0] = np.log10(X_additional[:,0]/sm_norm)
             X_additional[:,1] = np.log10(X_additional[:,1]/sm_cum_norm)
 
@@ -192,15 +196,15 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population])
 
             # Make the prediction
-            if max(adjusted_additional_g[-NB_LOOKBACK_DAYS:,0])>100:
-                pred = np.dot(above100_coefs,X)+above100_intercepts
+            if np.average(adjusted_additional_g[-NB_LOOKBACK_DAYS:,0])>0.6:
+                pred = np.dot(high_coefs,X)+high_intercepts
             else:
-                pred = np.dot(low_coefs,X)+low_intercepts
-                pdb.set_trace()
+                pred =  np.repeat(np.array([X_additional[:,0]]),5,axis=0)
+
             #Rescale the predictions to the median
             pred = np.power(10,pred)*sm_norm
             #Do not allow predicting more cases than 20 % of population
-            pred[pred>(0.2*population)]=0.2*population
+            pred[pred>(0.2*population/100000)]=0.2*population/100000
             std_pred = np.std(pred,axis=0)
             pred = np.average(pred,axis=0)
 
@@ -236,12 +240,17 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
         #Check
         adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
-        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']#/(population/100000)
+        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
         geo_pred_df['population']=population
-        pdb.set_trace()
+        #Vis
+        # plt.plot(np.arange(24),geo_pred_df['PredictedDailyNewCases'],color='grey')
+        # plt.bar(np.arange(24),geo_pred_df['smoothed_cases'],color='g,alpha=0.5)
+        # plt.title(g)
+        # plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
+
 
     #4. Obtain output
     # Combine all predictions into a single dataframe - remember to only select the requied columns later
