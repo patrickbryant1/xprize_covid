@@ -314,7 +314,7 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Select only world area data
 world_areas = {1:"Europe & Central Asia"}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
-
+pdb.set_trace()
 #Get data
 X_high,y_high,X_low,y_low,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
 

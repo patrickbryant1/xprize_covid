@@ -196,7 +196,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population])
 
             # Make the prediction
-            if np.average(adjusted_additional_g[-NB_LOOKBACK_DAYS:,0])>0.6:
+            if np.average(adjusted_additional_g[-NB_LOOKBACK_DAYS:,0])>5:
                 pred = np.dot(high_coefs,X)+high_intercepts
             else:
                 pred =  np.repeat(np.array([X_additional[:,0]]),5,axis=0)
@@ -244,10 +244,11 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
         geo_pred_df['population']=population
         #Vis
-        # plt.plot(np.arange(24),geo_pred_df['PredictedDailyNewCases'],color='grey')
-        # plt.bar(np.arange(24),geo_pred_df['smoothed_cases'],color='g,alpha=0.5)
-        # plt.title(g)
-        # plt.close()
+        plt.plot(np.arange(24),geo_pred_df['PredictedDailyNewCases'],color='grey')
+        plt.bar(np.arange(24),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
+        plt.title(g)
+        plt.savefig('./plots/'+g+'.png',format='png')
+        plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
 
