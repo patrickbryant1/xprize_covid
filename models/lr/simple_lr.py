@@ -206,7 +206,7 @@ def split_for_training(sel,train_days,forecast_days):
 
                 #Add
                 #Check the highest daily cases in the period
-                if np.average(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>0.6:
+                if np.average(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>5:
                     X_high.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                     y_high.append(yi)
                 else:
