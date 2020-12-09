@@ -188,7 +188,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population])
 
             # Make the prediction
-            if max(adjusted_additional_g[-NB_LOOKBACK_DAYS:])>100:
+            if max(adjusted_additional_g[-NB_LOOKBACK_DAYS:][:,0])>100:
                 pred = np.dot(above100_coefs,X)+above100_intercepts
             else:
                 pred = np.dot(low_coefs,X)+low_intercepts
