@@ -190,7 +190,7 @@ def split_for_training(sel,train_days,forecast_days):
                 #Normalize the cases with the period medians
                 sm_norm = max(np.median(xi[:,12]),1)
                 sm_cum_norm = max(np.median(xi[:,13]),1)
-                #Replace 0 with min(cases,1)
+                #Replace 0 with 0.1
                 xi[:,12][xi[:,12]<=0]=0.1
                 xi[:,13][xi[:,13]<=0]=0.1
 

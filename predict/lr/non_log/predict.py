@@ -17,10 +17,10 @@ def load_model():
     #Fetch intercepts and coefficients
     for i in range(1,6):
         try:
-            low_intercepts.append(np.load('./model/log/low/intercepts'+str(i)+'.npy', allow_pickle=True))
-            low_coefs.append(np.load('./model/log/low/coefs'+str(i)+'.npy', allow_pickle=True))
-            above100_intercepts.append(np.load('./model/log/above100/intercepts'+str(i)+'.npy', allow_pickle=True))
-            above100_coefs.append(np.load('./model/log/above100/coefs'+str(i)+'.npy', allow_pickle=True))
+            low_intercepts.append(np.load('../model/non_log/low/intercepts'+str(i)+'.npy', allow_pickle=True))
+            low_coefs.append(np.load('../model/non_log/low/coefs'+str(i)+'.npy', allow_pickle=True))
+            above100_intercepts.append(np.load('../model/non_log/above100/intercepts'+str(i)+'.npy', allow_pickle=True))
+            above100_coefs.append(np.load('../model/non_log/above100/coefs'+str(i)+'.npy', allow_pickle=True))
         except:
             print('Missing fold',i)
 
@@ -82,9 +82,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
     #2. Load the model
     low_intercepts, low_coefs, above100_intercepts, above100_coefs = load_model()
-
+    pdb.set_trace()
     #3. Load the additional data
-    data_path = '../../data/adjusted_data.csv'
+    data_path = '../../../data/adjusted_data.csv'
     adjusted_data = pd.read_csv(data_path,
                      parse_dates=['Date'],
                      encoding="ISO-8859-1",
@@ -172,9 +172,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #Normalize the cases with the period medians
             sm_norm = max(np.median(X_additional[:,0]),1)
             sm_cum_norm = max(np.median(X_additional[:,1]),1)
-            #Replace 0 with 0.1
-            X_additional[:,0][X_additional[:,0]<=0]=0.1
-            X_additional[:,1][X_additional[:,1]<=0]=0.1
             X_additional[:,0] = X_additional[:,0]/sm_norm
             X_additional[:,1] = X_additional[:,1]/sm_cum_norm
 
@@ -188,11 +185,13 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population])
 
             # Make the prediction
-            if max(adjusted_additional_g[-NB_LOOKBACK_DAYS:])>100:
+
+            if max(adjusted_additional_g[-NB_LOOKBACK_DAYS:][:,0])>100:
                 pred = np.dot(above100_coefs,X)+above100_intercepts
             else:
                 pred = np.dot(low_coefs,X)+low_intercepts
-
+            # Do not allow predicting negative cases
+            pred[pred<0]=0
             #Rescale the predictions to the median
             pred = pred*sm_norm
             #Do not allow predicting more cases than 20 % of population
