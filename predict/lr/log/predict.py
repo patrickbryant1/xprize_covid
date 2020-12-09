@@ -18,10 +18,10 @@ def load_model():
     #Fetch intercepts and coefficients
     for i in range(1,6):
         try:
-            low_intercepts.append(np.load('./model/average/low/intercepts'+str(i)+'.npy', allow_pickle=True))
-            low_coefs.append(np.load('./model/average/low/coefs'+str(i)+'.npy', allow_pickle=True))
-            high_intercepts.append(np.load('./model/average/high/intercepts'+str(i)+'.npy', allow_pickle=True))
-            high_coefs.append(np.load('./model/average/high/coefs'+str(i)+'.npy', allow_pickle=True))
+            low_intercepts.append(np.load('./model/log/low/intercepts'+str(i)+'.npy', allow_pickle=True))
+            low_coefs.append(np.load('./model/log/low/coefs'+str(i)+'.npy', allow_pickle=True))
+            high_intercepts.append(np.load('./model/log/high/intercepts'+str(i)+'.npy', allow_pickle=True))
+            high_coefs.append(np.load('./model/log/high/coefs'+str(i)+'.npy', allow_pickle=True))
         except:
             print('Missing fold',i)
 

@@ -99,8 +99,7 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
         y_high = np.load(outdir+'y_high.npy', allow_pickle=True)
         X_low = np.load(outdir+'X_low.npy', allow_pickle=True)
         y_low = np.load(outdir+'y_low.npy', allow_pickle=True)
-        populations = np.load(outdir+'populations.npy', allow_pickle=True)
-        regions = np.load(outdir+'regions.npy', allow_pickle=True)
+
 
     except:
         sel = adjusted_data[selected_features]
@@ -113,8 +112,7 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
         np.save(outdir+'y_high.npy',y_high)
         np.save(outdir+'X_low.npy',X_low)
         np.save(outdir+'y_low.npy',y_low)
-        np.save(outdir+'populations.npy',populations)
-        np.save(outdir+'regions.npy',regions)
+
 
 
 
@@ -253,23 +251,26 @@ def fit_model(X, y, NFOLD, outdir):
         errors = []
         coefs = []
         intercepts = []
-        #Fit each day
-        for day in range(y_train.shape[1]):
-            reg = LinearRegression().fit(X_train, y_train[:,day])
-            pred = reg.predict(X_valid)
 
-            #Ensure non-negative
-            pred[pred<0]=0
-            true = y_valid[:,day]
-            av_er = np.average(np.absolute(pred-true))
+        reg = LinearRegression().fit(X_train, y_train)
+        pred = reg.predict(X_valid)
 
-            R,p = pearsonr(pred,true)
-            print('Fold',fold+1,'Day',day,'Average error',av_er,'PCC',R)
-            #Save
-            corrs.append(R)
-            errors.append(av_er)
-            coefs.append(reg.coef_)
-            intercepts.append(reg.intercept_)
+        #Ensure non-negative
+        pred[pred<0]=0
+        true = y_valid
+        av_er = np.average(np.absolute(pred-true))
+
+        R,p = pearsonr(pred,true)
+        print('Fold',fold+1,'Average error',av_er,'PCC',R)
+        plt.scatter(true,pred,s=1)
+        plt.xlabel('True')
+        plt.ylabel('Pred')
+        plt.show()
+        #Save
+        corrs.append(R)
+        errors.append(av_er)
+        coefs.append(reg.coef_)
+        intercepts.append(reg.intercept_)
 
 
         #Save
@@ -307,7 +308,7 @@ world_areas = {1:"Europe & Central Asia"}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 #Get data
 X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,outdir)
-pdb.set_trace()
+
 print('Number periods in high cases selection',len(y_high))
 print('Number periods in low cases selection',len(y_low))
 
