@@ -10,17 +10,21 @@ import pdb
 def load_model():
     '''Load the model
     '''
-    intercepts = []
-    coefs = []
+    low_intercepts = []
+    low_coefs = []
+    above100_intercepts = []
+    above100_coefs = []
     #Fetch intercepts and coefficients
     for i in range(1,6):
         try:
-            intercepts.append(np.load('./model/intercepts'+str(i)+'.npy', allow_pickle=True))
-            coefs.append(np.load('./model/coefs'+str(i)+'.npy', allow_pickle=True))
+            low_intercepts.append(np.load('./model/low/intercepts'+str(i)+'.npy', allow_pickle=True))
+            low_coefs.append(np.load('./model/low/coefs'+str(i)+'.npy', allow_pickle=True))
+            above100_intercepts.append(np.load('./model/above100/intercepts'+str(i)+'.npy', allow_pickle=True))
+            above100_coefs.append(np.load('./model/above100/coefs'+str(i)+'.npy', allow_pickle=True))
         except:
             print('Missing fold',i)
 
-    return np.array(intercepts), np.array(coefs)
+    return np.array(low_intercepts), np.array(low_coefs),np.array(above100_intercepts), np.array(above100_coefs)
 
 def predict(start_date, end_date, path_to_ips_file, output_file_path):
     """
@@ -77,7 +81,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     ips_df = hist_ips_df[(hist_ips_df.Date >= start_date) & (hist_ips_df.Date <= end_date)]
     ips_df.GeoID.unique()
     #2. Load the model
-    intercepts, coefs = load_model()
+    low_intercepts, low_coefs, above100_intercepts, above100_coefs = load_model()
 
     #3. Load the additional data
     data_path = '../../data/adjusted_data.csv'
@@ -100,18 +104,14 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #4. Run the predictor
     additional_features = ['smoothed_cases',
                             'cumulative_smoothed_cases',
-                            'rescaled_cases',
-                            'cumulative_rescaled_cases',
                             'monthly_temperature',
                             'retail_and_recreation',
                             'grocery_and_pharmacy',
                             'parks',
                             'transit_stations',
                             'workplaces',
-                            'residential', #These 11 features are used as daily features
-                            'Country_index', #These 13 are only used once
-                            'Region_index',
-                            'death_to_case_scale',
+                            'residential', #These 9 features are used as daily features
+                            'death_to_case_scale', #The rest are only used once
                             'case_death_delay',
                             'gross_net_income',
                             'population_density',
@@ -143,8 +143,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             pdb.set_trace()
             continue
         #Get no-repeat features
-        country_index = adjusted_data_gdf.loc[0,'Country_index']
-        region_index = adjusted_data_gdf.loc[0,'Region_index']
         death_to_case_scale = adjusted_data_gdf.loc[0,'death_to_case_scale']
         case_death_delay = adjusted_data_gdf.loc[0,'case_death_delay']
         gross_net_income = adjusted_data_gdf.loc[0,'gross_net_income']
@@ -156,16 +154,12 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         ltowvs = adjusted_data_gdf.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
         ivr = adjusted_data_gdf.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
         population = adjusted_data_gdf.loc[0,'population']
-        #Normalize the cases by 100'000 population - remember to scale back for predictions as well
-        adjusted_data_gdf['rescaled_cases']=adjusted_data_gdf['rescaled_cases']/(population/100000)
-        adjusted_data_gdf['cumulative_rescaled_cases']=adjusted_data_gdf['cumulative_rescaled_cases']/(population/100000)
-        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
-        adjusted_data_gdf['cumulative_smoothed_cases']=adjusted_data_gdf['cumulative_smoothed_cases']/(population/100000)
+
 
         #Get historical NPIs
         historical_npis_g = np.array(adjusted_data_gdf[NPI_COLS])
         #Get other daily features
-        adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:11]])
+        adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:9]])
         #Get future NPIs
         future_npis = np.array(ips_gdf[NPI_COLS])
 
@@ -175,22 +169,32 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         while current_date <= end_date:
             # Prepare data - make check so that enough previous data exists
             X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:] #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
+            #Normalize the cases with the period medians
+            sm_norm = max(np.median(X_additional[:,0]),1)
+            sm_cum_norm = max(np.median(X_additional[:,1]),1)
+            X_additional[:,0] = X_additional[:,0]/sm_norm
+            X_additional[:,1] = X_additional[:,1]/sm_cum_norm
+
             #Get change over the past NB_LOOKBACK_DAYS
             period_change = X_additional[-1,1]-X_additional[0,1]
-
             #Get NPIS
             X_npis = historical_npis_g[-NB_LOOKBACK_DAYS:]
             X = np.concatenate([X_additional.flatten(),
                                 X_npis.flatten()])
             #Add
-            X = np.append(X,[country_index,region_index,death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population])
+            X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population])
 
-            # Make the prediction (reshape so that sklearn is happy)
-            pred = np.dot(coefs,X)+intercepts
+            # Make the prediction
+            if max(X_additional[:,0])>100:
+                pred = np.dot(above100_coefs,X)+above100_intercepts
+            else:
+                pred = np.dot(low_coefs,X)+low_intercepts
             # Do not allow predicting negative cases
             pred[pred<0]=0
-            #Do not allow predicting more cases than 80 % of population
-            pred[pred>(0.8*population/100000)]=0.8*population/100000
+            #Rescale the predictions to the median
+            pred = pred*sm_norm
+            #Do not allow predicting more cases than 20 % of population
+            pred[pred>(0.2*population)]=0.2*population
             std_pred = np.std(pred,axis=0)
             pred = np.average(pred,axis=0)
 
@@ -222,17 +226,17 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
         # Create geo_pred_df with pred column
         geo_pred_df = ips_gdf[ID_COLS].copy()
-        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)]) #*(population/100000)
+        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)])/(population/100000)
 
         #Check
         adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
-        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases'] #*(population/100000)
+        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
         geo_pred_df['population']=population
 
         #Save
         geo_pred_dfs.append(geo_pred_df)
-
+        pdb.set_trace()
 
     #4. Obtain output
     # Combine all predictions into a single dataframe - remember to only select the requied columns later

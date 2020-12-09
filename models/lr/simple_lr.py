@@ -190,13 +190,18 @@ def split_for_training(sel,train_days,forecast_days):
                 #Normalize the cases with the period medians
                 sm_norm = max(np.median(xi[:,12]),1)
                 sm_cum_norm = max(np.median(xi[:,13]),1)
-                xi[:,12]=xi[:,12]/sm_norm
-                xi[:,13]=xi[:,13]/sm_cum_norm
+                #Replace 0 with min(cases,1)
+                xi[:,12][xi[:,12]<=0]=0.1
+                xi[:,13][xi[:,13]<=0]=0.1
+
+                xi[:,12]=np.log10(xi[:,12]/sm_norm)
+                xi[:,13]=np.log10(xi[:,13]/sm_cum_norm)
                 #Get change over the past train days
                 period_change = xi[-1,13]-xi[0,13]
                 #Get targets
                 yi = np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])
-                yi = yi/sm_norm
+                yi[yi<=0]=0.1
+                yi = np.log10(yi/sm_norm)
 
                 #Add
                 #Check the highest daily cases in the period
@@ -280,7 +285,7 @@ def fit_model(X, y, NFOLD, outdir):
         np.save(outdir+'errors'+str(fold+1)+'.npy',np.array(errors))
         np.save(outdir+'coefs'+str(fold+1)+'.npy',np.array(coefs))
         np.save(outdir+'intercepts'+str(fold+1)+'.npy',np.array(intercepts))
-    pdb.set_trace()
+
     return None
 
 
@@ -311,6 +316,7 @@ world_areas = {1:"Europe & Central Asia"}
 
 #Get data
 X100,y100,X_low,y_low,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
+
 print('Number periods in above 100 cases selection',len(y100))
 print('Number periods in below 100 cases selection',len(y_low))
 #Fit model
