@@ -168,15 +168,19 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         days_ahead = 0
         while current_date <= end_date:
             # Prepare data - make check so that enough previous data exists
-            X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:] #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
+            #The np array has to be copied!!!!!!!!
+            #Otherwise there is a direct link to the adjusted_additional_g which means
+            #that both arrays are updated simultaneously
+            X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:].copy() #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
             #Normalize the cases with the period medians
             sm_norm = max(np.median(X_additional[:,0]),1)
             sm_cum_norm = max(np.median(X_additional[:,1]),1)
+
             #Replace 0 with 0.1
-            X_additional[:,0][X_additional[:,0]<=0]=0.1
-            X_additional[:,1][X_additional[:,1]<=0]=0.1
-            X_additional[:,0] = X_additional[:,0]/sm_norm
-            X_additional[:,1] = X_additional[:,1]/sm_cum_norm
+            X_additional[:,0][X_additional[:,0]<=0]=1
+            X_additional[:,1][X_additional[:,1]<=0]=1
+            X_additional[:,0] = np.log10(X_additional[:,0]/sm_norm)
+            X_additional[:,1] = np.log10(X_additional[:,1]/sm_cum_norm)
 
             #Get change over the past NB_LOOKBACK_DAYS
             period_change = X_additional[-1,1]-X_additional[0,1]
@@ -188,13 +192,13 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population])
 
             # Make the prediction
-            if max(adjusted_additional_g[-NB_LOOKBACK_DAYS:][:,0])>100:
+            if max(adjusted_additional_g[-NB_LOOKBACK_DAYS:,0])>100:
                 pred = np.dot(above100_coefs,X)+above100_intercepts
             else:
                 pred = np.dot(low_coefs,X)+low_intercepts
-
+                pdb.set_trace()
             #Rescale the predictions to the median
-            pred = pred*sm_norm
+            pred = np.power(10,pred)*sm_norm
             #Do not allow predicting more cases than 20 % of population
             pred[pred>(0.2*population)]=0.2*population
             std_pred = np.std(pred,axis=0)
@@ -212,15 +216,15 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
             # Append the prediction and npi's for the next x predicted days
             # in order to rollout predictions for further days.
-            future_additional = np.repeat(np.array([adjusted_additional_g[-1,:]]),len(pred),axis=0)
+            future_additional = np.repeat(np.array([adjusted_additional_g[-1,:].copy()]),len(pred),axis=0)
             future_additional[:,0]=pred #add predicted cases
             future_additional[:,1]=np.cumsum(pred) #add predicted cumulative cases
             #!!!!!!!!!!!!!!!
             #Look up monthly temperature for predicted dates: 'monthly_temperature'
             #!!!!!!!!!!!!!!!
+
             adjusted_additional_g = np.append(adjusted_additional_g, future_additional,axis=0)
             historical_npis_g = np.append(historical_npis_g, future_npis[days_ahead:days_ahead + 21], axis=0)
-
             # Move to next period
             current_date = current_date + np.timedelta64(21, 'D')
             days_ahead += 21
@@ -228,14 +232,14 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
         # Create geo_pred_df with pred column
         geo_pred_df = ips_gdf[ID_COLS].copy()
-        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)])/(population/100000)
+        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)])#/(population/100000)
 
         #Check
         adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
-        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
+        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']#/(population/100000)
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
         geo_pred_df['population']=population
-
+        pdb.set_trace()
         #Save
         geo_pred_dfs.append(geo_pred_df)
 

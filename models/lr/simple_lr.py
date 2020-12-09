@@ -95,8 +95,8 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
 
     #Get features
     try:
-        X100 = np.load(outdir+'X100.npy', allow_pickle=True)
-        y100 = np.load(outdir+'y100.npy', allow_pickle=True)
+        X_high = np.load(outdir+'X_high.npy', allow_pickle=True)
+        y_high = np.load(outdir+'y_high.npy', allow_pickle=True)
         X_low = np.load(outdir+'X_low.npy', allow_pickle=True)
         y_low = np.load(outdir+'y_low.npy', allow_pickle=True)
         populations = np.load(outdir+'populations.npy', allow_pickle=True)
@@ -106,11 +106,11 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
         sel = adjusted_data[selected_features]
         #Normalize
         sel = normalize_data(sel)
-        X100,y100,X_low,y_low,populations,regions = split_for_training(sel,train_days,forecast_days)
+        X_high,y_high,X_low,y_low,populations,regions = split_for_training(sel,train_days,forecast_days)
 
         #Save
-        np.save(outdir+'X100.npy',X100)
-        np.save(outdir+'y100.npy',y100)
+        np.save(outdir+'X_high.npy',X_high)
+        np.save(outdir+'y_high.npy',y_high)
         np.save(outdir+'X_low.npy',X_low)
         np.save(outdir+'y_low.npy',y_low)
         np.save(outdir+'populations.npy',populations)
@@ -118,14 +118,14 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
 
 
 
-    return X100,y100,X_low,y_low,populations,regions
+    return X_high,y_high,X_low,y_low,populations,regions
 
 def split_for_training(sel,train_days,forecast_days):
     '''Split the data for training and testing
     '''
-    X100 = [] #Input periods where input/target period reaches at least 100 cases
-    y100 = [] #Targets
-    X_low = [] #Input periods where input/target period reaches at most 100 cases
+    X_high = [] #Input periods where input/target period reaches at least _high cases
+    y_high = [] #Targets
+    X_low = [] #Input periods where input/target period reaches at most _high cases
     y_low = []
 
     countries = sel['Country_index'].unique()
@@ -176,23 +176,24 @@ def split_for_training(sel,train_days,forecast_days):
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
              'mas', 'uai', 'ltowvs', 'ivr','population'})
 
-            #Normalize the cases by 100'000 population
-            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/100000)
-            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/100000)
-            #country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
-            #country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
+            #Normalize the cases by _high'000 population
+            #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/_high000)
+            #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/_high000)
+            country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
+            country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
 
             for di in range(len(country_region_data)-(train_days+forecast_days-1)):
 
                 #Get all features
                 xi = np.array(country_region_data.loc[di:di+train_days-1])
+                #Replace 0 with 0.1
+                xi[:,12][xi[:,12]<=0]=1
+                xi[:,13][xi[:,13]<=0]=1
                 #Normalize the cases with the period medians
                 sm_norm = max(np.median(xi[:,12]),1)
                 sm_cum_norm = max(np.median(xi[:,13]),1)
-                #Replace 0 with 0.1
-                xi[:,12][xi[:,12]<=0]=0.1
-                xi[:,13][xi[:,13]<=0]=0.1
+                #I need to set all low case changes to 0. Only if the cases change more than _high I should take it into account.
 
                 xi[:,12]=np.log10(xi[:,12]/sm_norm)
                 xi[:,13]=np.log10(xi[:,13]/sm_cum_norm)
@@ -205,9 +206,9 @@ def split_for_training(sel,train_days,forecast_days):
 
                 #Add
                 #Check the highest daily cases in the period
-                if max(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>100:
-                    X100.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                    y100.append(yi)
+                if np.average(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>0.6:
+                    X_high.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                    y_high.append(yi)
                 else:
                     X_low.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                     y_low.append(yi)
@@ -215,7 +216,7 @@ def split_for_training(sel,train_days,forecast_days):
             #Save population
             populations.append(population)
 
-    return np.array(X100), np.array(y100),np.array(X_low), np.array(y_low), np.array(populations), np.array(regions)
+    return np.array(X_high), np.array(y_high),np.array(X_low), np.array(y_low), np.array(populations), np.array(regions)
 
 def kfold(num_regions, NFOLD):
     '''Generate a K-fold split using numpy (can't import sklearn everywhere)
@@ -315,10 +316,11 @@ world_areas = {1:"Europe & Central Asia"}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 
 #Get data
-X100,y100,X_low,y_low,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
+X_high,y_high,X_low,y_low,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
 
-print('Number periods in above 100 cases selection',len(y100))
-print('Number periods in below 100 cases selection',len(y_low))
+print('Number periods in above _high cases selection',len(y_high))
+print('Number periods in below _high cases selection',len(y_low))
+
 #Fit model
-fit_model(X100,y100,5,outdir+'above100/')
+fit_model(X_high,y_high,5,outdir+'high/')
 fit_model(X_low,y_low,5,outdir+'low/')
