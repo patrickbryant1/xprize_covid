@@ -106,7 +106,7 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
         sel = adjusted_data[selected_features]
         #Normalize
         sel = normalize_data(sel)
-        X_high,y_high,X_low,y_low,populations,regions = split_for_training(sel,train_days,forecast_days)
+        X_high,y_high,X_low,y_low = split_for_training(sel,train_days,forecast_days)
 
         #Save
         np.save(outdir+'X_high.npy',X_high)
@@ -118,7 +118,7 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
 
 
 
-    return X_high,y_high,X_low,y_low,populations,regions
+    return X_high,y_high,X_low,y_low
 
 def split_for_training(sel,train_days,forecast_days):
     '''Split the data for training and testing
@@ -187,25 +187,17 @@ def split_for_training(sel,train_days,forecast_days):
 
                 #Get all features
                 xi = np.array(country_region_data.loc[di:di+train_days-1])
-                #Replace 0 with 0.1
-                xi[:,12][xi[:,12]<=0]=0.1
-                xi[:,13][xi[:,13]<=0]=0.1
-                #Normalize the cases with the period medians
-                sm_norm = max(np.median(xi[:,12]),1)
-                sm_cum_norm = max(np.median(xi[:,13]),1)
-                #I need to set all low case changes to 0. Only if the cases change more than _high I should take it into account.
-
-                xi[:,12]=np.log10(xi[:,12]/sm_norm)
-                xi[:,13]=np.log10(xi[:,13]/sm_cum_norm)
                 #Get change over the past train days
                 period_change = xi[-1,13]-xi[0,13]
-                #Get targets
+                xi = np.average(xi,axis=0)
+
+                #Normalize the cases with the input period mean
                 yi = np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])
-                yi[yi<=0]=0.1
-                yi = np.log10(yi/sm_norm)
+                yi = np.average(yi) #divide by average observed or total observe in period?
 
                 #Add
                 #Check the highest daily cases in the period
+
                 if np.average(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>5:
                     X_high.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                     y_high.append(yi)
@@ -213,10 +205,9 @@ def split_for_training(sel,train_days,forecast_days):
                     X_low.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                     y_low.append(yi)
 
-            #Save population
-            populations.append(population)
 
-    return np.array(X_high), np.array(y_high),np.array(X_low), np.array(y_low), np.array(populations), np.array(regions)
+
+    return np.array(X_high), np.array(y_high),np.array(X_low), np.array(y_low)
 
 def kfold(num_regions, NFOLD):
     '''Generate a K-fold split using numpy (can't import sklearn everywhere)
@@ -314,10 +305,9 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Select only world area data
 world_areas = {1:"Europe & Central Asia"}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
-pdb.set_trace()
 #Get data
-X_high,y_high,X_low,y_low,populations,regions =  get_features(adjusted_data,train_days,forecast_days,outdir)
-
+X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,outdir)
+pdb.set_trace()
 print('Number periods in high cases selection',len(y_high))
 print('Number periods in low cases selection',len(y_low))
 
