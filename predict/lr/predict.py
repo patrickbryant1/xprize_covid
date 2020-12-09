@@ -200,7 +200,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             diff = np.average(pred-X[0])
             if diff/X[0]>10:
                 diff = 10
-            sp = max(0,X[0])
+            sp = max(0,X[0]) #+0.25*diff)
             ep = max(0,X[0]+0.5*diff)
             pred = np.arange(sp,ep,((ep-sp)/21))
             #Do not allow predicting more cases than 20 % of population
@@ -241,11 +241,11 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
         geo_pred_df['population']=population
         #Vis
-        plt.plot(np.arange(24),geo_pred_df['PredictedDailyNewCases'],color='grey')
-        plt.bar(np.arange(24),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
-        plt.title(g)
-        plt.savefig('./plots/'+g+'.png',format='png')
-        plt.close()
+        # plt.plot(np.arange(24),geo_pred_df['PredictedDailyNewCases'],color='grey')
+        # plt.bar(np.arange(24),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
+        # plt.title(g)
+        # plt.savefig('./plots/'+g+'.png',format='png')
+        # plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
 
