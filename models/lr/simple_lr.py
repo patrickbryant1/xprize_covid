@@ -97,8 +97,8 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
     try:
         X100 = np.load(outdir+'X100.npy', allow_pickle=True)
         y100 = np.load(outdir+'y100.npy', allow_pickle=True)
-        X_low = np.load(outdir+'X100.npy', allow_pickle=True)
-        y_low = np.load(outdir+'y100.npy', allow_pickle=True)
+        X_low = np.load(outdir+'X_low.npy', allow_pickle=True)
+        y_low = np.load(outdir+'y_low.npy', allow_pickle=True)
         populations = np.load(outdir+'populations.npy', allow_pickle=True)
         regions = np.load(outdir+'regions.npy', allow_pickle=True)
 
@@ -107,7 +107,7 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
         #Normalize
         sel = normalize_data(sel)
         X100,y100,X_low,y_low,populations,regions = split_for_training(sel,train_days,forecast_days)
-        pdb.set_trace()
+
         #Save
         np.save(outdir+'X100.npy',X100)
         np.save(outdir+'y100.npy',y100)
@@ -200,7 +200,7 @@ def split_for_training(sel,train_days,forecast_days):
 
                 #Add
                 #Check the highest daily cases in the period
-                if max(country_region_data.loc[di:di+train_days+forecast_days-1,'smoothed_cases'])>100:
+                if max(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>100:
                     X100.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                     y100.append(yi)
                 else:
@@ -314,5 +314,5 @@ X100,y100,X_low,y_low,populations,regions =  get_features(adjusted_data,train_da
 print('Number periods in above 100 cases selection',len(y100))
 print('Number periods in below 100 cases selection',len(y_low))
 #Fit model
-#fit_model(X100,y100,5,outdir+'above100/')
+fit_model(X100,y100,5,outdir+'above100/')
 fit_model(X_low,y_low,5,outdir+'low/')
