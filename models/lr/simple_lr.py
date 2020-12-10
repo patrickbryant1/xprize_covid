@@ -15,6 +15,7 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import mutual_info_score
 from scipy.stats import pearsonr
 from scipy import stats
+from math import e
 import numpy as np
 
 
@@ -33,11 +34,13 @@ parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
 parser.add_argument('--world_area', nargs=1, type= int,
                   default=sys.stdin, help = 'World area.')
+parser.add_argument('--threshold', nargs=1, type= float,
+                  default=sys.stdin, help = 'Threshold.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 
-def get_features(adjusted_data,train_days,forecast_days,outdir):
+def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     '''Get the selected features
     '''
 
@@ -91,42 +94,27 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
         np.save(outdir+'y.npy',y)
 
 
-    #Investigate t vs MI
-    mi_scores = []
-    mi_stds = []
-    for t in np.arange(0.1,10,0.1):
-        y_high = y[np.argwhere(X[:,12]>t)][:,0]
-        y_low = y[np.argwhere(X[:,12]<=t)][:,0]
-        mi_score, mi_std = calc_mutual_info(y_high,y_low)
-        mi_scores.append(mi_score)
-        mi_stds.append(mi_std)
+    high_i = np.argwhere(X[:,12]>t)
+    low_i = np.argwhere(X[:,12]<=t)
+    X_high = X[high_i][:,0,:]
+    y_high = y[high_i][:,0]
+    X_low = X[low_i][:,0,:]
+    y_low = y[low_i][:,0]
 
-    #Plot
+    #Plot distribution
     fig,ax = plt.subplots(figsize=(9/2.54,9/2.54))
-    plt.plot(np.arange(0.1,10,0.1),mi_scores)
-    plt.fill_between(np.arange(0.1,10,0.1),np.array(mi_scores-np.array(mi_stds),np.array(mi_scores+np.array(mi_stds)),alpha=0.5))
-    plt.title('Threshold vs MI')
-    plt.xlabel('Cases per 100000')
-    plt.ylabel('MI')
+    plt.hist(np.log10(y_high+0.001),bins=20,alpha=0.5,label='high')
+    plt.hist(np.log10(y_low+0.001),bins=20,alpha=0.5,label='low')
+    plt.title('Target case disributions')
+    plt.xlabel('log cases per 100000')
+    plt.yticks([])
+    plt.legend()
     plt.tight_layout()
-    plt.savefig(outdir+'t_vs_MI.png',format='png')
+    plt.savefig(outdir+'case_distr.png',format='png')
     plt.close()
-    pdb.set_trace()
 
     return X_high,y_high,X_low,y_low
 
-
-def calc_mutual_info(y_high,y_low):
-    '''Calculate the MI by bootstrapping n random samples 10 times
-    '''
-    mutual_info = []
-    n = min(5000,y_low.shape[0])
-    for i in range(10):
-        chosen_h = np.random.choice(y_high.shape[0],n,replace=False)
-        chosen_l = np.random.choice(y_low.shape[0],n,replace=False)
-        mutual_info.append(mutual_info_score(y_high[chosen_h],y_low[chosen_l]))
-
-    return np.average(mutual_info), np.std(mutual_info)
 
 def split_for_training(sel,train_days,forecast_days):
     '''Split the data for training and testing
@@ -230,7 +218,7 @@ def kfold(num_regions, NFOLD):
 
     return np.array(train_split), np.array(val_split)
 
-def fit_model(X, y, NFOLD, outdir):
+def fit_model(X, y, NFOLD, mode, outdir):
     '''Fit the linear model
     '''
     #Fit the model
@@ -253,11 +241,13 @@ def fit_model(X, y, NFOLD, outdir):
         coefs = []
         intercepts = []
 
-        reg = LinearRegression().fit(X_train, y_train)
+        reg = LinearRegression().fit(X_train, np.log(y_train+0.001))
         pred = reg.predict(X_valid)
-
-        #Ensure non-negative
-        pred[pred<0]=0
+        pred = np.power(e,pred)
+        if mode =='high':
+            pred[pred>5000]=5000
+        if mode=='low':
+            pred[pred>20]=20
         true = y_valid
         av_er = np.average(np.absolute(pred-true))
 
@@ -300,6 +290,7 @@ start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
 world_area = args.world_area[0]
+threshold = args.threshold[0]
 outdir = args.outdir[0]
 
 #Use only data from start date
@@ -309,12 +300,11 @@ world_areas = {1:"Europe & Central Asia"}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 #Get data
 
-X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,outdir)
+X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
 print('Number periods in high cases selection',len(y_high))
 print('Number periods in low cases selection',len(y_low))
 
-pdb.set_trace()
 #Fit model
-fit_model(X_high,y_high,5,outdir+'high/')
-fit_model(X_low,y_low,5,outdir+'low/')
+fit_model(X_high,y_high,5,'high',outdir+'high/')
+fit_model(X_low,y_low,5,'low',outdir+'low/')
