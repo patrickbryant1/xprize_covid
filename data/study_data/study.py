@@ -16,6 +16,7 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import mutual_info_score
 from scipy.stats import pearsonr
 from scipy import stats
+import seaborn as sns
 import numpy as np
 
 
@@ -179,9 +180,29 @@ def calc_mutual_info(y_high,y_low):
     return np.average(mutual_info), np.std(mutual_info)
 
 
-# def feature_outcome(X,y):
-#     '''Study the difference in outcome due to a feture being of a certain kind
-#     '''
+def feature_outcome(X_high,y_high,X_low,y_low,outdir):
+    '''Study the difference in outcome due to a feture being of a certain kind
+    '''
+
+    feature_names = ['C1_School closing','C2_Workplace closing','C3_Cancel public events',
+                    'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
+                    'C7_Restrictions on internal movement','C8_International travel controls','H1_Public information campaigns',
+                    'H2_Testing policy','H3_Contact tracing','H6_Facial Coverings', 'smoothed_cases','cumulative_smoothed_cases',
+                    'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density', 'monthly_temperature',
+                    'retail_and_recreation', 'grocery_and_pharmacy', 'parks', 'transit_stations', 'workplaces','residential',
+                    'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr', 'population']
+
+    for i in range(len(feature_names)):
+        fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
+        plt.scatter(X_high[:,i],np.log10(y_high+0.01),color='cornflowerblue',s=1,label='high')
+        plt.scatter(X_low[:,i],np.log10(y_low+0.01),color='mediumseagreen',s=1, label='low')
+        plt.xlabel(feature_names[i])
+        plt.ylabel('log cases per 100000')
+        plt.title(feature_names[i])
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(outdir+feature_names[i]+'.png',format='png',dpi=300)
+        plt.close()
 
 #####MAIN#####
 #Set font size
@@ -259,4 +280,16 @@ plt.legend()
 plt.tight_layout()
 plt.savefig(outdir+'t_vs_MI.png',format='png',dpi=300)
 plt.close()
-pdb.set_trace()
+
+
+#Look at features vs selected t from the selected periods
+X,y =  get_features(adjusted_data,21,21,outdir)
+t=1.8
+high_i = np.argwhere(X[:,12]>t)
+low_i = np.argwhere(X[:,12]<=t)
+#Select
+X_high = X[high_i][:,0,:]
+y_high = y[high_i][:,0]
+X_low = X[low_i][:,0,:]
+y_low = y[low_i][:,0]
+feature_outcome(X_high,y_high,X_low,y_low,outdir)
