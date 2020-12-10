@@ -184,7 +184,10 @@ def split_for_training(sel,train_days,forecast_days):
                 xi = np.array(country_region_data.loc[di:di+train_days-1])
                 #Get change over the past train days
                 period_change = xi[-1,13]-xi[0,13]
-                xi = np.median(xi,axis=0)
+                #case_medians = np.median(xi[:,12:14],axis=0)
+                #xi = np.average(xi,axis=0)
+                #xi[12:14]=case_medians
+
 
                 #Normalize the cases with the input period mean
                 yi = np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])
@@ -241,7 +244,7 @@ def fit_model(X, y, NFOLD, mode, outdir):
         coefs = []
         intercepts = []
 
-        reg = ElasticNet().fit(X_train, np.log(y_train+0.001))
+        reg = ElasticNet(warm_start=True,l1_ratio=0.75,selection='random',tol=0.1,alpha=0.5,max_iter=100000).fit(X_train, np.log(y_train+0.001))
         pred = reg.predict(X_valid)
         pred = np.power(e,pred)
         if mode =='high':
@@ -253,7 +256,7 @@ def fit_model(X, y, NFOLD, mode, outdir):
 
         R,p = pearsonr(pred,true)
         print('Fold',fold+1,'Average error',av_er,'PCC',R)
-        plt.scatter(np.log(true+0.001),np.log(pred+0.001),s=1)
+        plt.scatter(np.log10(true+0.001),np.log10(pred+0.001),s=1)
         plt.xlabel('True')
         plt.ylabel('Pred')
         plt.savefig(outdir+mode+str(fold)+'.png',format='png',dpi=300)
