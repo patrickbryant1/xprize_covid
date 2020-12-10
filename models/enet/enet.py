@@ -184,9 +184,9 @@ def split_for_training(sel,train_days,forecast_days):
                 xi = np.array(country_region_data.loc[di:di+train_days-1])
                 #Get change over the past train days
                 period_change = xi[-1,13]-xi[0,13]
-                #case_medians = np.median(xi[:,12:14],axis=0)
-                #xi = np.average(xi,axis=0)
-                #xi[12:14]=case_medians
+                case_medians = np.median(xi[:,12:14],axis=0)
+                xi = np.average(xi,axis=0)
+                xi[12:14]=case_medians
 
 
                 #Normalize the cases with the input period mean
@@ -244,7 +244,7 @@ def fit_model(X, y, NFOLD, mode, outdir):
         coefs = []
         intercepts = []
 
-        reg = ElasticNet(warm_start=True,l1_ratio=0.75,selection='random',tol=0.1,alpha=0.5,max_iter=100000).fit(X_train, np.log(y_train+0.001))
+        reg = ElasticNet(warm_start=True,l1_ratio=0.75,selection='random',tol=0.1,alpha=0.5,max_iter=1000).fit(X_train, np.log(y_train+0.001))
         pred = reg.predict(X_valid)
         pred = np.power(e,pred)
         if mode =='high':
