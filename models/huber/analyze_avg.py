@@ -35,6 +35,8 @@ def get_model_output(NFOLD,indir):
     coefs = []
     intercepts = []
     for f in range(1,NFOLD+1):
+        #if f==2:
+        #    continue
         corrs.append(np.load(outdir+'corrs'+str(f)+'.npy',allow_pickle=True))
         errors.append(np.load(outdir+'errors'+str(f)+'.npy',allow_pickle=True))
         coefs.append(np.load(outdir+'coefs'+str(f)+'.npy',allow_pickle=True))
@@ -47,33 +49,26 @@ def evaluate_model(corrs, errors, coefs, intercepts,outdir):
     Evaluate the fit model
     '''
 
-    #Evaluate model
-    results_file = open(outdir+'results.txt','w')
-    #Calculate error
-    results_file.write('Total 2week mae: '+str(np.sum(np.average(errors,axis=0)[:14]))+'\n')
-    results_file.write('Total mae per 100000: '+str(np.sum(np.average(errors,axis=0)))+'\n')
-    results_file.write('Std in total mae per 100000: '+str(np.sum(np.std(errors,axis=0)))+'\n')
-    results_file.write('Average mae per 100000: '+str(np.average(np.average(errors,axis=0)))+'\n')
-    results_file.write('Average std in mae per 100000: '+str(np.average(np.std(errors,axis=0)))+'\n')
-    results_file.write('Average PCC: '+str(np.average(np.average(corrs,axis=0)))+'\n')
-    results_file.write('Average std PCC: '+str(np.average(np.std(corrs,axis=0)))+'\n')
-    #Plot average error per day with std
-    plt.plot(range(1,errors.shape[1]+1),np.average(errors,axis=0),color='b')
-    plt.fill_between(range(1,errors.shape[1]+1),np.average(errors,axis=0)-np.std(errors,axis=0),np.average(errors,axis=0)+np.std(errors,axis=0),color='b',alpha=0.5)
-    plt.title('Average error with std')
-    plt.xlabel('Days in the future')
-    plt.ylabel('Error per 100000')
-    plt.savefig(outdir+'lr_av_error.png',format='png')
+    #Plot coefficients
+    #days pred,days behind - this goes from -21 to 1,features
+    feature_names = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
+    'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
+    'smoothed_cases', 'cumulative_smoothed_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential',
+    'death_to_case_scale','case_death_delay','gross_net_income','population_density','Change in last 21 days','pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr','population']
+
+
+    coef_av = np.average(coefs,axis=0)
+
+    #Normalize features
+    #coef_av = coef_av[0]/max(np.absolute(coef_av[0]))
+
+    fig,ax = plt.subplots(figsize=(9,4.5))
+    plt.bar(np.arange(len(feature_names)),coef_av[0])
+    plt.xticks(np.arange(len(feature_names)),labels=feature_names, rotation='vertical')
+    plt.tight_layout()
+    plt.savefig(outdir+'coefs.png',format='png')
     plt.close()
 
-    #Plot correlation
-    plt.plot(range(1,corrs.shape[1]+1),np.average(corrs,axis=0),color='b')
-    plt.fill_between(range(1,corrs.shape[1]+1),np.average(corrs,axis=0)-np.std(corrs,axis=0),np.average(corrs,axis=0)+np.std(corrs,axis=0),color='b',alpha=0.5)
-    plt.title('Pearson R')
-    plt.xlabel('Days in the future')
-    plt.ylabel('PCC')
-    plt.savefig(outdir+'PCC.png',format='png')
-    plt.close()
 
 
 #####MAIN#####

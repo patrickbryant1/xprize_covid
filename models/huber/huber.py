@@ -241,7 +241,7 @@ def fit_model(X, y, NFOLD, mode, outdir):
         coefs = []
         intercepts = []
 
-        reg = HuberRegressor().fit(X_train, np.log(y_train+0.001))
+        reg = HuberRegressor(max_iter=1000).fit(X_train, np.log(y_train+0.001))
         pred = reg.predict(X_valid)
         pred = np.power(e,pred)
         if mode =='high':
@@ -253,7 +253,7 @@ def fit_model(X, y, NFOLD, mode, outdir):
 
         R,p = pearsonr(pred,true)
         print('Fold',fold+1,'Average error',av_er,'PCC',R)
-        plt.scatter(np.log(true+0.001),np.log(pred+0.001),s=1)
+        plt.scatter(np.log10(true+0.001),np.log10(pred+0.001),s=1)
         plt.xlabel('True')
         plt.ylabel('Pred')
         plt.savefig(outdir+mode+str(fold)+'.png',format='png',dpi=300)
