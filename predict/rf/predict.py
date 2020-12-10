@@ -203,24 +203,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
             pred = np.average(np.power(e,preds))
             #Order the predictions to run through the predicted mean
-            diff = pred-X[0]
-            if diff/max(1,X[0])>5:
-                diff = max(1,X[0])*5
-
-            diff_contr1 = case_in_end-X[0] #From in mean to casae in end
-            diff_contr2 = diff - diff_contr1 #From case in end to pred mean
-            sp = max(0,case_in_end) #Start
-            mp = max(0,case_in_end+diff_contr2) #Mid
-            ep = max(0,mp+diff_contr2) #End
-            if sp == mp:
-                pred_half1 = np.repeat(mp,11)
-            else:
-                pred_half1 = np.arange(sp,mp,(mp-sp)/11) #first half of preds
-            if mp == ep:
-                pred_half2 = np.repeat(ep,10)
-            else:
-                pred_half2 = np.arange(mp,ep,(ep-mp)/10) #first half of preds
-            pred = np.concatenate([pred_half1, pred_half2])
+            #It looks like the median in the nex section is mainly driven
+            #by the end of that section --> run from case in end of input to pred
+            pred = np.arange(case_in_end,pred,(pred-case_in_end)/21) #
 
 
             #Do not allow predicting more cases than 1/21 of population per day
@@ -257,22 +242,19 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
         #Check
         adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
-        adjusted_data_gdf['smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
+        adjusted_data_gdf.loc[:,('smoothed_cases')]=np.array(adjusted_data_gdf.loc[:,('smoothed_cases')])/(population/100000)
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
         geo_pred_df['population']=population
         #Vis
+        fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
         plt.plot(np.arange(24),geo_pred_df['PredictedDailyNewCases'],color='grey')
         plt.bar(np.arange(24),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
         plt.title(g)
         plt.savefig('./plots/'+g+'.png',format='png')
+        plt.tight_layout()
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
-        pdb.set_trace()
-
-
-
-
 
     #4. Obtain output
     # Combine all predictions into a single dataframe - remember to only select the requied columns later
@@ -283,7 +265,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #Only the required columns
     pred_df.drop(columns={'GeoID','smoothed_cases','population'}).to_csv(output_file_path, index=False)
     print("Saved predictions to", output_file_path)
-
+    pdb.set_trace()
     return None
 
 
