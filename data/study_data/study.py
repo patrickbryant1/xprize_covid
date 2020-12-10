@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from sklearn.linear_model import LinearRegression
 from sklearn import preprocessing
 from sklearn.model_selection import KFold
@@ -21,18 +22,12 @@ import numpy as np
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''Simple linear regression model.''')
+parser = argparse.ArgumentParser(description = '''Stude data relationships.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
 parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
-parser.add_argument('--train_days', nargs=1, type= int,
-                  default=sys.stdin, help = 'Days to include in fitting.')
-parser.add_argument('--forecast_days', nargs=1, type= int,
-                  default=sys.stdin, help = 'Days to forecast.')
-parser.add_argument('--world_area', nargs=1, type= int,
-                  default=sys.stdin, help = 'World area.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -77,56 +72,19 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
 
     #Get features
     try:
-        X = np.load(outdir+'X.npy', allow_pickle=True)
-        y = np.load(outdir+'y.npy', allow_pickle=True)
-
-
+        X = np.load(outdir+'X_'+str(train_days)+'_'+str(forecast_days)+'.npy', allow_pickle=True)
+        y = np.load(outdir+'y_'+str(train_days)+'_'+str(forecast_days)+'.npy', allow_pickle=True)
 
     except:
         sel = adjusted_data[selected_features]
         X,y = split_for_training(sel,train_days,forecast_days)
 
         #Save
-        np.save(outdir+'X.npy',X)
-        np.save(outdir+'y.npy',y)
+        np.save(outdir+'X_'+str(train_days)+'_'+str(forecast_days)+'.npy',X)
+        np.save(outdir+'y_'+str(train_days)+'_'+str(forecast_days)+'.npy',y)
 
 
-    #Investigate t vs MI
-    mi_scores = []
-    mi_stds = []
-    for t in np.arange(0.1,10,0.1):
-        y_high = y[np.argwhere(X[:,12]>t)][:,0]
-        y_low = y[np.argwhere(X[:,12]<=t)][:,0]
-        mi_score, mi_std = calc_mutual_info(y_high,y_low)
-        mi_scores.append(mi_score)
-        mi_stds.append(mi_std)
-
-    #Plot
-    fig,ax = plt.subplots(figsize=(9/2.54,9/2.54))
-    plt.plot(np.arange(0.1,10,0.1),mi_scores)
-    plt.fill_between(np.arange(0.1,10,0.1),np.array(mi_scores-np.array(mi_stds),np.array(mi_scores+np.array(mi_stds)),alpha=0.5))
-    plt.title('Threshold vs MI')
-    plt.xlabel('Cases per 100000')
-    plt.ylabel('MI')
-    plt.tight_layout()
-    plt.savefig(outdir+'t_vs_MI.png',format='png')
-    plt.close()
-    pdb.set_trace()
-
-    return X_high,y_high,X_low,y_low
-
-
-def calc_mutual_info(y_high,y_low):
-    '''Calculate the MI by bootstrapping n random samples 10 times
-    '''
-    mutual_info = []
-    n = min(5000,y_low.shape[0])
-    for i in range(10):
-        chosen_h = np.random.choice(y_high.shape[0],n,replace=False)
-        chosen_l = np.random.choice(y_low.shape[0],n,replace=False)
-        mutual_info.append(mutual_info_score(y_high[chosen_h],y_low[chosen_l]))
-
-    return np.average(mutual_info), np.std(mutual_info)
+    return X,y
 
 def split_for_training(sel,train_days,forecast_days):
     '''Split the data for training and testing
@@ -208,80 +166,22 @@ def split_for_training(sel,train_days,forecast_days):
 
     return np.array(X), np.array(y)
 
-def kfold(num_regions, NFOLD):
-    '''Generate a K-fold split using numpy (can't import sklearn everywhere)
+def calc_mutual_info(y_high,y_low):
+    '''Calculate the MI by bootstrapping n random samples 10 times
     '''
-    all_i = np.arange(num_regions)
-    train_split = []
-    val_split = []
-    fetched_i = []
-    #Check
-    check = np.zeros(num_regions)
-    #Go through ll folds
-    for f in range(NFOLD):
-        remaining_i = np.setdiff1d(all_i,np.array(fetched_i))
-        val_i = np.random.choice(remaining_i,int(num_regions/NFOLD),replace=False)
-        train_i = np.setdiff1d(all_i,val_i)
-        #Save
-        val_split.append(val_i)
-        train_split.append(train_i)
-        fetched_i.extend(val_i)
-        check[val_i]+=1
+    mutual_info = []
+    n = min(5000,y_low.shape[0])
+    for i in range(10):
+        chosen_h = np.random.choice(y_high.shape[0],n,replace=False)
+        chosen_l = np.random.choice(y_low.shape[0],n,replace=False)
+        mutual_info.append(mutual_info_score(y_high[chosen_h],y_low[chosen_l]))
 
-    return np.array(train_split), np.array(val_split)
-
-def fit_model(X, y, NFOLD, outdir):
-    '''Fit the linear model
-    '''
-    #Fit the model
-
-    #KFOLD
-    NFOLD = 5
-    #kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
-    train_split, val_split = kfold(len(X),NFOLD)
-
-    #Save errors
-    train_errors = []
-    valid_errors = []
-    for fold in range(NFOLD):
-        tr_idx, val_idx = train_split[fold], val_split[fold]
-        print('Number of valid points',len(val_idx))
-        #Extract train and valid data
-        X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx],X[val_idx], y[val_idx]
-        corrs = []
-        errors = []
-        coefs = []
-        intercepts = []
-
-        reg = LinearRegression().fit(X_train, y_train)
-        pred = reg.predict(X_valid)
-
-        #Ensure non-negative
-        pred[pred<0]=0
-        true = y_valid
-        av_er = np.average(np.absolute(pred-true))
-
-        R,p = pearsonr(pred,true)
-        print('Fold',fold+1,'Average error',av_er,'PCC',R)
-        plt.scatter(true,pred,s=1)
-        plt.xlabel('True')
-        plt.ylabel('Pred')
-        plt.show()
-        #Save
-        corrs.append(R)
-        errors.append(av_er)
-        coefs.append(reg.coef_)
-        intercepts.append(reg.intercept_)
+    return np.average(mutual_info), np.std(mutual_info)
 
 
-        #Save
-        np.save(outdir+'corrs'+str(fold+1)+'.npy',np.array(corrs))
-        np.save(outdir+'errors'+str(fold+1)+'.npy',np.array(errors))
-        np.save(outdir+'coefs'+str(fold+1)+'.npy',np.array(coefs))
-        np.save(outdir+'intercepts'+str(fold+1)+'.npy',np.array(intercepts))
-
-    return None
-
+# def feature_outcome(X,y):
+#     '''Study the difference in outcome due to a feture being of a certain kind
+#     '''
 
 #####MAIN#####
 #Set font size
@@ -297,24 +197,66 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
 start_date = args.start_date[0]
-train_days = args.train_days[0]
-forecast_days = args.forecast_days[0]
-world_area = args.world_area[0]
 outdir = args.outdir[0]
 
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-#Select only world area data
-world_areas = {1:"Europe & Central Asia"}
-#adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
-#Get data
 
-X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,outdir)
+try:
+    avs = np.load(outdir+'case_avs.npy',allow_pickle=True)
+    stds = np.load(outdir+'case_stds.npy',allow_pickle=True)
+except:
+    #Get data
+    train_days = []
+    forecast_days = []
+    MI = {'case_av':[],'case_std':[]}
+    for td in [7,14,21]:
+        for fd in [7,14,21]:
+            X,y =  get_features(adjusted_data,td,fd,outdir)
 
-print('Number periods in high cases selection',len(y_high))
-print('Number periods in low cases selection',len(y_low))
+            #Investigate t vs MI
+            mi_scores = []
+            mi_stds = []
+            for t in np.arange(0.1,10,0.1):
+                y_high = y[np.argwhere(X[:,12]>t)][:,0]
+                y_low = y[np.argwhere(X[:,12]<=t)][:,0]
+                mi_score, mi_std = calc_mutual_info(y_high,y_low)
+                mi_scores.append(mi_score)
+                mi_stds.append(mi_std)
+            #Save
+            train_days.append(td)
+            forecast_days.append(fd)
+            #Save MIs
+            MI['case_av'].append(np.array(mi_scores))
+            MI['case_std'].append(np.array(mi_stds))
 
+    #Save
+    avs = np.array(MI['case_av'])
+    stds = np.array(MI['case_std'])
+    np.save(outdir+'case_avs.npy',avs)
+    np.save(outdir+'case_stds.npy',stds)
+
+
+#Plot
+#MI
+fig,ax = plt.subplots(figsize=(4.5,4.5))
+
+colors = ['tab:blue','tab:orange','tab:green','tab:purple','tab:brown','magenta',
+        'tab:gray','tab:olive','tab:cyan']
+i=0
+for td in [7,14,21]:
+    for fd in [7,14,21]:
+        plt.plot(np.arange(0.1,10,0.1),avs[i,:],color=colors[i],label=str(td)+'_'+str(fd))
+        plt.fill_between(np.arange(0.1,10,0.1),avs[i,:]-stds[i,:],avs[i,:]+stds[i,:],alpha=0.5,color=colors[i])
+        #plt.text(9.9,avs[i,-1],str(td)+'_'+str(fd))
+        i+=1
+plt.title('Threshold vs MI')
+plt.xlabel('Cases per 100000')
+plt.ylabel('MI')
+plt.ylim([6.5,8])
+plt.xticks(np.arange(0,11,1))
+plt.legend()
+plt.tight_layout()
+plt.savefig(outdir+'t_vs_MI.png',format='png',dpi=300)
+plt.close()
 pdb.set_trace()
-#Fit model
-fit_model(X_high,y_high,5,outdir+'high/')
-fit_model(X_low,y_low,5,outdir+'low/')
