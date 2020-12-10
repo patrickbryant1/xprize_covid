@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn import preprocessing
 from sklearn.model_selection import KFold
+from sklearn.metrics import mutual_info_score
 from scipy.stats import pearsonr
 from scipy import stats
 import numpy as np
@@ -35,27 +36,8 @@ parser.add_argument('--world_area', nargs=1, type= int,
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
-def normalize_data(sel):
-    '''Normalize and transform data
-    '''
 
-    # to_log = ['smoothed_cases','cumulative_smoothed_cases','rescaled_cases','cumulative_rescaled_cases','population_density', 'population']
-    # for var in to_log:
-    #     sel[var] = np.log10(sel[var]+0.001)
-
-    #GNI: group into 3: 0-20k,20-40k,40k+
-    index1 = sel[sel['gross_net_income']<20000].index
-    above = sel[sel['gross_net_income']>20000]
-    index2 = above[above['gross_net_income']<40000].index
-    index3 = sel[sel['gross_net_income']>40000].index
-    sel.at[index1,'gross_net_income']=0
-    sel.at[index2,'gross_net_income']=1
-    sel.at[index3,'gross_net_income']=2
-
-    return sel
-
-
-def get_features(adjusted_data,train_days,forecast_days,outdir):
+def get_features(adjusted_data,train_days,forecast_days,threshold,outdir):
     '''Get the selected features
     '''
 
@@ -95,30 +77,50 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
 
     #Get features
     try:
-        X_high = np.load(outdir+'X_high.npy', allow_pickle=True)
-        y_high = np.load(outdir+'y_high.npy', allow_pickle=True)
-        X_low = np.load(outdir+'X_low.npy', allow_pickle=True)
-        y_low = np.load(outdir+'y_low.npy', allow_pickle=True)
+        X_high = np.load(outdir+'X_high'+str(threshold)+'.npy', allow_pickle=True)
+        y_high = np.load(outdir+'y_high'+str(threshold)+'.npy', allow_pickle=True)
+        X_low = np.load(outdir+'X_low'+str(threshold)+'.npy', allow_pickle=True)
+        y_low = np.load(outdir+'y_low'+str(threshold)+'.npy', allow_pickle=True)
 
 
     except:
         sel = adjusted_data[selected_features]
-        #Normalize
-        sel = normalize_data(sel)
-        X_high,y_high,X_low,y_low = split_for_training(sel,train_days,forecast_days)
+        X_high,y_high,X_low,y_low = split_for_training(sel,train_days,forecast_days,threshold)
 
         #Save
-        np.save(outdir+'X_high.npy',X_high)
-        np.save(outdir+'y_high.npy',y_high)
-        np.save(outdir+'X_low.npy',X_low)
-        np.save(outdir+'y_low.npy',y_low)
+        np.save(outdir+'X_high'+str(threshold)+'.npy',X_high)
+        np.save(outdir+'y_high'+str(threshold)+'.npy',y_high)
+        np.save(outdir+'X_low'+str(threshold)+'.npy',X_low)
+        np.save(outdir+'y_low'+str(threshold)+'.npy',y_low)
 
 
-
+    #Plot
+    mi_score, mi_std = calc_mutual_info(y_high,y_low)
+    fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
+    plt.hist(np.log10(y_high+0.001),bins=20)
+    plt.hist(np.log10(y_low+0.001),bins=20,alpha=0.5)
+    plt.title('t>'+str(threshold)+'\nMI: '+str(np.round(mi_score,2))+'+/-'+str(np.round(mi_std,3)))
+    plt.xlabel('log cases/100000')
+    plt.yticks([])
+    plt.tight_layout()
+    plt.savefig(outdir+'high_low_distr'+str(threshold)+'.png',format='png')
+    plt.close()
 
     return X_high,y_high,X_low,y_low
 
-def split_for_training(sel,train_days,forecast_days):
+
+def calc_mutual_info(y_high,y_low):
+    '''Calculate the kl divergence by bootstrapping 1000 random samples 10 times
+    '''
+    mutual_info = []
+    for i in range(10):
+        chosen_h = np.random.choice(y_high.shape[0],5000,replace=False)
+        chosen_l = np.random.choice(y_low.shape[0],5000,replace=False)
+        mutual_info.append(mutual_info_score(y_high[chosen_h],y_low[chosen_l]))
+
+    return np.average(mutual_info), np.std(mutual_info)
+
+def split_for_training(sel,train_days,forecast_days,threshold):
     '''Split the data for training and testing
     '''
     X_high = [] #Input periods where input/target period reaches at least _high cases
@@ -187,16 +189,16 @@ def split_for_training(sel,train_days,forecast_days):
                 xi = np.array(country_region_data.loc[di:di+train_days-1])
                 #Get change over the past train days
                 period_change = xi[-1,13]-xi[0,13]
-                xi = np.average(xi,axis=0)
+                xi = np.median(xi,axis=0)
 
                 #Normalize the cases with the input period mean
                 yi = np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])
-                yi = np.average(yi) #divide by average observed or total observe in period?
+                yi = np.median(yi) #divide by average observed or total observe in period?
 
                 #Add
                 #Check the highest daily cases in the period
 
-                if np.average(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>5:
+                if np.median(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>threshold:
                     X_high.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
                     y_high.append(yi)
                 else:
@@ -307,11 +309,13 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 world_areas = {1:"Europe & Central Asia"}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 #Get data
-X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,outdir)
+for threshold in [0.5,0.75]:
+    X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
 print('Number periods in high cases selection',len(y_high))
 print('Number periods in low cases selection',len(y_low))
 
+pdb.set_trace()
 #Fit model
 fit_model(X_high,y_high,5,outdir+'high/')
 fit_model(X_low,y_low,5,outdir+'low/')
