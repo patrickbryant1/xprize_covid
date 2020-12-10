@@ -12,15 +12,17 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import ElasticNet
 from sklearn import preprocessing
 from sklearn.model_selection import KFold
+from sklearn.metrics import mutual_info_score
 from scipy.stats import pearsonr
 from scipy import stats
+from math import e
 import numpy as np
 
 
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''Elastic Net linear regression model.''')
+parser = argparse.ArgumentParser(description = '''Simple linear regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -32,30 +34,13 @@ parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
 parser.add_argument('--world_area', nargs=1, type= int,
                   default=sys.stdin, help = 'World area.')
+parser.add_argument('--threshold', nargs=1, type= float,
+                  default=sys.stdin, help = 'Threshold.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
-def normalize_data(sel):
-    '''Normalize and transform data
-    '''
 
-    # to_log = ['smoothed_cases','cumulative_smoothed_cases','rescaled_cases','cumulative_rescaled_cases','population_density', 'population']
-    # for var in to_log:
-    #     sel[var] = np.log10(sel[var]+0.001)
-
-    #GNI: group into 3: 0-20k,20-40k,40k+
-    index1 = sel[sel['gross_net_income']<20000].index
-    above = sel[sel['gross_net_income']>20000]
-    index2 = above[above['gross_net_income']<40000].index
-    index3 = sel[sel['gross_net_income']>40000].index
-    sel.at[index1,'gross_net_income']=0
-    sel.at[index2,'gross_net_income']=1
-    sel.at[index3,'gross_net_income']=2
-
-    return sel
-
-
-def get_features(adjusted_data,train_days,forecast_days,outdir):
+def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     '''Get the selected features
     '''
 
@@ -95,36 +80,48 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
 
     #Get features
     try:
-        X_high = np.load(outdir+'X_high.npy', allow_pickle=True)
-        y_high = np.load(outdir+'y_high.npy', allow_pickle=True)
-        X_low = np.load(outdir+'X_low.npy', allow_pickle=True)
-        y_low = np.load(outdir+'y_low.npy', allow_pickle=True)
+        X = np.load(outdir+'X.npy', allow_pickle=True)
+        y = np.load(outdir+'y.npy', allow_pickle=True)
+
 
 
     except:
         sel = adjusted_data[selected_features]
-        #Normalize
-        sel = normalize_data(sel)
-        X_high,y_high,X_low,y_low = split_for_training(sel,train_days,forecast_days)
+        X,y = split_for_training(sel,train_days,forecast_days)
 
         #Save
-        np.save(outdir+'X_high.npy',X_high)
-        np.save(outdir+'y_high.npy',y_high)
-        np.save(outdir+'X_low.npy',X_low)
-        np.save(outdir+'y_low.npy',y_low)
+        np.save(outdir+'X.npy',X)
+        np.save(outdir+'y.npy',y)
 
 
+    high_i = np.argwhere(X[:,12]>t)
+    low_i = np.argwhere(X[:,12]<=t)
+    X_high = X[high_i][:,0,:]
+    y_high = y[high_i][:,0]
+    X_low = X[low_i][:,0,:]
+    y_low = y[low_i][:,0]
 
+    #Plot distribution
+    fig,ax = plt.subplots(figsize=(9/2.54,9/2.54))
+    plt.hist(np.log10(y_high+0.001),bins=20,alpha=0.5,label='high')
+    plt.hist(np.log10(y_low+0.001),bins=20,alpha=0.5,label='low')
+    plt.title('Target case disributions')
+    plt.xlabel('log cases per 100000')
+    plt.yticks([])
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(outdir+'case_distr.png',format='png')
+    plt.close()
 
     return X_high,y_high,X_low,y_low
+
 
 def split_for_training(sel,train_days,forecast_days):
     '''Split the data for training and testing
     '''
-    X_high = [] #Input periods where input/target period reaches at least _high cases
-    y_high = [] #Targets
-    X_low = [] #Input periods where input/target period reaches at most _high cases
-    y_low = []
+    X = [] #Input periods
+    y = [] #Targets
+
 
     countries = sel['Country_index'].unique()
     populations = []
@@ -187,25 +184,17 @@ def split_for_training(sel,train_days,forecast_days):
                 xi = np.array(country_region_data.loc[di:di+train_days-1])
                 #Get change over the past train days
                 period_change = xi[-1,13]-xi[0,13]
-                xi = np.average(xi,axis=0)
+                xi = np.median(xi,axis=0)
 
                 #Normalize the cases with the input period mean
                 yi = np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])
-                yi = np.average(yi) #divide by average observed or total observe in period?
+                yi = np.median(yi) #divide by average observed or total observe in period?
 
                 #Add
-                #Check the highest daily cases in the period
+                X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                y.append(yi)
 
-                if np.average(country_region_data.loc[di:di+train_days-1,'smoothed_cases'])>5:
-                    X_high.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                    y_high.append(yi)
-                else:
-                    X_low.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                    y_low.append(yi)
-
-
-
-    return np.array(X_high), np.array(y_high),np.array(X_low), np.array(y_low)
+    return np.array(X), np.array(y)
 
 def kfold(num_regions, NFOLD):
     '''Generate a K-fold split using numpy (can't import sklearn everywhere)
@@ -229,7 +218,7 @@ def kfold(num_regions, NFOLD):
 
     return np.array(train_split), np.array(val_split)
 
-def fit_model(X, y, NFOLD, outdir):
+def fit_model(X, y, NFOLD, mode, outdir):
     '''Fit the linear model
     '''
     #Fit the model
@@ -252,20 +241,23 @@ def fit_model(X, y, NFOLD, outdir):
         coefs = []
         intercepts = []
 
-        reg = ElasticNet().fit(X_train, y_train)
+        reg = ElasticNet().fit(X_train, np.log(y_train+0.001))
         pred = reg.predict(X_valid)
-
-        #Ensure non-negative
-        pred[pred<0]=0
+        pred = np.power(e,pred)
+        if mode =='high':
+            pred[pred>5000]=5000
+        if mode=='low':
+            pred[pred>10]=10
         true = y_valid
         av_er = np.average(np.absolute(pred-true))
 
         R,p = pearsonr(pred,true)
         print('Fold',fold+1,'Average error',av_er,'PCC',R)
-        plt.scatter(true,pred,s=1)
+        plt.scatter(np.log(true+0.001),np.log(pred+0.001),s=1)
         plt.xlabel('True')
         plt.ylabel('Pred')
-        plt.show()
+        plt.savefig(outdir+mode+str(fold)+'.png',format='png',dpi=300)
+        plt.close()
         #Save
         corrs.append(R)
         errors.append(av_er)
@@ -299,6 +291,7 @@ start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
 world_area = args.world_area[0]
+threshold = args.threshold[0]
 outdir = args.outdir[0]
 
 #Use only data from start date
@@ -307,11 +300,12 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 world_areas = {1:"Europe & Central Asia"}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 #Get data
-X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,outdir)
+
+X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
 print('Number periods in high cases selection',len(y_high))
 print('Number periods in low cases selection',len(y_low))
 
 #Fit model
-fit_model(X_high,y_high,5,outdir+'high/')
-fit_model(X_low,y_low,5,outdir+'low/')
+fit_model(X_high,y_high,5,'high',outdir+'high/')
+fit_model(X_low,y_low,5,'low',outdir+'low/')
