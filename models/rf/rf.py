@@ -233,8 +233,7 @@ def fit_model(X, y, NFOLD, mode, outdir):
     train_split, val_split = kfold(len(X),NFOLD)
 
     #Save errors
-    train_errors = []
-    valid_errors = []
+    mdi_importances = []
     for fold in range(NFOLD):
         tr_idx, val_idx = train_split[fold], val_split[fold]
         print('Number of valid points',len(val_idx))
@@ -242,8 +241,6 @@ def fit_model(X, y, NFOLD, mode, outdir):
         X_train, y_train, X_valid, y_valid = X[tr_idx], y[tr_idx],X[val_idx], y[val_idx]
         corrs = []
         errors = []
-        coefs = []
-        intercepts = []
 
         reg = RandomForestRegressor(n_jobs=-1, random_state=42).fit(X_train, np.log(y_train+0.001))
         pred = reg.predict(X_valid)
@@ -267,13 +264,15 @@ def fit_model(X, y, NFOLD, mode, outdir):
         errors.append(av_er)
 
         #Feature importances
-        mdi_importances['Importance'+str(i)] = reg.feature_importances_
+        mdi_importances.append(reg.feature_importances_)
 
         #Save
         np.save(outdir+'corrs'+str(fold+1)+'.npy',np.array(corrs))
         np.save(outdir+'errors'+str(fold+1)+'.npy',np.array(errors))
         with open(outdir+'model'+str(fold), 'wb') as f:
             pickle.dump(reg, f)
+
+    np.save(outdir+'feature_importances.npy',np.array(mdi_importances))
 
 
     return None
