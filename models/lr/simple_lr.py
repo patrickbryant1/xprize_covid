@@ -247,16 +247,17 @@ def fit_model(X, y, NFOLD, mode, outdir):
         if mode =='high':
             pred[pred>5000]=5000
         if mode=='low':
-            pred[pred>20]=20
+            pred[pred>10]=10
         true = y_valid
         av_er = np.average(np.absolute(pred-true))
 
         R,p = pearsonr(pred,true)
         print('Fold',fold+1,'Average error',av_er,'PCC',R)
-        plt.scatter(true,pred,s=1)
+        plt.scatter(np.log(true+0.001),np.log(pred+0.001),s=1)
         plt.xlabel('True')
         plt.ylabel('Pred')
-        plt.show()
+        plt.savefig(outdir+mode+str(fold)+'.png',format='png',dpi=300)
+        plt.close()
         #Save
         corrs.append(R)
         errors.append(av_er)
