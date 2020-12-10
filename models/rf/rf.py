@@ -16,6 +16,7 @@ from sklearn.metrics import mutual_info_score
 from scipy.stats import pearsonr
 from scipy import stats
 from math import e
+import pickle
 import numpy as np
 
 
@@ -244,13 +245,13 @@ def fit_model(X, y, NFOLD, mode, outdir):
         coefs = []
         intercepts = []
 
-        reg = RandomForestRegressor().fit(X_train, np.log(y_train+0.001))
+        reg = RandomForestRegressor(n_jobs=-1, random_state=42).fit(X_train, np.log(y_train+0.001))
         pred = reg.predict(X_valid)
         pred = np.power(e,pred)
-        if mode =='high':
-            pred[pred>5000]=5000
-        if mode=='low':
-            pred[pred>10]=10
+        #if mode =='high':
+        #    pred[pred>5000]=5000
+        #if mode=='low':
+        #    pred[pred>10]=10
         true = y_valid
         av_er = np.average(np.absolute(pred-true))
 
@@ -265,11 +266,14 @@ def fit_model(X, y, NFOLD, mode, outdir):
         corrs.append(R)
         errors.append(av_er)
 
-
+        #Feature importances
+        mdi_importances['Importance'+str(i)] = reg.feature_importances_
 
         #Save
         np.save(outdir+'corrs'+str(fold+1)+'.npy',np.array(corrs))
         np.save(outdir+'errors'+str(fold+1)+'.npy',np.array(errors))
+        with open(outdir+'model'+str(fold), 'wb') as f:
+            pickle.dump(reg, f)
 
 
     return None
