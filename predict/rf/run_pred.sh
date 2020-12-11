@@ -8,6 +8,6 @@ ALL_HISTORICAL_IPS=../../data/hitorical_ip.csv
 #Predit June
 #python3 predict.py -s 2020-06-07 -e 2020-06-30 -ip $ALL_HISTORICAL_IPS -o predictions_2020-06-07_2020-06-31.csv
 #Predit November
-python3 predict.py -s 2020-11-01 -e 2020-11-30 -ip $ALL_HISTORICAL_IPS -o predictions_2020-11-01_2020-11-30.csv
+python3 predict.py -s 2020-10-11 -e 2020-12-11 -ip $ALL_HISTORICAL_IPS -o predictions_2020-10-11_2020-12-11.csv
 #1 month in January for India and Mexico
 #python3 predict.py -s 2021-01-01 -e 2021-01-31 -ip ../test_cases/future_ip.csv -o predictions_2021-01-01_2021-01-31.csv
