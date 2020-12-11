@@ -194,7 +194,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         #Get future NPIs
         future_npis = np.array(ips_gdf[NPI_COLS])
         if adjusted_data_gdf['RegionName'].values[0]=='Brazil':
-            pdb.set_trace()
+
 
         # Make prediction for each requested day
         geo_preds = []
