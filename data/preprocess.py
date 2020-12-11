@@ -606,7 +606,6 @@ except:
     oxford_data = pd.merge(oxford_data,world_areas,on='CountryCode', how='left')
     #Add the additional_xprize_data
     oxford_data = pd.merge(oxford_data,additional_xprize_data,on='CountryCode', how='left')
-    pdb.set_trace()
     #Parse regions
     oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,
                                 gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors)
