@@ -92,7 +92,7 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
         np.save(outdir+'X_'+str(train_days)+'_'+str(forecast_days)+'.npy',X)
         np.save(outdir+'y_'+str(train_days)+'_'+str(forecast_days)+'.npy',y)
         np.save(outdir+'day_closest_to_target_'+str(train_days)+'_'+str(forecast_days)+'.npy',day_closest_to_target)
-        pdb.set_trace()
+
     return X,y,day_closest_to_target
 
 def split_for_training(sel,train_days,forecast_days):
@@ -323,5 +323,5 @@ dct_high = day_closest_to_target[high_i][:,0]
 X_low = X[low_i][:,0,:]
 y_low = y[low_i][:,0]
 dct_low = day_closest_to_target[low_i][:,0]
-
+pdb.set_trace()
 feature_outcome(X_high,y_high,dct_high,X_low,y_low,dct_low,outdir)

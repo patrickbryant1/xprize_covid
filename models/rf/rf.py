@@ -77,6 +77,13 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
                         'workplaces',
                         'residential',
                         'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
+                        'Urban population (% of total population)',
+                        'Population ages 65 and above (% of total population)',
+                        'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)',
+                        'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
+                        'Share of Deaths from Air Pollution (%)',
+                        'CO2 emissions (metric tons per capita)',
+                        'Air transport (# carrier departures worldwide)',
                         'population']
 
     #Get features
@@ -160,8 +167,16 @@ def split_for_training(sel,train_days,forecast_days):
             uai = country_region_data.loc[0,'uai'] #Uncertainty
             ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
             ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-            #PC1 =  country_region_data.loc[0,'PC1'] #Principal components 1 and 2 of last 90 days of cases
-            #PC2 =  country_region_data.loc[0,'PC2']
+            upop = country_region_data.loc[0,'Urban population (% of total population)']
+            pop65 = country_region_data.loc[0,'Population ages 65 and above (% of total population)']
+            gdp = country_region_data.loc[0,'GDP per capita (current US$)']
+            obesity = country_region_data.loc[0,'Obesity Rate (%)']
+            cancer = country_region_data.loc[0,'Cancer Rate (%)']
+            smoking_deaths = country_region_data.loc[0,'Share of Deaths from Smoking (%)']
+            pneumonia_dr = country_region_data.loc[0,'Pneumonia Death Rate (per 100K)']
+            air_pollution_deaths = country_region_data.loc[0,'Share of Deaths from Air Pollution (%)']
+            co2_emission = country_region_data.loc[0,'CO2 emissions (metric tons per capita)']
+            air_transport = country_region_data.loc[0,'Air transport (# carrier departures worldwide)']
             population = country_region_data.loc[0,'population']
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
@@ -170,7 +185,9 @@ def split_for_training(sel,train_days,forecast_days):
 
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr','population'})
+             'mas', 'uai', 'ltowvs', 'ivr','Urban population (% of total population)','Population ages 65 and above (% of total population)',
+             'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
+             'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)','population'})
 
             #Normalize the cases by _high'000 population
             #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/_high000)
@@ -195,7 +212,10 @@ def split_for_training(sel,train_days,forecast_days):
                 yi = np.median(yi) #divide by average observed or total observe in period?
 
                 #Add
-                X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
+                X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
+                                                period_change,pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                                                cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
+                                                air_transport, population]))
                 y.append(yi)
 
     return np.array(X), np.array(y)
