@@ -20,10 +20,11 @@ def load_model():
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/'
     for i in range(5):
         try:
-            low_models.append(pickle.load(open('./models/low/model'+str(i), 'rb')))
-            high_models.append(pickle.load(open('./models/high/model'+str(i), 'rb')))
+            low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
+            high_models.append(pickle.load(open(modeldir+'/high/model'+str(i), 'rb')))
         except:
             print('Missing fold',i)
 
@@ -119,6 +120,13 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                             'gross_net_income',
                             'population_density',
                             'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
+                            'Urban population (% of total population)',
+                            'Population ages 65 and above (% of total population)',
+                            'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)',
+                            'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
+                            'Share of Deaths from Air Pollution (%)',
+                            'CO2 emissions (metric tons per capita)',
+                            'Air transport (# carrier departures worldwide)',
                             'population']
 
     NB_LOOKBACK_DAYS=21
@@ -130,8 +138,12 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         print('Predicting for', g)
         #Get intervention plan for g
         ips_gdf = ips_df[ips_df.GeoID == g]
-         # Pull out all relevant data for g
-        adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
+        # Pull out all relevant data for g
+        try:
+            adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
+        except:
+            print('Region', g, 'not in data...')
+            pdb.set_trace()
 
 
         #Check the timelag to the last known date
@@ -143,7 +155,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         adjusted_data_gdf = adjusted_data_gdf[adjusted_data_gdf['Date']<current_date]
         adjusted_data_gdf = adjusted_data_gdf.reset_index()
         #Check if enough data to predict
-        if len(adjusted_data_gdf)<21:
+        if len(adjusted_data_gdf)<NB_LOOKBACK_DAYS:
             print('Not enough data for',g)
             pdb.set_trace()
             continue
@@ -158,6 +170,16 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         uai = adjusted_data_gdf.loc[0,'uai'] #Uncertainty
         ltowvs = adjusted_data_gdf.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
         ivr = adjusted_data_gdf.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
+        upop = adjusted_data_gdf.loc[0,'Urban population (% of total population)']
+        pop65 = adjusted_data_gdf.loc[0,'Population ages 65 and above (% of total population)']
+        gdp = adjusted_data_gdf.loc[0,'GDP per capita (current US$)']
+        obesity = adjusted_data_gdf.loc[0,'Obesity Rate (%)']
+        cancer = adjusted_data_gdf.loc[0,'Cancer Rate (%)']
+        smoking_deaths = adjusted_data_gdf.loc[0,'Share of Deaths from Smoking (%)']
+        pneumonia_dr = adjusted_data_gdf.loc[0,'Pneumonia Death Rate (per 100K)']
+        air_pollution_deaths = adjusted_data_gdf.loc[0,'Share of Deaths from Air Pollution (%)']
+        co2_emission = adjusted_data_gdf.loc[0,'CO2 emissions (metric tons per capita)']
+        air_transport = adjusted_data_gdf.loc[0,'Air transport (# carrier departures worldwide)']
         population = adjusted_data_gdf.loc[0,'population']
 
         #Normalize cases to per 100'000 pop
@@ -173,14 +195,18 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
         # Make prediction for each requested day
         geo_preds = []
+        geo_preds_upper = []
+        geo_preds_lower = []
         days_ahead = 0
+        prev_std=0 #Std deviation
         while current_date <= end_date:
             # Prepare data - make check so that enough previous data exists
             #The np array has to be copied!!!!!!!!
             #Otherwise there is a direct link to the adjusted_additional_g which means
             #that both arrays are updated simultaneously
+
+            #Get change over the past NB_LOOKBACK_DAYS. The predictions are the medians = 11 days ahead
             X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:].copy() #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
-            #Get change over the past NB_LOOKBACK_DAYS
             case_in_end = X_additional[-1,0]
             period_change = X_additional[-1,1]-X_additional[0,1]
             case_medians = np.median(X_additional[:,:2],axis=0)
@@ -193,34 +219,42 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
             X = np.concatenate([X_additional,X_npis])
             #Add
-            X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population])
+            X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,
+                            period_change,pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                            cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
+                            air_transport, population])
 
-            # Make the prediction
-            preds = []
-            if np.average(adjusted_additional_g[-NB_LOOKBACK_DAYS:,0])>threshold:
+            # Make the prediction from all 5 models
+            model_preds = []
+            if X[0]>threshold:
                 for model in high_models:
-                    preds.append(model.predict(np.array([X]))[0])
+                    model_preds.append(model.predict(np.array([X]))[0])
             else:
                 for model in low_models:
-                    preds.append(model.predict(np.array([X]))[0])
+                    model_preds.append(model.predict(np.array([X]))[0])
 
 
-            pred = np.average(np.power(e,preds))
+            pred = np.power(e,model_preds)
+            pred_av = np.average(pred)
+            pred_std = np.std(pred)
             #Order the predictions to run through the predicted mean
             #It looks like the median in the nex section is mainly driven
             #by the end of that section --> run from case in end of input to pred
-            pred = np.arange(case_in_end,pred,(pred-case_in_end)/21) #
-
-
+            pred = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/11)
+            pred_lower = np.arange(case_in_end-2*prev_std,pred_av-2*pred_std,((pred_av-2*pred_std)-(case_in_end-2*prev_std))/11)
+            pred_upper = np.arange(case_in_end+2*prev_std,pred_av+2*pred_std,((pred_av+2*pred_std)-(case_in_end+2*prev_std))/11)
+            prev_std = pred_std
             #Do not allow predicting more cases than 1/21 of population per day
             pred[pred>((1/21*population)/(population/100000))]=(1/21*population)/(population/100000)
 
             # Add if it's a requested date
-            if current_date+ np.timedelta64(21, 'D') >= start_date:
+            if current_date+ np.timedelta64(11, 'D') >= start_date:
                 #Append the predicted dates
-                days_for_pred =  current_date+ np.timedelta64(21, 'D')-start_date
+                days_for_pred =  current_date+ np.timedelta64(11, 'D')-start_date
                 geo_preds.extend(pred[-days_for_pred.days:])
-                #print(current_date.strftime('%Y-%m-%d'), pred)
+                geo_preds_lower.extend(pred_lower[-days_for_pred.days:])
+                geo_preds_upper.extend(pred_upper[-days_for_pred.days:])
+
             else:
                 print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")
 
@@ -234,16 +268,18 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #!!!!!!!!!!!!!!!
 
             adjusted_additional_g = np.append(adjusted_additional_g, future_additional,axis=0)
-            historical_npis_g = np.append(historical_npis_g, future_npis[days_ahead:days_ahead + 21], axis=0)
+            historical_npis_g = np.append(historical_npis_g, future_npis[days_ahead:days_ahead + 11], axis=0)
             # Move to next period
-            current_date = current_date + np.timedelta64(21, 'D')
-            days_ahead += 21
+            current_date = current_date + np.timedelta64(11, 'D')
+            days_ahead += 11
 
 
         # Create geo_pred_df with pred column
         geo_pred_df = ips_gdf[ID_COLS].copy()
-        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)])#/(population/100000)
+        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)])#*(population/100000) Adjust for population
 
+        geo_pred_df['PredictedDailyNewCases_lower'] = np.array(geo_preds_lower[:len(geo_pred_df)])
+        geo_pred_df['PredictedDailyNewCases_upper'] = np.array(geo_preds_upper[:len(geo_pred_df)])
         #Check
         adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
         adjusted_data_gdf.loc[:,('smoothed_cases')]=np.array(adjusted_data_gdf.loc[:,('smoothed_cases')])/(population/100000)
@@ -251,8 +287,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_pred_df['population']=population
         #Vis
         fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
-        plt.plot(np.arange(24),geo_pred_df['PredictedDailyNewCases'],color='grey')
-        plt.bar(np.arange(24),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
+        plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases'],color='grey')
+        plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases_lower'],geo_pred_df['PredictedDailyNewCases_upper'],alpha=0.5,color='grey')
+        plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
         plt.title(g)
         plt.tight_layout()
         plt.savefig('./plots/'+g+'.png',format='png')
