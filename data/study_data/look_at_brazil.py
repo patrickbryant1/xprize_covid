@@ -60,7 +60,7 @@ for region in brazil_data.RegionName.unique():
     region_data = brazil_data[brazil_data['RegionName']==region]
     if region==0:
         region = 'Whole Brazil'
-    plt.plot(region_data['Date'],region_data['ConfirmedCases'],label=region)
+    plt.scatter(region_data['Date'],region_data['ConfirmedCases'],label=region)
 plt.legend()
 plt.yscale('log')
 plt.ylabel('cases')
@@ -80,7 +80,7 @@ for region in brazil_data.RegionCode.unique():
         population=country_populations[country_populations['Country Code']==region_data['CountryCode'].values[0]]['2018'].values[0]
     if region==0:
         region = 'Whole Brazil'
-    plt.plot(region_data['Date'],region_data['ConfirmedCases']/(population/100000),label=region)
+    plt.scatter(region_data['Date'],region_data['ConfirmedCases']/(population/100000),label=region)
 
 plt.legend()
 plt.ylabel('Cases per 100000 population')
