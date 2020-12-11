@@ -35,6 +35,8 @@ parser.add_argument('--cultural_descriptors', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to Hofstede cultural descriptors.')
 parser.add_argument('--world_areas', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to csv with ISO3 to world area.')
+parser.add_argument('--additional_xprize_data', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to csv with additional data from xprize.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -573,6 +575,7 @@ cultural_descriptors = pd.read_csv(args.cultural_descriptors[0],sep=';')
 #Replace the #NULL! with 0
 cultural_descriptors=cultural_descriptors.replace('#NULL!',0)
 world_areas = pd.read_csv(args.world_areas[0])
+additional_xprize_data = pd.read_csv(args.additional_xprize_data[0])
 outdir = args.outdir[0]
 
 #Save the NPIS for testing
@@ -597,10 +600,13 @@ try:
 
 
 
+
 except:
     #Add world area to ocford data
-
     oxford_data = pd.merge(oxford_data,world_areas,on='CountryCode', how='left')
+    #Add the additional_xprize_data
+    oxford_data = pd.merge(oxford_data,additional_xprize_data,on='CountryCode', how='left')
+    pdb.set_trace()
     #Parse regions
     oxford_data = parse_regions(oxford_data, us_state_populations, regional_populations, country_populations,
                                 gross_net_income,population_density,monthly_temperature,mobility_data,cultural_descriptors)

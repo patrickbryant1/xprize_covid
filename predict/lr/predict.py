@@ -6,6 +6,7 @@ import numpy as np
 import os
 import sys
 import matplotlib.pyplot as plt
+from math import e
 import pdb
 
 def load_model():
@@ -18,10 +19,10 @@ def load_model():
     #Fetch intercepts and coefficients
     for i in range(1,6):
         try:
-            low_intercepts.append(np.load('./model/average/low/intercepts'+str(i)+'.npy', allow_pickle=True))
-            low_coefs.append(np.load('./model/average/low/coefs'+str(i)+'.npy', allow_pickle=True))
-            high_intercepts.append(np.load('./model/average/high/intercepts'+str(i)+'.npy', allow_pickle=True))
-            high_coefs.append(np.load('./model/average/high/coefs'+str(i)+'.npy', allow_pickle=True))
+            low_intercepts.append(np.load('./model/median/low/intercepts'+str(i)+'.npy', allow_pickle=True))
+            low_coefs.append(np.load('./model/median/low/coefs'+str(i)+'.npy', allow_pickle=True))
+            high_intercepts.append(np.load('./model/median/high/intercepts'+str(i)+'.npy', allow_pickle=True))
+            high_coefs.append(np.load('./model/median/high/coefs'+str(i)+'.npy', allow_pickle=True))
         except:
             print('Missing fold',i)
 
@@ -179,8 +180,10 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #Get change over the past NB_LOOKBACK_DAYS
             case_in_end = X_additional[-1,0]
             period_change = X_additional[-1,1]-X_additional[0,1]
-
+            case_medians = np.median(X_additional[:,:2],axis=0)
             X_additional = np.average(X_additional,axis=0)
+            X_additional[:2]=case_medians
+
 
             #Get NPIS
             X_npis = historical_npis_g[-NB_LOOKBACK_DAYS:].copy()
@@ -191,32 +194,14 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population])
 
             # Make the prediction
-            if np.average(adjusted_additional_g[-NB_LOOKBACK_DAYS:,0])>5:
-                pred = np.dot(high_coefs,X)+high_intercepts
+            if np.average(adjusted_additional_g[-NB_LOOKBACK_DAYS:,0])>1.8:
+                preds = np.dot(high_coefs,X)+high_intercepts
             else:
-                pred =  np.dot(low_coefs,X)+high_intercepts
+                preds = np.dot(low_coefs,X)+high_intercepts
 
-            pred[pred<0]=0
             #Order the predictions to run through the predicted mean
-            diff = np.median(pred-X[0])
-            if diff/max(1,X[0])>5:
-                diff = max(1,X[0])*5
-
-            diff_contr1 = case_in_end-X[0] #From in mean to casae in end
-            diff_contr2 = diff - diff_contr1 #From case in end to pred mean
-            sp = max(0,case_in_end) #Start
-            mp = max(0,case_in_end+diff_contr2) #Mid
-            ep = max(0,mp+diff_contr2) #End
-            if sp == mp:
-                pred_half1 = np.repeat(mp,11)
-            else:
-                pred_half1 = np.arange(sp,mp,(mp-sp)/11) #first half of preds
-            if mp == ep:
-                pred_half2 = np.repeat(ep,10)
-            else:
-                pred_half2 = np.arange(mp,ep,(ep-mp)/10) #first half of preds
-            pred = np.concatenate([pred_half1, pred_half2])
-
+            pred = np.average(np.power(e,preds))
+            pred = np.arange(case_in_end,pred,(pred-case_in_end)/21) #
 
             #Do not allow predicting more cases than 20 % of population
             pred[pred>((1/21*population)/(population/100000))]=(1/21*population)/(population/100000)
@@ -256,9 +241,11 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
         geo_pred_df['population']=population
         #Vis
+        fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
         plt.plot(np.arange(24),geo_pred_df['PredictedDailyNewCases'],color='grey')
         plt.bar(np.arange(24),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
         plt.title(g)
+        plt.tight_layout()
         plt.savefig('./plots/'+g+'.png',format='png')
         plt.close()
         #Save

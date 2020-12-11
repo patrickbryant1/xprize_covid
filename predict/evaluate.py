@@ -44,14 +44,18 @@ outdir = args.outdir[0]
 
 #Define region
 in_csv['GeoID'] = in_csv['CountryName'] + '__' + in_csv['RegionName'].astype(str)
+
 #Evaluate all regions and save
+drop_regions = in_csv[in_csv['CountryName']=='Brazil']['GeoID'].unique()
 all_cumulative_errors = []
 all_PCC = []
 for region in in_csv['GeoID'].unique():
+    if region in drop_regions:
+        continue
     geo_data = in_csv[in_csv['GeoID']==region]
     population = geo_data['population'].values[0]
-    geo_pred = np.array(geo_data['PredictedDailyNewCases'])/(population/100000)
-    geo_true = np.array(geo_data['smoothed_cases'])//(population/100000)
+    geo_pred = np.array(geo_data['PredictedDailyNewCases'])
+    geo_true = np.array(geo_data['smoothed_cases'])
     #Calculate error
     cumulative_error, R = calc_error_pcc(geo_pred, geo_true)
     all_cumulative_errors.append(cumulative_error)

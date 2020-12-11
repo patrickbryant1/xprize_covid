@@ -5,10 +5,14 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+import matplotlib
 import matplotlib.pyplot as plt
 import pickle
 from math import e
 import pdb
+
+#Set font size
+matplotlib.rcParams.update({'font.size': 7})
 
 def load_model():
     '''Load the model
@@ -250,8 +254,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         plt.plot(np.arange(24),geo_pred_df['PredictedDailyNewCases'],color='grey')
         plt.bar(np.arange(24),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
         plt.title(g)
-        plt.savefig('./plots/'+g+'.png',format='png')
         plt.tight_layout()
+        plt.savefig('./plots/'+g+'.png',format='png')
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
