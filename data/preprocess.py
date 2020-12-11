@@ -598,7 +598,7 @@ try:
            "Region_index":int},
     error_bad_lines=False)
 
-
+    pdb.set_trace()
 
 
 except:

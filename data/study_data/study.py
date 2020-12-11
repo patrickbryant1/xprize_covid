@@ -69,29 +69,38 @@ def get_features(adjusted_data,train_days,forecast_days,outdir):
                         'workplaces',
                         'residential',
                         'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
+                        'Urban population (% of total population)',
+                        'Population ages 65 and above (% of total population)',
+                        'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)',
+                        'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
+                        'Share of Deaths from Air Pollution (%)',
+                        'CO2 emissions (metric tons per capita)',
+                        'Air transport (# carrier departures worldwide)',
                         'population']
 
     #Get features
     try:
         X = np.load(outdir+'X_'+str(train_days)+'_'+str(forecast_days)+'.npy', allow_pickle=True)
         y = np.load(outdir+'y_'+str(train_days)+'_'+str(forecast_days)+'.npy', allow_pickle=True)
+        day_closest_to_target = np.load(outdir+'day_closest_to_target_'+str(train_days)+'_'+str(forecast_days)+'.npy', allow_pickle=True)
 
     except:
         sel = adjusted_data[selected_features]
-        X,y = split_for_training(sel,train_days,forecast_days)
+        X,y,day_closest_to_target = split_for_training(sel,train_days,forecast_days)
 
         #Save
         np.save(outdir+'X_'+str(train_days)+'_'+str(forecast_days)+'.npy',X)
         np.save(outdir+'y_'+str(train_days)+'_'+str(forecast_days)+'.npy',y)
-
-
-    return X,y
+        np.save(outdir+'day_closest_to_target_'+str(train_days)+'_'+str(forecast_days)+'.npy',day_closest_to_target)
+        pdb.set_trace()
+    return X,y,day_closest_to_target
 
 def split_for_training(sel,train_days,forecast_days):
     '''Split the data for training and testing
     '''
     X = [] #Input periods
     y = [] #Targets
+    day_closest_to_target = [] #which future day that is the closest to the target median
 
 
     countries = sel['Country_index'].unique()
@@ -130,8 +139,16 @@ def split_for_training(sel,train_days,forecast_days):
             uai = country_region_data.loc[0,'uai'] #Uncertainty
             ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
             ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-            #PC1 =  country_region_data.loc[0,'PC1'] #Principal components 1 and 2 of last 90 days of cases
-            #PC2 =  country_region_data.loc[0,'PC2']
+            upop = country_region_data.loc[0,'Urban population (% of total population)']
+            pop65 = country_region_data.loc[0,'Population ages 65 and above (% of total population)']
+            gdp = country_region_data.loc[0,'GDP per capita (current US$)']
+            obesity = country_region_data.loc[0,'Obesity Rate (%)']
+            cancer = country_region_data.loc[0,'Cancer Rate (%)']
+            smoking_deaths = country_region_data.loc[0,'Share of Deaths from Smoking (%)']
+            pneumonia_dr = country_region_data.loc[0,'Pneumonia Death Rate (per 100K)']
+            air_pollution_deaths = country_region_data.loc[0,'Share of Deaths from Air Pollution (%)']
+            co2_emission = country_region_data.loc[0,'CO2 emissions (metric tons per capita)']
+            air_transport = country_region_data.loc[0,'Air transport (# carrier departures worldwide)']
             population = country_region_data.loc[0,'population']
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
@@ -140,7 +157,9 @@ def split_for_training(sel,train_days,forecast_days):
 
             country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr','population'})
+             'mas', 'uai', 'ltowvs', 'ivr','Urban population (% of total population)','Population ages 65 and above (% of total population)',
+             'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
+             'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)','population'})
 
             #Normalize the cases by _high'000 population
             #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/_high000)
@@ -157,15 +176,22 @@ def split_for_training(sel,train_days,forecast_days):
                 period_change = xi[-1,13]-xi[0,13]
                 xi = np.median(xi,axis=0)
 
-                #Normalize the cases with the input period mean
+                #Get median
                 yi = np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])
-                yi = np.median(yi) #divide by average observed or total observe in period?
+                median_yi = np.median(yi)
+                #look at which day is the closest to the median
+                median_diff = np.absolute(yi-median_yi)
+                day_closest_to_target.append(np.average(np.argwhere(median_diff==min(median_diff))))
 
                 #Add
-                X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,period_change,pdi, idv, mas, uai, ltowvs, ivr, population]))
-                y.append(yi)
+                X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
+                                                period_change,pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                                                cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
+                                                air_transport, population]))
+                y.append(median_yi)
 
-    return np.array(X), np.array(y)
+
+    return np.array(X), np.array(y), np.array(day_closest_to_target)
 
 def calc_mutual_info(y_high,y_low):
     '''Calculate the MI by bootstrapping n random samples 10 times
@@ -180,7 +206,7 @@ def calc_mutual_info(y_high,y_low):
     return np.average(mutual_info), np.std(mutual_info)
 
 
-def feature_outcome(X_high,y_high,X_low,y_low,outdir):
+def feature_outcome(X_high,y_high,dct_high,X_low,y_low,dct_low,outdir):
     '''Study the difference in outcome due to a feture being of a certain kind
     '''
 
@@ -190,7 +216,9 @@ def feature_outcome(X_high,y_high,X_low,y_low,outdir):
                     'H2_Testing policy','H3_Contact tracing','H6_Facial Coverings', 'smoothed_cases','cumulative_smoothed_cases',
                     'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density', 'monthly_temperature',
                     'retail_and_recreation', 'grocery_and_pharmacy', 'parks', 'transit_stations', 'workplaces','residential',
-                    'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr', 'population']
+                    'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr', 'Urban population (% of total population)','Population ages 65 and above (% of total population)',
+                    'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
+                    'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)','Air transport (# carrier departures worldwide)','population']
 
     for i in range(len(feature_names)):
         fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
@@ -203,6 +231,7 @@ def feature_outcome(X_high,y_high,X_low,y_low,outdir):
         plt.tight_layout()
         plt.savefig(outdir+feature_names[i]+'.png',format='png',dpi=300)
         plt.close()
+
 
 #####MAIN#####
 #Set font size
@@ -233,7 +262,7 @@ except:
     MI = {'case_av':[],'case_std':[]}
     for td in [7,14,21]:
         for fd in [7,14,21]:
-            X,y =  get_features(adjusted_data,td,fd,outdir)
+            X,y,day_closest_to_target =  get_features(adjusted_data,td,fd,outdir)
 
             #Investigate t vs MI
             mi_scores = []
@@ -283,13 +312,16 @@ plt.close()
 
 
 #Look at features vs selected t from the selected periods
-X,y =  get_features(adjusted_data,21,21,outdir)
+X,y,day_closest_to_target =  get_features(adjusted_data,21,21,outdir)
 t=1.8
 high_i = np.argwhere(X[:,12]>t)
 low_i = np.argwhere(X[:,12]<=t)
 #Select
 X_high = X[high_i][:,0,:]
 y_high = y[high_i][:,0]
+dct_high = day_closest_to_target[high_i][:,0]
 X_low = X[low_i][:,0,:]
 y_low = y[low_i][:,0]
-feature_outcome(X_high,y_high,X_low,y_low,outdir)
+dct_low = day_closest_to_target[low_i][:,0]
+
+feature_outcome(X_high,y_high,dct_high,X_low,y_low,dct_low,outdir)
