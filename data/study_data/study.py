@@ -210,6 +210,30 @@ def feature_outcome(X_high,y_high,dct_high,X_low,y_low,dct_low,outdir):
     '''Study the difference in outcome due to a feture being of a certain kind
     '''
 
+    #Look at dct vs y
+    fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
+    plt.scatter(dct_low+1,np.log10(y_low+0.001),s=0.1)
+    plt.tight_layout()
+    plt.savefig(outdir+'dct_low.png',format='png',dpi=300)
+    plt.close()
+
+    fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
+    plt.scatter(dct_high+1,np.log10(y_high+0.001),s=0.1)
+    plt.tight_layout()
+    plt.savefig(outdir+'dct_high.png',format='png',dpi=300)
+    plt.close()
+
+    fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
+    plt.hist(dct_low+1,alpha=0.5,label='low',bins=21)
+    plt.hist(dct_high+1,alpha=0.5,label='high',bins=21)
+    plt.legend()
+    plt.xlabel('Day of median')
+    plt.tight_layout()
+    plt.savefig(outdir+'dct_distr.png',format='png',dpi=300)
+    plt.close()
+    pdb.set_trace()
+
+
     feature_names = ['C1_School closing','C2_Workplace closing','C3_Cancel public events',
                     'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
                     'C7_Restrictions on internal movement','C8_International travel controls','H1_Public information campaigns',
@@ -323,5 +347,5 @@ dct_high = day_closest_to_target[high_i][:,0]
 X_low = X[low_i][:,0,:]
 y_low = y[low_i][:,0]
 dct_low = day_closest_to_target[low_i][:,0]
-pdb.set_trace()
+
 feature_outcome(X_high,y_high,dct_high,X_low,y_low,dct_low,outdir)
