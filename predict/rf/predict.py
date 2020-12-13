@@ -202,6 +202,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_preds_upper = []
         geo_preds_lower = []
         days_ahead = 0
+        pred_days=14
         prev_std=0 #Std deviation
         while current_date <= end_date:
             # Prepare data - make check so that enough previous data exists
@@ -245,11 +246,11 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #Order the predictions to run through the predicted mean
             #It looks like the median in the nex section is mainly driven
             #by the end of that section --> run from case in end of input to pred
-            pred_half1 = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/11)
-            pred_half2 = np.arange(pred_av,pred_av+(pred_av-case_in_end),(pred_av-case_in_end)/10)
+            pred_half1 = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days/2))
+            pred_half2 = np.arange(pred_av,pred_av+(pred_av-case_in_end),(pred_av-case_in_end)/(pred_days/2))
             pred = np.concatenate([pred_half1,pred_half2])
-            pred_lower = np.arange(case_in_end-4*prev_std,pred[-1]-4*pred_std,((pred[-1]-4*pred_std)-(case_in_end-4*prev_std))/21)
-            pred_upper = np.arange(case_in_end+4*prev_std,pred[-1]+4*pred_std,((pred[-1]+4*pred_std)-(case_in_end+4*prev_std))/21)
+            pred_lower = np.arange(case_in_end-4*prev_std,pred[-1]-4*pred_std,((pred[-1]-4*pred_std)-(case_in_end-4*prev_std))/pred_days)
+            pred_upper = np.arange(case_in_end+4*prev_std,pred[-1]+4*pred_std,((pred[-1]+4*pred_std)-(case_in_end+4*prev_std))/pred_days)
             prev_std = pred_std
 
             #Min 0
@@ -257,12 +258,12 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             pred_lower[pred_lower<0]=0
             pred_upper[pred_upper<0]=0
             #Do not allow predicting more cases than 1/21 of population per day
-            pred[pred>((1/21*population)/(population/100000))]=(1/21*population)/(population/100000)
+            pred[pred>((1/pred_days*population)/(population/100000))]=(1/21*population)/(population/100000)
 
             # Add if it's a requested date
-            if current_date+ np.timedelta64(21, 'D') >= start_date:
+            if current_date+ np.timedelta64(pred_days, 'D') >= start_date:
                 #Append the predicted dates
-                days_for_pred =  current_date+ np.timedelta64(21, 'D')-start_date
+                days_for_pred =  current_date+ np.timedelta64(pred_days, 'D')-start_date
                 geo_preds.extend(pred[-days_for_pred.days:])
                 geo_preds_lower.extend(pred_lower[-days_for_pred.days:])
                 geo_preds_upper.extend(pred_upper[-days_for_pred.days:])
@@ -282,8 +283,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             adjusted_additional_g = np.append(adjusted_additional_g, future_additional,axis=0)
             historical_npis_g = np.append(historical_npis_g, future_npis[days_ahead:days_ahead + 21], axis=0)
             # Move to next period
-            current_date = current_date + np.timedelta64(21, 'D')
-            days_ahead += 21
+            current_date = current_date + np.timedelta64(pred_days, 'D')
+            days_ahead += pred_days
 
 
         # Create geo_pred_df with pred column
