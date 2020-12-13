@@ -7,7 +7,7 @@ import os
 import sys
 import matplotlib
 import matplotlib.pyplot as plt
-import pickle
+import _pickle as pickle
 from math import e
 import pdb
 
@@ -105,6 +105,10 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     adjusted_data['GeoID'] = adjusted_data['CountryName'] + '__' + adjusted_data['RegionName'].astype(str)
     adjusted_data = adjusted_data.fillna(0)
 
+    #Exclude the regional data from Brazil
+    exclude_index = adjusted_data[(adjusted_data['CountryCode']=='BRA')&(adjusted_data['RegionCode']!='0')].index
+    adjusted_data = adjusted_data.drop(exclude_index)
+
     #4. Run the predictor
     additional_features = ['smoothed_cases',
                             'cumulative_smoothed_cases',
@@ -144,7 +148,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
         except:
             print('Region', g, 'not in data...')
-            pdb.set_trace()
+
 
 
         #Check the timelag to the last known date
@@ -158,7 +162,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         #Check if enough data to predict
         if len(adjusted_data_gdf)<NB_LOOKBACK_DAYS:
             print('Not enough data for',g)
-            pdb.set_trace()
             continue
         #Get no-repeat features
         death_to_case_scale = adjusted_data_gdf.loc[0,'death_to_case_scale']
@@ -193,8 +196,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:9]])
         #Get future NPIs
         future_npis = np.array(ips_gdf[NPI_COLS])
-        if adjusted_data_gdf['RegionName'].values[0]=='Brazil':
-
 
         # Make prediction for each requested day
         geo_preds = []
@@ -211,7 +212,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #Get change over the past NB_LOOKBACK_DAYS. The predictions are the medians = 11 days ahead
             X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:].copy() #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
             case_in_end = X_additional[-1,0]
-            period_change = X_additional[-1,1]-X_additional[0,1]
+            #period_change = X_additional[-1,1]-X_additional[0,1]
             case_medians = np.median(X_additional[:,:2],axis=0)
             X_additional = np.average(X_additional,axis=0)
             X_additional[:2]=case_medians
@@ -223,7 +224,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             X = np.concatenate([X_additional,X_npis])
             #Add
             X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,
-                            period_change,pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                            #period_change,
+                            pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
                             cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
                             air_transport, population])
 
@@ -291,9 +293,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_pred_df['PredictedDailyNewCases_lower'] = np.array(geo_preds_lower[:len(geo_pred_df)])
         geo_pred_df['PredictedDailyNewCases_upper'] = np.array(geo_preds_upper[:len(geo_pred_df)])
         #Check
-        adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
-        adjusted_data_gdf.loc[:,('smoothed_cases')]=np.array(adjusted_data_gdf.loc[:,('smoothed_cases')])/(population/100000)
-        geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf[['Date','smoothed_cases']],on='Date',how='left')
+        adjusted_data_gdf = adjusted_data[adjusted_data['GeoID'] == g]
+        adjusted_data_gdf.at[:,'smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
+        geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf.loc[:,('Date','smoothed_cases')],on='Date',how='left')
         geo_pred_df['population']=population
         #Vis
         fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))

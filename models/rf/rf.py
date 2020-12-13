@@ -16,7 +16,7 @@ from sklearn.metrics import mutual_info_score
 from scipy.stats import pearsonr
 from scipy import stats
 from math import e
-import pickle
+import _pickle as pickle
 import numpy as np
 
 
@@ -201,7 +201,7 @@ def split_for_training(sel,train_days,forecast_days):
                 #Get all features
                 xi = np.array(country_region_data.loc[di:di+train_days-1])
                 #Get change over the past train days
-                period_change = xi[-1,13]-xi[0,13]
+                #period_change = xi[-1,13]-xi[0,13]
                 case_medians = np.median(xi[:,12:14],axis=0)
                 xi = np.average(xi,axis=0)
                 xi[12:14]=case_medians
@@ -213,7 +213,8 @@ def split_for_training(sel,train_days,forecast_days):
 
                 #Add
                 X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
-                                                period_change,pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                                                #period_change,
+                                                pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
                                                 cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
                                                 air_transport, population]))
                 y.append(yi)
@@ -320,8 +321,12 @@ outdir = args.outdir[0]
 
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
+#Exclude the regional data from Brazil
+exclude_index = adjusted_data[(adjusted_data['CountryCode']=='BRA')&(adjusted_data['RegionCode']!='0')].index
+adjusted_data = adjusted_data.drop(exclude_index)
+
 #Select only world area data
-world_areas = {1:"Europe & Central Asia"}
+#world_areas = {1:"Europe & Central Asia"}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 #Get data
 
