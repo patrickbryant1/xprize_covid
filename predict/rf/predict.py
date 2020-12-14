@@ -20,7 +20,7 @@ def load_model():
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/6_weeks_ahead/'
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/'
     for i in range(5):
         try:
             low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
@@ -202,7 +202,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_preds_upper = []
         geo_preds_lower = []
         days_ahead = 0
-        pred_days=42
+        pred_days=28-4
         prev_std=0 #Std deviation
         while current_date <= end_date:
             # Prepare data - make check so that enough previous data exists
@@ -249,21 +249,18 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #by the end of that section --> run from case in end of input to pred
             pred = np.zeros(pred_days)
             pred_lower =  np.zeros(pred_days)
-            pred_higher =  np.zeros(pred_days)
+            pred_upper =  np.zeros(pred_days)
             #Assign the first 4
             pred[:3]=np.arange(case_in_end,pred_av[0],(pred_av[0]-case_in_end)/3)
             pred_lower[:3]=np.arange(case_in_end,pred_av[0]-2*pred_std[0],(pred_av[0]-2*pred_std[0] - case_in_end)/3)
-            pred_higher[:3]=np.arange(case_in_end,pred_av[0]+2*pred_std[0],(pred_av[0]+2*pred_std[0] - case_in_end)/3)
+            pred_upper[:3]=np.arange(case_in_end,pred_av[0]+2*pred_std[0],(pred_av[0]+2*pred_std[0] - case_in_end)/3)
             for pw in range(pred_av.shape[0]-1):
-
-                pred[3+pw*7:3+(pw+1)*7] = np.arange(pred_av[pw],pred_av[pw+1],(pred_av[pw+1]-pred_av[pw])/7)[:7]
-                pred_lower[3+pw*7:3+(pw+1)*7] = np.arange(pred_av[pw]-pred_std[pw],pred_av[pw+1]-pred_std[pw+1],((pred_av[pw+1]-pred_std[pw+1])-(pred_av[pw]-pred_std[pw]))/7)[:7]
-                pred_higher[3+pw*7:3+(pw+1)*7] = np.arange(pred_av[pw]+pred_std[pw],pred_av[pw+1]+pred_std[pw+1],((pred_av[pw+1]+pred_std[pw+1])-(pred_av[pw]+pred_std[pw]))/7)[:7]
-
-            pdb.set_trace()
-
-
-
+                try:
+                    pred[3+pw*7:3+(pw+1)*7] = np.arange(pred_av[pw],pred_av[pw+1],(pred_av[pw+1]-pred_av[pw])/7)[:7]
+                    pred_lower[3+pw*7:3+(pw+1)*7] = np.arange(pred_av[pw]-pred_std[pw],pred_av[pw+1]-pred_std[pw+1],((pred_av[pw+1]-pred_std[pw+1])-(pred_av[pw]-pred_std[pw]))/7)[:7]
+                    pred_upper[3+pw*7:3+(pw+1)*7] = np.arange(pred_av[pw]+pred_std[pw],pred_av[pw+1]+pred_std[pw+1],((pred_av[pw+1]+pred_std[pw+1])-(pred_av[pw]+pred_std[pw]))/7)[:7]
+                except:
+                    continue
 
             #Min 0
             pred[pred<0]=0
