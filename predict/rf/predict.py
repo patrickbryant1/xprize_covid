@@ -20,7 +20,7 @@ def load_model():
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/'
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/6_weeks_ahead/'
     for i in range(5):
         try:
             low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
@@ -112,13 +112,13 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #4. Run the predictor
     additional_features = ['smoothed_cases',
                             'cumulative_smoothed_cases',
-                            'monthly_temperature',
-                            'retail_and_recreation',
-                            'grocery_and_pharmacy',
-                            'parks',
-                            'transit_stations',
-                            'workplaces',
-                            'residential', #These 9 features are used as daily features
+                            'monthly_temperature', #These 3 features are used as daily features
+                            #'retail_and_recreation',
+                            #'grocery_and_pharmacy',
+                            #'parks',
+                            #'transit_stations',
+                            #'workplaces',
+                            #'residential',
                             'death_to_case_scale', #The rest are only used once
                             'case_death_delay',
                             'gross_net_income',
@@ -133,7 +133,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                             'Air transport (# carrier departures worldwide)',
                             'population']
 
-    NB_LOOKBACK_DAYS=21
+    NB_LOOKBACK_DAYS=7
     # Make predictions for each country,region pair
     #Set threshold for model selection
     threshold=1.8
@@ -193,7 +193,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         #Get historical NPIs
         historical_npis_g = np.array(adjusted_data_gdf[NPI_COLS])
         #Get other daily features
-        adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:9]])
+        adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:3]])
         #Get future NPIs
         future_npis = np.array(ips_gdf[NPI_COLS])
 
@@ -202,7 +202,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_preds_upper = []
         geo_preds_lower = []
         days_ahead = 0
-        pred_days=14
+        pred_days=42
         prev_std=0 #Std deviation
         while current_date <= end_date:
             # Prepare data - make check so that enough previous data exists
@@ -217,12 +217,12 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             case_medians = np.median(X_additional[:,:2],axis=0)
             X_additional = np.average(X_additional,axis=0)
             X_additional[:2]=case_medians
-
             #Get NPIS
             X_npis = historical_npis_g[-NB_LOOKBACK_DAYS:].copy()
             X_npis = np.average(X_npis,axis=0)
 
             X = np.concatenate([X_additional,X_npis])
+            model_preds = []
             #Add
             X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,
                             #period_change,
@@ -241,17 +241,20 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
 
             pred = np.power(e,model_preds)
-            pred_av = np.average(pred)
-            pred_std = np.std(pred)
+            pred_av = np.average(pred,axis=0)
+            pred_std = np.std(pred,axis=0)
+
             #Order the predictions to run through the predicted mean
             #It looks like the median in the nex section is mainly driven
             #by the end of that section --> run from case in end of input to pred
-            pred_half1 = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days/2))
-            pred_half2 = np.arange(pred_av,pred_av+(pred_av-case_in_end),(pred_av-case_in_end)/(pred_days/2))
-            pred = np.concatenate([pred_half1,pred_half2])
-            pred_lower = np.arange(case_in_end-4*prev_std,pred[-1]-4*pred_std,((pred[-1]-4*pred_std)-(case_in_end-4*prev_std))/pred_days)
-            pred_upper = np.arange(case_in_end+4*prev_std,pred[-1]+4*pred_std,((pred[-1]+4*pred_std)-(case_in_end+4*prev_std))/pred_days)
-            prev_std = pred_std
+            for pw in range(pred_av.shape[0]):
+                pred_half1 = np.arange(case_in_end,pred_av[pw],(pred_av[pw]-case_in_end)/(7/2))
+                pred_half2 = np.arange(pred_av[pw],pred_av[pw]+(pred_av[pw]-case_in_end),(pred_av[pw]-case_in_end)/(7/2))
+                pred = np.concatenate([pred_half1,pred_half2])
+                pred_lower = np.arange(case_in_end-4*prev_std[pw],pred[-1]-4*pred_std,((pred[-1]-4*pred_std[pw])-(case_in_end-4*prev_std[pw]))/7)
+                pred_upper = np.arange(case_in_end+4*prev_std[pw],pred[-1]+4*pred_std,((pred[-1]+4*pred_std[pw])-(case_in_end+4*prev_std[pw]))/7)
+                prev_std = pred_std
+                pdb.set_trace()
 
             #Min 0
             pred[pred<0]=0

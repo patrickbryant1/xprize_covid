@@ -273,15 +273,16 @@ def fit_model(X, y, NFOLD, mode, outdir):
         #if mode=='low':
         #    pred[pred>10]=10
         true = y_valid
-        av_er = np.average(np.absolute(pred-true))
-        pdb.set_trace()
-        R,p = pearsonr(pred,true)
-        print('Fold',fold+1,'Average error',av_er,'PCC',R)
-        plt.scatter(np.log10(true+0.001),np.log10(pred+0.001),s=1)
-        plt.xlabel('True')
-        plt.ylabel('Pred')
-        plt.savefig(outdir+mode+str(fold)+'.png',format='png',dpi=300)
-        plt.close()
+
+        for i in range(pred.shape[1]):
+            av_er = np.average(np.absolute(pred[:,i]-true[:,i]))
+            R,p = pearsonr(pred[:,i],true[:,i])
+            print('Fold',fold+1,'Average error for week',i+1,av_er,'PCC',R)
+            plt.scatter(np.log10(true+0.001),np.log10(pred+0.001),s=1)
+            plt.xlabel('True')
+            plt.ylabel('Pred')
+            plt.savefig(outdir+mode+str(fold+1)+'_week'+str(i+1)+'.png',format='png',dpi=300)
+            plt.close()
         #Save
         corrs.append(R)
         errors.append(av_er)

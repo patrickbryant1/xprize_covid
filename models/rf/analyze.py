@@ -35,7 +35,8 @@ def evaluate_model(feature_importances,outdir):
     #days pred,days behind - this goes from -21 to 1,features
     feature_names = np.array(['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport', 'C6_Stay at home requirements',
     'C7_Restrictions on internal movement', 'C8_International travel controls', 'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings',
-    'smoothed_cases', 'cumulative_smoothed_cases', 'monthly_temperature', 'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential',
+    'smoothed_cases', 'cumulative_smoothed_cases', 'monthly_temperature',
+    #'retail_and_recreation', 'grocery_and_pharmacy', 'parks','transit_stations', 'workplaces', 'residential',
     'death_to_case_scale','case_death_delay','gross_net_income','population_density',
     #'Change in last 21 days',
     'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
