@@ -70,12 +70,12 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
                         'gross_net_income',
                         'population_density',
                         'monthly_temperature',
-                        'retail_and_recreation',
-                        'grocery_and_pharmacy',
-                        'parks',
-                        'transit_stations',
-                        'workplaces',
-                        'residential',
+                        #'retail_and_recreation',
+                        #'grocery_and_pharmacy',
+                        #'parks',
+                        #'transit_stations',
+                        #'workplaces',
+                        #'residential',
                         'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
                         'Urban population (% of total population)',
                         'Population ages 65 and above (% of total population)',
@@ -100,7 +100,6 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
         #Save
         np.save(outdir+'X.npy',X)
         np.save(outdir+'y.npy',y)
-
 
     high_i = np.argwhere(X[:,12]>t)
     low_i = np.argwhere(X[:,12]<=t)
@@ -208,8 +207,11 @@ def split_for_training(sel,train_days,forecast_days):
 
 
                 #Normalize the cases with the input period mean
-                yi = np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])
-                yi = np.median(yi) #divide by average observed or total observe in period?
+                yi = []
+                for fd in range(di+train_days,di+train_days+forecast_days-train_days+1,7):
+
+                    yi.append(np.median(np.array(country_region_data.loc[fd:fd+7,'smoothed_cases'])))
+
 
                 #Add
                 X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
@@ -217,7 +219,7 @@ def split_for_training(sel,train_days,forecast_days):
                                                 pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
                                                 cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
                                                 air_transport, population]))
-                y.append(yi)
+                y.append(np.array(yi))
 
     return np.array(X), np.array(y)
 
@@ -272,7 +274,7 @@ def fit_model(X, y, NFOLD, mode, outdir):
         #    pred[pred>10]=10
         true = y_valid
         av_er = np.average(np.absolute(pred-true))
-
+        pdb.set_trace()
         R,p = pearsonr(pred,true)
         print('Fold',fold+1,'Average error',av_er,'PCC',R)
         plt.scatter(np.log10(true+0.001),np.log10(pred+0.001),s=1)
