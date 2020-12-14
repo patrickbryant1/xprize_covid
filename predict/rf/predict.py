@@ -20,7 +20,7 @@ def load_model():
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/2_weeks/'
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/3_weeks/'
     for i in range(5):
         try:
             low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
@@ -133,7 +133,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                             'Air transport (# carrier departures worldwide)',
                             'population']
 
-    NB_LOOKBACK_DAYS=14
+    NB_LOOKBACK_DAYS=21
     # Make predictions for each country,region pair
     #Set threshold for model selection
     threshold=1.8
@@ -202,9 +202,14 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_preds_upper = []
         geo_preds_lower = []
         days_ahead = 0
-        pred_days=14
         prev_std=0 #Std deviation
+        prediction_period = 0
         while current_date <= end_date:
+            if prediction_period<1:
+                pred_days=11
+            else:
+                pred_days=21
+            prediction_period += 1
             # Prepare data - make check so that enough previous data exists
             #The np array has to be copied!!!!!!!!
             #Otherwise there is a direct link to the adjusted_additional_g which means
@@ -246,11 +251,12 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #Order the predictions to run through the predicted mean
             #It looks like the median in the nex section is mainly driven
             #by the end of that section --> run from case in end of input to pred
-            pred_half1 = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days/2))
-            pred_half2 = np.arange(pred_av,pred_av+(pred_av-case_in_end),(pred_av-case_in_end)/(pred_days/2))
-            pred = np.concatenate([pred_half1,pred_half2])
-            pred_lower = np.arange(case_in_end-4*prev_std,pred[-1]-4*pred_std,((pred[-1]-4*pred_std)-(case_in_end-4*prev_std))/pred_days)
-            pred_upper = np.arange(case_in_end+4*prev_std,pred[-1]+4*pred_std,((pred[-1]+4*pred_std)-(case_in_end+4*prev_std))/pred_days)
+            #pred_half1 = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))
+            #pred_half2 = np.arange(pred_av,pred_av+(pred_av-case_in_end),(pred_av-case_in_end)/(pred_days))
+            #pred = np.concatenate([pred_half1,pred_half2])
+            pred = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))[:pred_days]
+            pred_lower = np.arange(case_in_end-4*prev_std,pred[-1]-4*pred_std,((pred[-1]-4*pred_std)-(case_in_end-4*prev_std))/pred_days)[:pred_days]
+            pred_upper = np.arange(case_in_end+4*prev_std,pred[-1]+4*pred_std,((pred[-1]+4*pred_std)-(case_in_end+4*prev_std))/pred_days)[:pred_days]
             prev_std = pred_std
 
             #Min 0
@@ -285,7 +291,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             # Move to next period
             current_date = current_date + np.timedelta64(pred_days, 'D')
             days_ahead += pred_days
-
 
         # Create geo_pred_df with pred column
         geo_pred_df = ips_gdf[ID_COLS].copy()
