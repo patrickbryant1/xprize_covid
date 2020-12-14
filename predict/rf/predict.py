@@ -241,20 +241,29 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
 
             pred = np.power(e,model_preds)
-            pred_av = np.average(pred,axis=0)
-            pred_std = np.std(pred,axis=0)
+            pred_av = np.round(np.average(pred,axis=0),2)
+            pred_std = np.round(np.std(pred,axis=0),2)
 
             #Order the predictions to run through the predicted mean
             #It looks like the median in the nex section is mainly driven
             #by the end of that section --> run from case in end of input to pred
-            for pw in range(pred_av.shape[0]):
-                pred_half1 = np.arange(case_in_end,pred_av[pw],(pred_av[pw]-case_in_end)/(7/2))
-                pred_half2 = np.arange(pred_av[pw],pred_av[pw]+(pred_av[pw]-case_in_end),(pred_av[pw]-case_in_end)/(7/2))
-                pred = np.concatenate([pred_half1,pred_half2])
-                pred_lower = np.arange(case_in_end-4*prev_std[pw],pred[-1]-4*pred_std,((pred[-1]-4*pred_std[pw])-(case_in_end-4*prev_std[pw]))/7)
-                pred_upper = np.arange(case_in_end+4*prev_std[pw],pred[-1]+4*pred_std,((pred[-1]+4*pred_std[pw])-(case_in_end+4*prev_std[pw]))/7)
-                prev_std = pred_std
-                pdb.set_trace()
+            pred = np.zeros(pred_days)
+            pred_lower =  np.zeros(pred_days)
+            pred_higher =  np.zeros(pred_days)
+            #Assign the first 4
+            pred[:3]=np.arange(case_in_end,pred_av[0],(pred_av[0]-case_in_end)/3)
+            pred_lower[:3]=np.arange(case_in_end,pred_av[0]-2*pred_std[0],(pred_av[0]-2*pred_std[0] - case_in_end)/3)
+            pred_higher[:3]=np.arange(case_in_end,pred_av[0]+2*pred_std[0],(pred_av[0]+2*pred_std[0] - case_in_end)/3)
+            for pw in range(pred_av.shape[0]-1):
+
+                pred[3+pw*7:3+(pw+1)*7] = np.arange(pred_av[pw],pred_av[pw+1],(pred_av[pw+1]-pred_av[pw])/7)[:7]
+                pred_lower[3+pw*7:3+(pw+1)*7] = np.arange(pred_av[pw]-pred_std[pw],pred_av[pw+1]-pred_std[pw+1],((pred_av[pw+1]-pred_std[pw+1])-(pred_av[pw]-pred_std[pw]))/7)[:7]
+                pred_higher[3+pw*7:3+(pw+1)*7] = np.arange(pred_av[pw]+pred_std[pw],pred_av[pw+1]+pred_std[pw+1],((pred_av[pw+1]+pred_std[pw+1])-(pred_av[pw]+pred_std[pw]))/7)[:7]
+
+            pdb.set_trace()
+
+
+
 
             #Min 0
             pred[pred<0]=0
