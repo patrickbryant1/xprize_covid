@@ -326,10 +326,11 @@ exclude_index = adjusted_data[(adjusted_data['CountryCode']=='BRA')&(adjusted_da
 adjusted_data = adjusted_data.drop(exclude_index)
 
 #Select only world area data
-#world_areas = {1:"Europe & Central Asia"}
-#adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
+world_areas = {1:'Latin America & Caribbean', 2:'South Asia', 3:'Sub-Saharan Africa',
+               4:'Europe & Central Asia', 5:'Middle East & North Africa',
+               6:'East Asia & Pacific', 7:'North America'}
+adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 #Get data
-
 X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
 print('Number periods in high cases selection',len(y_high))

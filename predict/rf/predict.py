@@ -20,7 +20,7 @@ def load_model():
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/3_weeks/'
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/subregions/3_weeks/wa7/'
     for i in range(5):
         try:
             low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
@@ -108,6 +108,13 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #Exclude the regional data from Brazil
     exclude_index = adjusted_data[(adjusted_data['CountryCode']=='BRA')&(adjusted_data['RegionCode']!='0')].index
     adjusted_data = adjusted_data.drop(exclude_index)
+
+    #Get only for certain world part
+    #Select only world area data
+    world_areas = {1:'Latin America & Caribbean', 2:'South Asia', 3:'Sub-Saharan Africa',
+                   4:'Europe & Central Asia', 5:'Middle East & North Africa',
+                   6:'East Asia & Pacific', 7:'North America'}
+    adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[7]]
 
     #4. Run the predictor
     additional_features = ['smoothed_cases',
