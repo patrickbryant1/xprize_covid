@@ -10,8 +10,7 @@ import random
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
-
-from sklearn.model_selection import KFold
+from math import e
 
 import tensorflow as tf
 from tensorflow import keras
@@ -228,11 +227,11 @@ def split_for_training(sel,train_days,forecast_days,num_pred_periods):
                 X2.append(np.append([death_to_case_scale,case_death_delay,gross_net_income,population_density,
                                     pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
                                     cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
-                                    air_transport, population],all_xi[1].flatten()[:-2]))
+                                    air_transport, population],all_xi[1].flatten()[:-1]))
                 X3.append(np.append([death_to_case_scale,case_death_delay,gross_net_income,population_density,
                                     pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
                                     cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
-                                    air_transport, population],all_xi[2].flatten()[:-2]))
+                                    air_transport, population],all_xi[2].flatten()[:-1]))
 
 
                 y.append(np.array(all_yi))
@@ -278,7 +277,7 @@ class DataGenerator(keras.utils.Sequence):
 
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(np.floor(len(self.X_train_fold) / self.batch_size))
+        return int(np.floor(len(self.X1_train_fold) / self.batch_size))
 
     def __getitem__(self, index):
         'Generate one batch of data'
@@ -288,7 +287,7 @@ class DataGenerator(keras.utils.Sequence):
 
         # Generate data
         X1_batch, X2_batch, X3_batch, y_batch = self.__data_generation(batch_indices)
-        pdb.set_trace()
+
         return [X1_batch, X2_batch, X3_batch], y_batch
 
     def on_epoch_end(self): #Will be done at epoch 0 also
@@ -312,24 +311,25 @@ def build_net(n1,n2,dim1,dim2,dim3):
     '''Build the net using Keras
     '''
     shared_dense1 = L.Dense(n1, activation="relu", name="d1")
-    shared_dense2 = L.Dense(1, activation="relu", name="d2")
+    shared_dense2 = L.Dense(n2, activation="relu", name="d2")
+    shared_dense3 = L.Dense(1, activation="relu", name="d3")
 
     inp1 = L.Input((dim1,), name="inp1") #Inputs with median cases
     inp2 = L.Input((dim2,), name="inp2") #Inputs without median cases
     inp3 = L.Input((dim3,), name="inp3") #Inputs without median cases
 
-    pred_step1 = shared_dense2(shared_dense1(inp1))
+    pred_step1 = L.BatchNormalization()(shared_dense3(shared_dense2(shared_dense1(inp1))))
     #Concat preds 1 with inp 2
-    pred_in2 = L.Concatenate(axis=1)([inp2,pred_step1])
-    pred_step2 = shared_dense2(shared_dense1(pred_in2))
+    pred_in2 = L.Concatenate()([inp2,pred_step1])
+    pred_step2 = L.BatchNormalization()(shared_dense3(shared_dense2(shared_dense1(pred_in2))))
     #Concat preds 2 with inp 3
     pred_in3 = L.Concatenate()([inp3,pred_step2])
-    pred_step3 = shared_dense2(shared_dense1(pred_in3))
+    pred_step3 = L.BatchNormalization()(shared_dense3(shared_dense2(shared_dense1(pred_in3))))
 
     preds = L.Concatenate()([pred_step1,pred_step2,pred_step3])
 
-    model = M.Model([in1,in2,in3], preds, name="Dense")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae'])
+    model = M.Model([inp1,inp2,inp3], preds, name="Dense")
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.001),metrics=['mae'])
     return model
 
 def fit_data(X1,X2,X3,y,mode,outdir):
@@ -345,8 +345,8 @@ def fit_data(X1,X2,X3,y,mode,outdir):
     corrs = []
 
     #Get net parameters
-    BATCH_SIZE=64
-    EPOCHS=100
+    BATCH_SIZE=16
+    EPOCHS=10
     n1=X1.shape[1] #Nodes layer 1
     n2=X1.shape[1] #Nodes layer 2
 
@@ -359,19 +359,24 @@ def fit_data(X1,X2,X3,y,mode,outdir):
         print('Number of valid points',len(val_idx))
         tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
         print("FOLD", fold)
-        net = build_net(n1,n2,X.shape[1])
+        net =build_net(n1,n2,X1.shape[1],X2.shape[1],X3.shape[1])
         #Data generation
         training_generator = DataGenerator(X1[tr_idx], X2[tr_idx], X3[tr_idx], y[tr_idx], BATCH_SIZE)
         valid_generator = DataGenerator(X1[val_idx], X2[val_idx], X3[val_idx], y[val_idx], BATCH_SIZE)
-        pdb.set_trace()
+
         net.fit(training_generator,
                 validation_data=valid_generator,
                 epochs=EPOCHS,
                 callbacks = [tensorboard]
                 )
 
-        preds = net.predict(X[val_idx])
-        preds[preds<0]=0
+        preds = net.predict([X1[val_idx],X2[val_idx], X3[val_idx]])
+        plt.hist(preds[:,0])
+        plt.hist(preds[:,1])
+        plt.hist(preds[:,2])
+        plt.show()
+        preds = np.power(e,preds)
+        pdb.set_trace()
         errors.append(np.average(np.absolute(preds[:,1]-y[val_idx])))
         corrs.append(pearsonr(preds[:,1],y[val_idx])[0])
 
@@ -397,7 +402,6 @@ outdir = args.outdir[0]
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get data
 X1_high,X1_low,X2_high,X2_low,X3_high,X3_low,y_high,y_low = get_features(adjusted_data,train_days,forecast_days,num_pred_periods,threshold,outdir)
-
 
 #Fit high
 #Convert to log for training
