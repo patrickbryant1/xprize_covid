@@ -35,6 +35,8 @@ parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
 #parser.add_argument('--param_combo', nargs=1, type= int,
                   #default=sys.stdin, help = 'Parameter combo.')
+parser.add_argument('--num_pred_periods', nargs=1, type= int,
+                  default=sys.stdin, help = 'Number of prediction periods.')
 parser.add_argument('--threshold', nargs=1, type= float,
                   default=sys.stdin, help = 'Threshold.')
 parser.add_argument('--outdir', nargs=1, type= str,
@@ -47,7 +49,7 @@ def seed_everything(seed=2020):
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-def get_features(adjusted_data,train_days,forecast_days,t,outdir):
+def get_features(adjusted_data,train_days,forecast_days,num_pred_periods,t,outdir):
     '''Get the selected features
     '''
 
@@ -101,7 +103,7 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
 
     except:
         sel = adjusted_data[selected_features]
-        X,y = split_for_training(sel,train_days,forecast_days)
+        X,y = split_for_training(sel,train_days,forecast_days,num_pred_periods)
 
         #Save
         np.save(outdir+'X.npy',X)
@@ -130,10 +132,12 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     return X_high,y_high,X_low,y_low
 
 
-def split_for_training(sel,train_days,forecast_days):
+def split_for_training(sel,train_days,forecast_days,num_pred_periods):
     '''Split the data for training and testing
     '''
-    X = [] #Input periods
+    X_1 = [] #Input periods
+    X_2 = []
+    X_3 = []
     y = [] #Targets
 
 
@@ -195,20 +199,22 @@ def split_for_training(sel,train_days,forecast_days):
              'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
              'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)','population'})
 
-            #Normalize the cases by _high'000 population
+            #Normalize the cases by 100'000 population
             #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/_high000)
             #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/_high000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
 
-            for di in range(len(country_region_data)-(train_days+forecast_days-1)):
+            for di in range(len(country_region_data)-(train_days+num_pred_periods*forecast_days-1)):
 
                 #Get all features
-                xi = np.array(country_region_data.loc[di:di+train_days-1])
-                case_medians = np.median(xi[:,12:14],axis=0)
-                xi = np.average(xi,axis=0)
-                xi[12:14]=case_medians
+                all_xi = []
+                for pp in num_pred_periods:
+                    xi = np.array(country_region_data.loc[di:di+train_days-1])
+                    case_medians = np.median(xi[:,12:14],axis=0)
+                    xi = np.average(xi,axis=0)
+                    xi[12:14]=case_medians
 
 
                 #Normalize the cases with the input period mean
@@ -216,11 +222,16 @@ def split_for_training(sel,train_days,forecast_days):
                 yi = np.median(yi) #divide by average observed or total observe in period?
 
                 #Add
-                X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
-                                                #period_change,
-                                                pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
-                                                cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
-                                                air_transport, population]))
+                X1.append(np.append([death_to_case_scale,case_death_delay,gross_net_income,population_density,
+                                    pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                                    cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
+                                    air_transport, population],xi.flatten()))
+
+                X2.append(np.append([death_to_case_scale,case_death_delay,gross_net_income,population_density,
+                                    pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                                    cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
+                                    air_transport, population],xi.flatten()))
+
                 y.append(yi)
 
     return np.array(X), np.array(y)
@@ -289,35 +300,71 @@ class DataGenerator(keras.utils.Sequence):
 
 #Custom loss
 #============================#
-def qloss(y_true, y_pred):
-    # Pinball loss for multiple quantiles
-    qs = [0.2, 0.50, 0.8]
-    q = tf.constant(np.array([qs]), dtype=tf.float32)
-    e = y_true - y_pred
-    v = tf.maximum(q*e, (q-1)*e)
-    return K.mean(v)
-
-
 
 #####BUILD NET#####
 def build_net(n1,n2,input_dim):
     '''Build the net using Keras
     '''
-    z = L.Input((input_dim,), name="Patient")
+    shared_dense1 = L.Dense(n1, activation="relu", name="d1")
+    shared_dense2 = L.Dense(n2, activation="relu", name="d2")
 
-    x1 = L.Dense(n1, activation="relu", name="d1")(z)
-    x1 = L.BatchNormalization()(x1)
-    x2 = L.Dense(n2, activation="relu", name="d2")(x1)
-    x3 = L.Dense(n2, activation="relu", name="d3")(x2)
+    inp1 = L.Input((input_dim,), name="inp1") #Inputs with median cases
+    inp2 = L.Input((input_dim,), name="inp2") #Inputs without median cases
+    inp3 = L.Input((input_dim,), name="inp3") #Inputs without median cases
 
-    p1 = L.Dense(3, activation="linear", name="p1")(x3)
-    p2 = L.Dense(3, activation="relu", name="p2")(x3)
-    preds = L.Lambda(lambda x: x[0] + tf.cumsum(x[1], axis=1),
-                     name="preds")([p1, p2])
+    pred_step1 = shared_dense2(shared_dense1(inp1))
+    #Concat preds 1 with inp 2
+    pred_step1 = shared_dense2(shared_dense1(inp2))
+
 
     model = M.Model(z, preds, name="Dense")
     model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.01, amsgrad=False),metrics=['mae'])
     return model
+
+def fit_data(X,y,mode,outdir):
+
+    #Get inpu2 - no cases
+
+
+    pdb.set_trace()
+    #KFOLD
+    NFOLD = 5
+    #kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
+    train_split, val_split = kfold(len(X),NFOLD)
+    #Save errors
+    errors = []
+    corrs = []
+
+    #Get net parameters
+    BATCH_SIZE=64
+    EPOCHS=100
+    n1=X.shape[1] #Nodes layer 1
+    n2=X.shape[1] #Nodes layer 2
+
+    #Make net
+    net = build_net(n1,n2,X.shape[1])
+    print(net.summary())
+
+    for fold in range(NFOLD):
+        tr_idx, val_idx = train_split[fold], val_split[fold]
+        print('Number of valid points',len(val_idx))
+        tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
+        print("FOLD", fold)
+        net = build_net(n1,n2,X.shape[1])
+        #Data generation
+        training_generator = DataGenerator(X[tr_idx], y[tr_idx], BATCH_SIZE)
+        valid_generator = DataGenerator(X[val_idx], y[val_idx], BATCH_SIZE)
+        pdb.set_trace()
+        net.fit(training_generator,
+                validation_data=valid_generator,
+                epochs=EPOCHS,
+                callbacks = [tensorboard]
+                )
+
+        preds = net.predict(X[val_idx])
+        preds[preds<0]=0
+        errors.append(np.average(np.absolute(preds[:,1]-y[val_idx])))
+        corrs.append(pearsonr(preds[:,1],y[val_idx])[0])
 
 
 #####MAIN#####
@@ -336,54 +383,20 @@ adjusted_data = adjusted_data.fillna(0)
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
+num_pred_periods = args.num_pred_periods[0]
 threshold = args.threshold[0]
 outdir = args.outdir[0]
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get data
-X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
+X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,num_pred_periods,threshold,outdir)
 
 pdb.set_trace()
+
+
+#Fit high
 #Convert to log for training
-np.log(y_train+0.001)
-#Get net parameters
-BATCH_SIZE=64
-EPOCHS=100
-n1=X.shape[1] #Nodes layer 1
-n2=X.shape[1 #Nodes layer 2
+fit_data(X_high,np.log(y_high+0.001),'high',outdir)
 
-#Make net
-net = build_net(n1,n2,X.shape[1]+1)
-print(net.summary())
-
-
-#KFOLD
-NFOLD = 5
-#kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
-train_split, val_split = kfold(len(X),NFOLD)
-#Save errors
-errors = []
-corrs = []
-
-for fold in range(NFOLD):
-    tr_idx, val_idx = train_split[fold], val_split[fold]
-    print('Number of valid points',len(val_idx))
-    tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
-    print("FOLD", fold)
-    net = build_net(n1,n2,X.shape[1])
-    #Data generation
-    training_generator = DataGenerator(X[tr_idx], y[tr_idx], BATCH_SIZE)
-    valid_generator = DataGenerator(X[val_idx], y[val_idx], BATCH_SIZE)
-
-    net.fit(training_generator,
-            validation_data=valid_generator,
-            epochs=EPOCHS,
-            callbacks = [tensorboard]
-            )
-
-    preds = net.predict(X[val_idx])
-    preds[preds<0]=0
-    errors.append(np.average(np.absolute(preds[:,1]-y[val_idx])))
-    corrs.append(pearsonr(preds[:,1],y[val_idx])[0])
 pdb.set_trace()
 pdb.set_trace()
