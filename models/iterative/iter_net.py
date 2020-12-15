@@ -323,7 +323,7 @@ def bin_loss(y_true, y_pred):
 
     # sum_kl_loss = sum_kl_loss/kl_p
     # sum_g_loss = sum_g_loss/g_p
-    loss = 150*g_loss+kl_loss
+    loss = 500*K.abs(g_loss)+kl_loss
     #Scale with R? loss = loss/R - on_batch_end
     #Normalize loss by percentage contributions: divide by contribution
     #Write batch generator to avoid incompatibility in shapes
@@ -370,9 +370,9 @@ def fit_data(X1,X2,X3,y,mode,outdir):
 
     #Get net parameters
     BATCH_SIZE=512
-    EPOCHS=50
-    n1=X1.shape[1] #Nodes layer 1
-    n2=X1.shape[1] #Nodes layer 2
+    EPOCHS=400
+    n1=8 #X1.shape[1] #Nodes layer 1
+    n2=8 #X1.shape[1] #Nodes layer 2
 
     #Make net
     net = build_net(n1,n2,X1.shape[1],X2.shape[1],X3.shape[1])
