@@ -345,8 +345,8 @@ def fit_data(X1,X2,X3,y,mode,outdir):
     corrs = []
 
     #Get net parameters
-    BATCH_SIZE=16
-    EPOCHS=10
+    BATCH_SIZE=512
+    EPOCHS=500
     n1=X1.shape[1] #Nodes layer 1
     n2=X1.shape[1] #Nodes layer 2
 
@@ -376,9 +376,16 @@ def fit_data(X1,X2,X3,y,mode,outdir):
         plt.hist(preds[:,2])
         plt.show()
         preds = np.power(e,preds)
+        true = np.power(e,y[val_idx])
+
+
+
+        for i in range(preds.shape[1]):
+            errors.append(np.average(np.absolute(preds[:,i]-true[:,i])))
+            corrs.append(pearsonr(preds[:,i],true[:,i])[0])
+
+
         pdb.set_trace()
-        errors.append(np.average(np.absolute(preds[:,1]-y[val_idx])))
-        corrs.append(pearsonr(preds[:,1],y[val_idx])[0])
 
 
 #####MAIN#####
