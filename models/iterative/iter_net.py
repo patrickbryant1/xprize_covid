@@ -23,7 +23,7 @@ from scipy.stats import pearsonr
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''A dense regression model.''')
+parser = argparse.ArgumentParser(description = '''A dense iterative regression model.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -76,12 +76,12 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
                         'gross_net_income',
                         'population_density',
                         'monthly_temperature',
-                        'retail_and_recreation',
-                        'grocery_and_pharmacy',
-                        'parks',
-                        'transit_stations',
-                        'workplaces',
-                        'residential',
+                        #'retail_and_recreation',
+                        #'grocery_and_pharmacy',
+                        #'parks',
+                        #'transit_stations',
+                        #'workplaces',
+                        #'residential',
                         'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
                         'Urban population (% of total population)',
                         'Population ages 65 and above (% of total population)',
@@ -206,8 +206,6 @@ def split_for_training(sel,train_days,forecast_days):
 
                 #Get all features
                 xi = np.array(country_region_data.loc[di:di+train_days-1])
-                #Get change over the past train days
-                #period_change = xi[-1,13]-xi[0,13]
                 case_medians = np.median(xi[:,12:14],axis=0)
                 xi = np.average(xi,axis=0)
                 xi[12:14]=case_medians
@@ -345,7 +343,7 @@ adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Get data
 X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
-
+pdb.set_trace()
 #Convert to log for training
 np.log(y_train+0.001)
 #Get net parameters

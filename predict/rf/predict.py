@@ -114,7 +114,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     world_areas = {1:'Latin America & Caribbean', 2:'South Asia', 3:'Sub-Saharan Africa',
                    4:'Europe & Central Asia', 5:'Middle East & North Africa',
                    6:'East Asia & Pacific', 7:'North America'}
-    adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[7]]
+    #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[7]]
 
     #4. Run the predictor
     additional_features = ['smoothed_cases',
