@@ -43,12 +43,6 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 #######FUNCTIONS#######
-def seed_everything(seed=2020):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-
 def get_features(adjusted_data,train_days,forecast_days,num_pred_periods,t,outdir):
     '''Get the selected features
     '''
@@ -69,6 +63,7 @@ def get_features(adjusted_data,train_days,forecast_days,num_pred_periods,t,outdi
                         'Region_index',
                         'CountryName',
                         'RegionName',
+                        'monthly_temperature',
                         'smoothed_cases',
                         'cumulative_smoothed_cases',
                         #'rescaled_cases',
@@ -77,7 +72,6 @@ def get_features(adjusted_data,train_days,forecast_days,num_pred_periods,t,outdi
                         'case_death_delay',
                         'gross_net_income',
                         'population_density',
-                        'monthly_temperature',
                         #'retail_and_recreation',
                         #'grocery_and_pharmacy',
                         #'parks',
@@ -96,38 +90,37 @@ def get_features(adjusted_data,train_days,forecast_days,num_pred_periods,t,outdi
 
     #Get features
     try:
-        X = np.load(outdir+'X.npy', allow_pickle=True)
+        X1 = np.load(outdir+'X1.npy', allow_pickle=True)
+        X2 = np.load(outdir+'X3.npy', allow_pickle=True)
+        X3 = np.load(outdir+'X3.npy', allow_pickle=True)
         y = np.load(outdir+'y.npy', allow_pickle=True)
 
 
 
     except:
         sel = adjusted_data[selected_features]
-        X,y = split_for_training(sel,train_days,forecast_days,num_pred_periods)
+        X1,X2,X3,y = split_for_training(sel,train_days,forecast_days,num_pred_periods)
 
         #Save
-        np.save(outdir+'X.npy',X)
+        np.save(outdir+'X1.npy',X)
+        np.save(outdir+'X2.npy',X)
+        np.save(outdir+'X3.npy',X)
         np.save(outdir+'y.npy',y)
 
+    #Split into high and low
+    high_i = np.argwhere(X[:,13]>t)
+    low_i = np.argwhere(X[:,13]<=t)
+    X1_high = X1[high_i][:,0,:]
+    X1_low = X1[low_i][:,0,:]
+    X2_high = X2[high_i][:,0,:]
+    X2_low = X2[low_i][:,0,:]
+    X3_high = X3[high_i][:,0,:]
+    X4_low = X3[low_i][:,0,:]
 
-    high_i = np.argwhere(X[:,12]>t)
-    low_i = np.argwhere(X[:,12]<=t)
-    X_high = X[high_i][:,0,:]
     y_high = y[high_i][:,0]
-    X_low = X[low_i][:,0,:]
     y_low = y[low_i][:,0]
 
-    #Plot distribution
-    fig,ax = plt.subplots(figsize=(9/2.54,9/2.54))
-    plt.hist(np.log10(y_high+0.001),bins=20,alpha=0.5,label='high')
-    plt.hist(np.log10(y_low+0.001),bins=20,alpha=0.5,label='low')
-    plt.title('Target case disributions')
-    plt.xlabel('log cases per 100000')
-    plt.yticks([])
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(outdir+'case_distr.png',format='png')
-    plt.close()
+    pdb.set_trace()
 
     return X_high,y_high,X_low,y_low
 
@@ -135,9 +128,9 @@ def get_features(adjusted_data,train_days,forecast_days,num_pred_periods,t,outdi
 def split_for_training(sel,train_days,forecast_days,num_pred_periods):
     '''Split the data for training and testing
     '''
-    X_1 = [] #Input periods
-    X_2 = []
-    X_3 = []
+    X1 = [] #Input periods
+    X2 = []
+    X3 = []
     y = [] #Targets
 
 
@@ -206,35 +199,46 @@ def split_for_training(sel,train_days,forecast_days,num_pred_periods):
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Loop through and get the data
 
-            for di in range(len(country_region_data)-(train_days+num_pred_periods*forecast_days-1)):
+            for di in range(len(country_region_data)-(train_days*num_pred_periods+forecast_days-1)):
 
                 #Get all features
                 all_xi = []
-                for pp in num_pred_periods:
-                    xi = np.array(country_region_data.loc[di:di+train_days-1])
-                    case_medians = np.median(xi[:,12:14],axis=0)
+                all_yi = []
+                for pi in range(num_pred_periods):
+                    xi = np.array(country_region_data.loc[di+train_days*pi:di+train_days*(pi+1)-1])
+                    case_medians = np.median(xi[:,13:],axis=0)
                     xi = np.average(xi,axis=0)
-                    xi[12:14]=case_medians
+                    xi[13:]=case_medians
+                    all_xi.append(xi)
+
+                    #Get median
+                    yi = np.array(country_region_data.loc[di+train_days*(pi+1):di+train_days*(pi+2)+forecast_days-1]['smoothed_cases'])
+                    all_yi.append(np.median(yi))
 
 
-                #Normalize the cases with the input period mean
-                yi = np.array(country_region_data.loc[di+train_days:di+train_days+forecast_days-1]['smoothed_cases'])
-                yi = np.median(yi) #divide by average observed or total observe in period?
+
+
 
                 #Add
                 X1.append(np.append([death_to_case_scale,case_death_delay,gross_net_income,population_density,
                                     pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
                                     cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
-                                    air_transport, population],xi.flatten()))
+                                    air_transport, population],all_xi[0].flatten()))
 
                 X2.append(np.append([death_to_case_scale,case_death_delay,gross_net_income,population_density,
                                     pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
                                     cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
-                                    air_transport, population],xi.flatten()))
+                                    air_transport, population],all_xi[1].flatten()[:-2]))
+                X3.append(np.append([death_to_case_scale,case_death_delay,gross_net_income,population_density,
+                                    pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                                    cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
+                                    air_transport, population],all_xi[2].flatten()[:-2]))
 
-                y.append(yi)
 
-    return np.array(X), np.array(y)
+                y.append(np.array(all_yi))
+
+
+    return np.array(X1),np.array(X2),np.array(X3), np.array(y)
 
 
 def kfold(num_regions, NFOLD):
