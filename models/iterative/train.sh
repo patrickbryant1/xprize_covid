@@ -6,4 +6,5 @@ FORECAST_DAYS=21
 NUM_PRED_PERIODS=3
 THRESHOLD=1.8
 OUTDIR=/home/patrick/results/COVID19/xprize/iterative/
+rm -r $OUTDIR/fold*
 ./iter_net.py --adjusted_data $ADJUSTED_DATA --start_date $START_DATE --train_days $TRAIN_DAYS --forecast_days $FORECAST_DAYS --num_pred_periods $NUM_PRED_PERIODS --threshold $THRESHOLD --outdir $OUTDIR

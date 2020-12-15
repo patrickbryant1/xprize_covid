@@ -306,13 +306,37 @@ class DataGenerator(keras.utils.Sequence):
 #Custom loss
 #============================#
 
+def bin_loss(y_true, y_pred):
+    tf.dtypes.cast(y_true, tf.float32)
+    tf.dtypes.cast(y_pred, tf.float32)
+    #Shold make this a log loss
+    g_loss = tf.keras.losses.MeanAbsoluteError()(y_true, y_pred) #general, compare difference
+    #log_g_loss = keras.backend.log(g_loss/100)
+    #Gauss for loss
+    #gauss = keras.backend.random_normal_variable(shape=(batch_size, 1), mean=0.7, scale=0.3) # Gaussian distribution, scale: Float, standard deviation of the normal distribution.
+    kl_loss = keras.losses.kullback_leibler_divergence(y_true, y_pred) #better than comparing to gaussian
+
+
+    # #Normalize due to proportion
+    # kl_p = sum_kl_loss/(sum_g_loss+sum_kl_loss)
+    # g_p = sum_g_loss/(sum_g_loss+sum_kl_loss)
+
+    # sum_kl_loss = sum_kl_loss/kl_p
+    # sum_g_loss = sum_g_loss/g_p
+    loss = 150*g_loss+kl_loss
+    #Scale with R? loss = loss/R - on_batch_end
+    #Normalize loss by percentage contributions: divide by contribution
+    #Write batch generator to avoid incompatibility in shapes
+    #problem at batch end due to kongruens
+    return K.mean(loss)
+
 #####BUILD NET#####
 def build_net(n1,n2,dim1,dim2,dim3):
     '''Build the net using Keras
     '''
     shared_dense1 = L.Dense(n1, activation="relu", name="d1")
     shared_dense2 = L.Dense(n2, activation="relu", name="d2")
-    shared_dense3 = L.Dense(1, activation="relu", name="d3")
+    shared_dense3 = L.Dense(1, activation="linear", name="d3")
 
     inp1 = L.Input((dim1,), name="inp1") #Inputs with median cases
     inp2 = L.Input((dim2,), name="inp2") #Inputs without median cases
@@ -329,7 +353,7 @@ def build_net(n1,n2,dim1,dim2,dim3):
     preds = L.Concatenate()([pred_step1,pred_step2,pred_step3])
 
     model = M.Model([inp1,inp2,inp3], preds, name="Dense")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.001),metrics=['mae'])
+    model.compile(loss=bin_loss, optimizer=tf.keras.optimizers.Adam(lr=0.01),metrics=['mae'])
     return model
 
 def fit_data(X1,X2,X3,y,mode,outdir):
@@ -346,7 +370,7 @@ def fit_data(X1,X2,X3,y,mode,outdir):
 
     #Get net parameters
     BATCH_SIZE=512
-    EPOCHS=500
+    EPOCHS=50
     n1=X1.shape[1] #Nodes layer 1
     n2=X1.shape[1] #Nodes layer 2
 
@@ -357,7 +381,7 @@ def fit_data(X1,X2,X3,y,mode,outdir):
     for fold in range(NFOLD):
         tr_idx, val_idx = train_split[fold], val_split[fold]
         print('Number of valid points',len(val_idx))
-        tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold))
+        tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold+1))
         print("FOLD", fold)
         net =build_net(n1,n2,X1.shape[1],X2.shape[1],X3.shape[1])
         #Data generation
@@ -371,9 +395,8 @@ def fit_data(X1,X2,X3,y,mode,outdir):
                 )
 
         preds = net.predict([X1[val_idx],X2[val_idx], X3[val_idx]])
-        plt.hist(preds[:,0])
-        plt.hist(preds[:,1])
-        plt.hist(preds[:,2])
+        plt.hist(preds,color=['b','b','b'],alpha=0.5)
+        plt.hist(y[val_idx],color=['r','r','r'],alpha=0.5)
         plt.show()
         preds = np.power(e,preds)
         true = np.power(e,y[val_idx])
@@ -384,8 +407,8 @@ def fit_data(X1,X2,X3,y,mode,outdir):
             errors.append(np.average(np.absolute(preds[:,i]-true[:,i])))
             corrs.append(pearsonr(preds[:,i],true[:,i])[0])
 
+    pdb.set_trace()
 
-        pdb.set_trace()
 
 
 #####MAIN#####
