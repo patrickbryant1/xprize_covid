@@ -124,7 +124,6 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     plt.savefig(outdir+'case_distr.png',format='png')
     plt.close()
 
-    pdb.set_trace()
 
     return X,y #X_high,y_high,X_low,y_low
 
@@ -363,13 +362,12 @@ world_areas = {1:'Latin America & Caribbean', 2:'South Asia', 3:'Sub-Saharan Afr
                6:'East Asia & Pacific', 7:'North America'}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 #Get data
-#X_high,y_high,X_low,y_low
-X,y =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
+X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
-#print('Number periods in high cases selection',len(y_high))
-#print('Number periods in low cases selection',len(y_low))
+print('Number periods in high cases selection',len(y_high))
+print('Number periods in low cases selection',len(y_low))
 
 #Fit model
-fit_model(X,y,5,'high',outdir+'high/')
-#fit_model(X_high,y_high,5,'high',outdir+'high/')
-#fit_model(X_low,y_low,5,'low',outdir+'low/')
+#fit_model(X,y,5,'high',outdir+'high/')
+fit_model(X_high,y_high,5,'high',outdir+'high/')
+fit_model(X_low,y_low,5,'low',outdir+'low/')

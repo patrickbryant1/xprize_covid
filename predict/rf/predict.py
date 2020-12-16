@@ -200,7 +200,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         #Get historical NPIs
         historical_npis_g = np.array(adjusted_data_gdf[NPI_COLS])
         #Get other daily features
-        adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:9]])
+        adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:3]])
         #Get future NPIs
         future_npis = np.array(ips_gdf[NPI_COLS])
 
