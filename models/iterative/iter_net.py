@@ -312,7 +312,7 @@ def bin_loss(y_true, y_pred):
 
     # sum_kl_loss = sum_kl_loss/kl_p
     # sum_g_loss = sum_g_loss/g_p
-    loss = K.abs(g_loss)+ K.abs(kl_loss)
+    loss = K.abs(g_loss) #+ K.abs(kl_loss)
     #Scale with R? loss = loss/R - on_batch_end
     #Normalize loss by percentage contributions: divide by contribution
     #Write batch generator to avoid incompatibility in shapes
@@ -347,7 +347,7 @@ def build_net(n1,n2,dim1,dim2,dim3):
     preds = L.Concatenate()([pred_step1,pred_step2,pred_step3])
 
     model = M.Model([inp1,inp2,inp3], preds, name="Dense")
-    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.01, decay=0.001,),metrics=['mae'])
+    model.compile(loss=bin_loss, optimizer=tf.keras.optimizers.Adam(lr=0.01, decay=0.001,),metrics=['mae'])
     return model
 
 def fit_data(X1,X2,X3,y,mode,outdir):
@@ -364,7 +364,7 @@ def fit_data(X1,X2,X3,y,mode,outdir):
 
     #Get net parameters
     BATCH_SIZE=256
-    EPOCHS=10
+    EPOCHS=1000
     n1=X1.shape[1] #Nodes layer 1
     n2=X1.shape[1] #Nodes layer 2
 
@@ -400,7 +400,7 @@ def fit_data(X1,X2,X3,y,mode,outdir):
                 )
 
         #Look at activations
-        get_activations(net, [X1[val_idx],X2[val_idx], X3[val_idx]])
+        #get_activations(net, [X1[val_idx],X2[val_idx], X3[val_idx]])
 
         preds = net.predict([X1[val_idx],X2[val_idx], X3[val_idx]])
         plt.hist(preds,color=['b','b','b'],alpha=0.5)
@@ -420,7 +420,6 @@ def fit_data(X1,X2,X3,y,mode,outdir):
         plt.savefig(outdir+'median_'+str(fold+1)+'.png',format='png')
         plt.close()
 
-        pdb.set_trace()
 
 
 def get_activations(net, data):
@@ -437,19 +436,19 @@ def get_activations(net, data):
     def softmax(x):
         """Compute softmax values for each sets of scores in x."""
         e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum(axis=0) # only difference
+        return e_x / e_x.sum(axis=0) # only difference
 
-    def attention(inp,act):
+    def attention(act):
         #Dot
-        pdb.set_trace()
-        dot = np.dot(inp.T,act)
+        dot = np.dot(act.T,act)
+        dot = dot/np.max(dot)
         soft = softmax(dot)
         att = np.dot(soft,act.T)
         plt.bar(np.arange(att.shape[0]),np.average(att,axis=1))
         plt.show()
-    attention(data[0],layer_output1)
-    pdb.set_trace()
-    pdb.set_trace()
+    attention(layer_output1)
+    attention(layer_output2)
+    attention(layer_output3)
 
 
 
