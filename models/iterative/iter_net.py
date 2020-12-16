@@ -20,6 +20,7 @@ import tensorflow.keras.models as M
 from tensorflow.keras.callbacks import TensorBoard
 from scipy.stats import pearsonr
 
+
 import pdb
 #Arguments for argparse module:
 parser = argparse.ArgumentParser(description = '''A dense iterative regression model.''')
@@ -346,7 +347,7 @@ def build_net(n1,n2,dim1,dim2,dim3):
     preds = L.Concatenate()([pred_step1,pred_step2,pred_step3])
 
     model = M.Model([inp1,inp2,inp3], preds, name="Dense")
-    model.compile(loss=bin_loss, optimizer=tf.keras.optimizers.Adam(lr=0.01, decay=0.001,),metrics=['mae'])
+    model.compile(loss='mae', optimizer=tf.keras.optimizers.Adam(lr=0.01, decay=0.001,),metrics=['mae'])
     return model
 
 def fit_data(X1,X2,X3,y,mode,outdir):
@@ -363,7 +364,7 @@ def fit_data(X1,X2,X3,y,mode,outdir):
 
     #Get net parameters
     BATCH_SIZE=256
-    EPOCHS=500
+    EPOCHS=10
     n1=X1.shape[1] #Nodes layer 1
     n2=X1.shape[1] #Nodes layer 2
 
@@ -425,7 +426,6 @@ def fit_data(X1,X2,X3,y,mode,outdir):
 def get_activations(net, data):
 
     #Get layer output
-    pdb.set_trace()
     #layers 1-3 are the dense ones
     get_1st_layer_output = K.function([net.layers[0].input],[net.layers[1].output])
     get_2nd_layer_output = K.function([net.layers[0].input],[net.layers[2].output])
@@ -434,7 +434,21 @@ def get_activations(net, data):
     layer_output2 = get_2nd_layer_output(data)[0]
     layer_output3 = get_3d_layer_output(data)[0]
 
-    plt.bar(np.arange(av.shape[0]),av)
+    def softmax(x):
+        """Compute softmax values for each sets of scores in x."""
+        e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=0) # only difference
+
+    def attention(inp,act):
+        #Dot
+        pdb.set_trace()
+        dot = np.dot(inp.T,act)
+        soft = softmax(dot)
+        att = np.dot(soft,act.T)
+        plt.bar(np.arange(att.shape[0]),np.average(att,axis=1))
+        plt.show()
+    attention(data[0],layer_output1)
+    pdb.set_trace()
     pdb.set_trace()
 
 
