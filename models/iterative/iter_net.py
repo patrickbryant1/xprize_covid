@@ -339,11 +339,7 @@ def build_net(n1,n2,dim1,dim2,dim3):
     #Concat preds 2 with inp 3
     pred_in3 = L.Concatenate()([inp3,pred_step2])
     pred_step3 = L.BatchNormalization()(shared_dense3(shared_dense2(shared_dense1(pred_in3))))
-
-    #Attentions
-    attention1 = L.Attention(name="a1")([shared_dense1(inp1),shared_dense1(inp1)])
-    attention2 = L.Attention(name="a2")([shared_dense1(pred_in2),shared_dense1(pred_in2)])
-    attention3 = L.Attention(name="a3")([shared_dense1(pred_in3),shared_dense1(pred_in3)])
+    #Concat preds
     preds = L.Concatenate()([pred_step1,pred_step2,pred_step3])
 
     model = M.Model([inp1,inp2,inp3], preds, name="Dense")
@@ -364,7 +360,7 @@ def fit_data(X1,X2,X3,y,mode,outdir):
 
     #Get net parameters
     BATCH_SIZE=256
-    EPOCHS=2000
+    EPOCHS=500
     n1=X1.shape[1] #Nodes layer 1
     n2=X1.shape[1] #Nodes layer 2
 
@@ -403,13 +399,14 @@ def fit_data(X1,X2,X3,y,mode,outdir):
         #get_activations(net, [X1[val_idx],X2[val_idx], X3[val_idx]])
 
         preds = net.predict([X1[val_idx],X2[val_idx], X3[val_idx]])
+        preds[preds<0]=0
         plt.hist(preds,color=['b','b','b'],alpha=0.5)
         plt.hist(y[val_idx],color=['r','r','r'],alpha=0.5)
         plt.savefig(outdir+'hist_fold'+str(fold+1)+'.png',format='png')
         plt.close()
-        preds = np.power(e,preds)
-        true = np.power(e,y[val_idx])
-
+        #preds = np.power(e,preds)
+        #true = np.power(e,y[val_idx])
+        true = y[val_idx]
         for i in range(preds.shape[1]):
             errors.append(np.average(np.absolute(preds[:,i]-true[:,i])))
             corrs.append(pearsonr(preds[:,i],true[:,i])[0])
@@ -479,7 +476,7 @@ X1,X2,X3,y = get_features(adjusted_data,train_days,forecast_days,num_pred_period
 
 #Fit high
 #Convert to log for training
-fit_data(X1,X2,X3,np.log(y+0.001),'high',outdir)
+fit_data(X1,X2,X3,y,'high',outdir)
 
 pdb.set_trace()
 pdb.set_trace()
