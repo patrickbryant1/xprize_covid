@@ -296,7 +296,7 @@ def fit_model(X, y, NFOLD, mode, outdir):
 
         reg = RandomForestRegressor(n_jobs=-1, random_state=42).fit(X_train, y_train)
         pred = reg.predict(X_valid)
-        pred = pred*X_valid[:,12]
+        pred = pred
 
         #pred = np.power(e,pred)
         #if mode =='high':
@@ -371,5 +371,5 @@ print('Number periods in low cases selection',len(y_low))
 
 #Fit model
 #fit_model(X,y,5,'high',outdir+'high/')
-fit_model(X_high,y_high/X_high[:,12],5,'high',outdir+'high/')
+fit_model(X_high,y_high,5,'high',outdir+'high/')
 #fit_model(X_low,y_low,5,'low',outdir+'low/')
