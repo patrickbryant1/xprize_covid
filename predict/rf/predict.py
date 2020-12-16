@@ -255,8 +255,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #pred = np.power(e,model_preds)
             pred = np.array(model_preds)
             #If predicting differnce to median
-            if X[0]>threshold:
-                pred = pred*X[0]
             pred_av = np.average(pred)
             pred_std = np.std(pred)
             #Order the predictions to run through the predicted mean
