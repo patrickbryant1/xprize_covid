@@ -125,7 +125,7 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     plt.close()
 
 
-    return X,y #X_high,y_high,X_low,y_low
+    return X_high,y_high,X_low,y_low
 
 def choose_uniform(X,y,num,mode):
     '''Function for choosing data
