@@ -20,7 +20,7 @@ def load_model():
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/'
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/non_log/'
     for i in range(5):
         try:
             low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
@@ -199,14 +199,14 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
         #Get historical NPIs
         historical_npis_g = np.array(adjusted_data_gdf[NPI_COLS]).copy()
-        #Get other daily features
-        adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:9]]).copy()
+
 
         #Plot
         fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
         colors = {1:'b',2:'grey'}
         for npi_scale in [1,2]:
-
+            #Get other daily features
+            adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:9]]).copy()
             # Make prediction for each requested day
             # Start predicting from start_date, unless there's a gap since last known date
             current_date = min(last_known_date + np.timedelta64(1, 'D'), start_date)
@@ -230,7 +230,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                 #that both arrays are updated simultaneously
 
                 #Get change over the past NB_LOOKBACK_DAYS. The predictions are the medians = 11 days ahead
-                X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:].copy() #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
+                X_additional = np.array(adjusted_additional_g[-NB_LOOKBACK_DAYS:]).copy() #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
                 case_in_end = X_additional[-1,0]
                 #period_change = X_additional[-1,1]-X_additional[0,1]
                 case_medians = np.median(X_additional[:,:2],axis=0)
@@ -259,7 +259,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                         model_preds.append(model.predict(np.array([X]))[0])
 
 
-                pred = np.power(e,model_preds)
+                #pred = np.power(e,model_preds)
+                pred = np.array(model_preds)
                 pred_av = np.average(pred)
                 pred_std = np.std(pred)
                 #Order the predictions to run through the predicted mean
@@ -268,6 +269,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                 #pred_half1 = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))
                 #pred_half2 = np.arange(pred_av,pred_av+(pred_av-case_in_end),(pred_av-case_in_end)/(pred_days))
                 #pred = np.concatenate([pred_half1,pred_half2])
+
                 pred = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))[:pred_days]
                 pred_lower = np.arange(case_in_end-4*prev_std,pred[-1]-4*pred_std,((pred[-1]-4*pred_std)-(case_in_end-4*prev_std))/pred_days)[:pred_days]
                 pred_upper = np.arange(case_in_end+4*prev_std,pred[-1]+4*pred_std,((pred[-1]+4*pred_std)-(case_in_end+4*prev_std))/pred_days)[:pred_days]
@@ -331,6 +333,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
+
 
 
 
