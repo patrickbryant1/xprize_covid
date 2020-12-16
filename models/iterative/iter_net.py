@@ -364,7 +364,7 @@ def fit_data(X1,X2,X3,y,mode,outdir):
 
     #Get net parameters
     BATCH_SIZE=256
-    EPOCHS=1000
+    EPOCHS=2000
     n1=X1.shape[1] #Nodes layer 1
     n2=X1.shape[1] #Nodes layer 2
 
@@ -407,15 +407,15 @@ def fit_data(X1,X2,X3,y,mode,outdir):
         plt.hist(y[val_idx],color=['r','r','r'],alpha=0.5)
         plt.savefig(outdir+'hist_fold'+str(fold+1)+'.png',format='png')
         plt.close()
-        #preds = np.power(e,preds)
-        #true = np.power(e,y[val_idx])
-
-        true = y[val_idx]
+        preds = np.power(e,preds)
+        true = np.power(e,y[val_idx])
 
         for i in range(preds.shape[1]):
             errors.append(np.average(np.absolute(preds[:,i]-true[:,i])))
             corrs.append(pearsonr(preds[:,i],true[:,i])[0])
-            plt.scatter(preds[:,i],true[:,i],label='Median '+str(i+1),s=1,alpha=0.5)
+            plt.scatter(preds[:,i],true[:,i],label='Median:'+str(i+1)+' PCC:'+str(np.round(corrs[-1],2))+' Error:'+str(np.round(errors[-1],2)),s=1,alpha=0.5)
+        plt.xlabel('Pred')
+        plt.ylabel('True')
         plt.legend()
         plt.savefig(outdir+'median_'+str(fold+1)+'.png',format='png')
         plt.close()

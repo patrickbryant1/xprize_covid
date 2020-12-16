@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+
+#Trein log
 ADJUSTED_DATA=../../data/adjusted_data.csv
 START_DATE='2020-06-01' #Date to start from
 TRAIN_DAYS=21 #Number of days to include as the training period
