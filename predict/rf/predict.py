@@ -20,7 +20,7 @@ def load_model():
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/'
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/non_log'
     for i in range(5):
         try:
             low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
@@ -120,12 +120,12 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     additional_features = ['smoothed_cases',
                             'cumulative_smoothed_cases',
                             'monthly_temperature',
-                            'retail_and_recreation',
-                            'grocery_and_pharmacy',
-                            'parks',
-                            'transit_stations',
-                            'workplaces',
-                            'residential', #These 9 features are used as daily features
+                            # 'retail_and_recreation',
+                            # 'grocery_and_pharmacy',
+                            # 'parks',
+                            # 'transit_stations',
+                            # 'workplaces',
+                            # 'residential', #These 9 features are used as daily features
                             'death_to_case_scale', #The rest are only used once
                             'case_death_delay',
                             'gross_net_income',

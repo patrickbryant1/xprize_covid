@@ -101,20 +101,7 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
         np.save(outdir+'X.npy',X)
         np.save(outdir+'y.npy',y)
 
-    #look at period differences:
-    prev_cases = X[:,12].copy()
-    prev_cases[prev_cases<1]=1
-    xy_diff = y/prev_cases
-    xy_diff = np.log10(xy_diff+0.01)
-    chosen_i = np.array([],dtype='int32')
-    for step in np.arange(-2,2.1,0.1):
-        sel = np.argwhere((xy_diff>step)&(xy_diff<=step+0.1))
-        if len(sel)>500:
-            sel = np.random.choice(sel.flatten(),500,replace=False)
-        chosen_i = np.concatenate([chosen_i,sel.flatten()])
 
-    X = X[chosen_i]
-    y = y[chosen_i]
     high_i = np.argwhere(X[:,12]>t)
     low_i = np.argwhere(X[:,12]<=t)
     X_high = X[high_i][:,0,:]
@@ -122,6 +109,9 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     X_low = X[low_i][:,0,:]
     y_low = y[low_i][:,0]
 
+    #look at period differences:
+    choose_uniform(X_high,y_high,500,'high')
+    choose_uniform(X_low,y_low,500,'low')
     #Plot distribution
     fig,ax = plt.subplots(figsize=(9/2.54,9/2.54))
     plt.hist(np.log10(y_high+0.001),bins=20,alpha=0.75,label='high')
@@ -134,16 +124,36 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     plt.savefig(outdir+'case_distr.png',format='png')
     plt.close()
 
+    pdb.set_trace()
+
+    return X,y #X_high,y_high,X_low,y_low
+
+def choose_uniform(X,y,num,mode):
+    '''Function for choosing data
+    '''
+
+    prev_cases = X[:,12].copy()
+    prev_cases[prev_cases<1]=1
+    xy_diff = y/prev_cases
+    xy_diff = np.log10(xy_diff+0.01)
+    chosen_i = np.array([],dtype='int32')
+    for step in np.arange(-2,2.1,0.1):
+        sel = np.argwhere((xy_diff>step)&(xy_diff<=step+0.1))
+        if len(sel)>num:
+            sel = np.random.choice(sel.flatten(),500,replace=False)
+        chosen_i = np.concatenate([chosen_i,sel.flatten()])
+
+    X = X[chosen_i]
+    y = y[chosen_i]
+
     prev_cases = X[:,12].copy()
     prev_cases[prev_cases<1]=1
     xy_diff = y/prev_cases
     xy_diff = np.log10(xy_diff+0.01)
     plt.hist(xy_diff,bins=50)
     plt.tight_layout()
-    plt.savefig(outdir+'change_distr.png',format='png')
+    plt.savefig(outdir+mode+'_change_distr.png',format='png')
     plt.close()
-
-    return X_high,y_high,X_low,y_low
 
 
 def split_for_training(sel,train_days,forecast_days):
@@ -353,11 +363,13 @@ world_areas = {1:'Latin America & Caribbean', 2:'South Asia', 3:'Sub-Saharan Afr
                6:'East Asia & Pacific', 7:'North America'}
 #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 #Get data
-X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
+#X_high,y_high,X_low,y_low
+X,y =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
-print('Number periods in high cases selection',len(y_high))
-print('Number periods in low cases selection',len(y_low))
+#print('Number periods in high cases selection',len(y_high))
+#print('Number periods in low cases selection',len(y_low))
 
 #Fit model
-fit_model(X_high,y_high,5,'high',outdir+'high/')
-fit_model(X_low,y_low,5,'low',outdir+'low/')
+fit_model(X,y,5,'high',outdir+'high/')
+#fit_model(X_high,y_high,5,'high',outdir+'high/')
+#fit_model(X_low,y_low,5,'low',outdir+'low/')
