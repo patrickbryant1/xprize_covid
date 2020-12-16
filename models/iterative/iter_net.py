@@ -107,20 +107,8 @@ def get_features(adjusted_data,train_days,forecast_days,num_pred_periods,t,outdi
         np.save(outdir+'y.npy',y)
 
     #Split into high and low
-    high_i = np.argwhere(X1[:,13]>t)
-    low_i = np.argwhere(X1[:,13]<=t)
-    X1_high = X1[high_i][:,0,:]
-    X1_low = X1[low_i][:,0,:]
-    X2_high = X2[high_i][:,0,:]
-    X2_low = X2[low_i][:,0,:]
-    X3_high = X3[high_i][:,0,:]
-    X3_low = X3[low_i][:,0,:]
 
-    y_high = y[high_i][:,0]
-    y_low = y[low_i][:,0]
-
-
-    return X1_high,X1_low,X2_high,X2_low,X3_high,X3_low,y_high,y_low
+    return X1,X2,X3,y
 
 
 def split_for_training(sel,train_days,forecast_days,num_pred_periods):
@@ -323,7 +311,7 @@ def bin_loss(y_true, y_pred):
 
     # sum_kl_loss = sum_kl_loss/kl_p
     # sum_g_loss = sum_g_loss/g_p
-    loss = 500*K.abs(g_loss)+kl_loss
+    loss = K.abs(g_loss)+ K.abs(kl_loss)
     #Scale with R? loss = loss/R - on_batch_end
     #Normalize loss by percentage contributions: divide by contribution
     #Write batch generator to avoid incompatibility in shapes
@@ -343,6 +331,7 @@ def build_net(n1,n2,dim1,dim2,dim3):
     inp3 = L.Input((dim3,), name="inp3") #Inputs without median cases
 
     pred_step1 = L.BatchNormalization()(shared_dense3(shared_dense2(shared_dense1(inp1))))
+
     #Concat preds 1 with inp 2
     pred_in2 = L.Concatenate()([inp2,pred_step1])
     pred_step2 = L.BatchNormalization()(shared_dense3(shared_dense2(shared_dense1(pred_in2))))
@@ -350,10 +339,14 @@ def build_net(n1,n2,dim1,dim2,dim3):
     pred_in3 = L.Concatenate()([inp3,pred_step2])
     pred_step3 = L.BatchNormalization()(shared_dense3(shared_dense2(shared_dense1(pred_in3))))
 
+    #Attentions
+    attention1 = L.Attention(name="a1")([shared_dense1(inp1),shared_dense1(inp1)])
+    attention2 = L.Attention(name="a2")([shared_dense1(pred_in2),shared_dense1(pred_in2)])
+    attention3 = L.Attention(name="a3")([shared_dense1(pred_in3),shared_dense1(pred_in3)])
     preds = L.Concatenate()([pred_step1,pred_step2,pred_step3])
 
     model = M.Model([inp1,inp2,inp3], preds, name="Dense")
-    model.compile(loss=bin_loss, optimizer=tf.keras.optimizers.Adam(lr=0.01),metrics=['mae'])
+    model.compile(loss=bin_loss, optimizer=tf.keras.optimizers.Adam(lr=0.01, decay=0.001,),metrics=['mae'])
     return model
 
 def fit_data(X1,X2,X3,y,mode,outdir):
@@ -369,44 +362,79 @@ def fit_data(X1,X2,X3,y,mode,outdir):
     corrs = []
 
     #Get net parameters
-    BATCH_SIZE=512
-    EPOCHS=400
-    n1=8 #X1.shape[1] #Nodes layer 1
-    n2=8 #X1.shape[1] #Nodes layer 2
+    BATCH_SIZE=256
+    EPOCHS=500
+    n1=X1.shape[1] #Nodes layer 1
+    n2=X1.shape[1] #Nodes layer 2
 
     #Make net
     net = build_net(n1,n2,X1.shape[1],X2.shape[1],X3.shape[1])
+    #serialize model to JSON
+    model_json = net.to_json()
+    with open(outdir+"model.json", "w") as json_file:
+    	json_file.write(model_json)
+    print('Saved model...')
     print(net.summary())
+
 
     for fold in range(NFOLD):
         tr_idx, val_idx = train_split[fold], val_split[fold]
         print('Number of valid points',len(val_idx))
         tensorboard = TensorBoard(log_dir=outdir+'fold'+str(fold+1))
-        print("FOLD", fold)
+        #Checkpoint
+        filepath=outdir+"fold_"+str(fold+1)+"_weights-{epoch:02d}-.hdf5"
+        checkpoint = keras.callbacks.ModelCheckpoint(filepath, verbose=1, save_best_only=True, mode='min')
+
+        #Build net
         net =build_net(n1,n2,X1.shape[1],X2.shape[1],X3.shape[1])
         #Data generation
         training_generator = DataGenerator(X1[tr_idx], X2[tr_idx], X3[tr_idx], y[tr_idx], BATCH_SIZE)
         valid_generator = DataGenerator(X1[val_idx], X2[val_idx], X3[val_idx], y[val_idx], BATCH_SIZE)
-
+        #Fit net
+        print("Fitting fold", fold+1)
         net.fit(training_generator,
                 validation_data=valid_generator,
                 epochs=EPOCHS,
-                callbacks = [tensorboard]
+                callbacks = [tensorboard, checkpoint]
                 )
+
+        #Look at activations
+        get_activations(net, [X1[val_idx],X2[val_idx], X3[val_idx]])
 
         preds = net.predict([X1[val_idx],X2[val_idx], X3[val_idx]])
         plt.hist(preds,color=['b','b','b'],alpha=0.5)
         plt.hist(y[val_idx],color=['r','r','r'],alpha=0.5)
-        plt.show()
-        preds = np.power(e,preds)
-        true = np.power(e,y[val_idx])
+        plt.savefig(outdir+'hist_fold'+str(fold+1)+'.png',format='png')
+        plt.close()
+        #preds = np.power(e,preds)
+        #true = np.power(e,y[val_idx])
 
-
+        true = y[val_idx]
 
         for i in range(preds.shape[1]):
             errors.append(np.average(np.absolute(preds[:,i]-true[:,i])))
             corrs.append(pearsonr(preds[:,i],true[:,i])[0])
+            plt.scatter(preds[:,i],true[:,i],label='Median '+str(i+1),s=1,alpha=0.5)
+        plt.legend()
+        plt.savefig(outdir+'median_'+str(fold+1)+'.png',format='png')
+        plt.close()
 
+        pdb.set_trace()
+
+
+def get_activations(net, data):
+
+    #Get layer output
+    pdb.set_trace()
+    #layers 1-3 are the dense ones
+    get_1st_layer_output = K.function([net.layers[0].input],[net.layers[1].output])
+    get_2nd_layer_output = K.function([net.layers[0].input],[net.layers[2].output])
+    get_3d_layer_output = K.function([net.layers[0].input],[net.layers[3].output])
+    layer_output1 = get_1st_layer_output(data)[0]
+    layer_output2 = get_2nd_layer_output(data)[0]
+    layer_output3 = get_3d_layer_output(data)[0]
+
+    plt.bar(np.arange(av.shape[0]),av)
     pdb.set_trace()
 
 
@@ -430,12 +458,15 @@ threshold = args.threshold[0]
 outdir = args.outdir[0]
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
+#Exclude the regional data from Brazil
+exclude_index = adjusted_data[(adjusted_data['CountryCode']=='BRA')&(adjusted_data['RegionCode']!='0')].index
+adjusted_data = adjusted_data.drop(exclude_index)
 #Get data
-X1_high,X1_low,X2_high,X2_low,X3_high,X3_low,y_high,y_low = get_features(adjusted_data,train_days,forecast_days,num_pred_periods,threshold,outdir)
+X1,X2,X3,y = get_features(adjusted_data,train_days,forecast_days,num_pred_periods,threshold,outdir)
 
 #Fit high
 #Convert to log for training
-fit_data(X1_high,X2_high,X3_high,np.log(y_high+0.001),'high',outdir)
+fit_data(X1,X2,X3,np.log(y+0.001),'high',outdir)
 
 pdb.set_trace()
 pdb.set_trace()
