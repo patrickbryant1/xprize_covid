@@ -70,12 +70,12 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
                         'gross_net_income',
                         'population_density',
                         'monthly_temperature',
-                        'retail_and_recreation',
-                        'grocery_and_pharmacy',
-                        'parks',
-                        'transit_stations',
-                        'workplaces',
-                        'residential',
+                        #'retail_and_recreation',
+                        #'grocery_and_pharmacy',
+                        #'parks',
+                        #'transit_stations',
+                        #'workplaces',
+                        #'residential',
                         'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
                         'Urban population (% of total population)',
                         'Population ages 65 and above (% of total population)',
@@ -101,7 +101,20 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
         np.save(outdir+'X.npy',X)
         np.save(outdir+'y.npy',y)
 
+    #look at period differences:
+    prev_cases = X[:,12].copy()
+    prev_cases[prev_cases<1]=1
+    xy_diff = y/prev_cases
+    xy_diff = np.log10(xy_diff+0.01)
+    chosen_i = np.array([],dtype='int32')
+    for step in np.arange(-2,2.1,0.1):
+        sel = np.argwhere((xy_diff>step)&(xy_diff<=step+0.1))
+        if len(sel)>500:
+            sel = np.random.choice(sel.flatten(),500,replace=False)
+        chosen_i = np.concatenate([chosen_i,sel.flatten()])
 
+    X = X[chosen_i]
+    y = y[chosen_i]
     high_i = np.argwhere(X[:,12]>t)
     low_i = np.argwhere(X[:,12]<=t)
     X_high = X[high_i][:,0,:]
@@ -111,14 +124,23 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
 
     #Plot distribution
     fig,ax = plt.subplots(figsize=(9/2.54,9/2.54))
-    plt.hist(np.log10(y_high+0.001),bins=20,alpha=0.5,label='high')
-    plt.hist(np.log10(y_low+0.001),bins=20,alpha=0.5,label='low')
+    plt.hist(np.log10(y_high+0.001),bins=20,alpha=0.75,label='high')
+    plt.hist(np.log10(y_low+0.001),bins=20,alpha=0.75,label='low')
     plt.title('Target case disributions')
     plt.xlabel('log cases per 100000')
     plt.yticks([])
     plt.legend()
     plt.tight_layout()
     plt.savefig(outdir+'case_distr.png',format='png')
+    plt.close()
+
+    prev_cases = X[:,12].copy()
+    prev_cases[prev_cases<1]=1
+    xy_diff = y/prev_cases
+    xy_diff = np.log10(xy_diff+0.01)
+    plt.hist(xy_diff,bins=50)
+    plt.tight_layout()
+    plt.savefig(outdir+'change_distr.png',format='png')
     plt.close()
 
     return X_high,y_high,X_low,y_low

@@ -20,7 +20,7 @@ def load_model():
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/non_log/'
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/'
     for i in range(5):
         try:
             low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
@@ -198,143 +198,131 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         adjusted_data_gdf['cumulative_smoothed_cases']=adjusted_data_gdf['cumulative_smoothed_cases']/(population/100000)
 
         #Get historical NPIs
-        historical_npis_g = np.array(adjusted_data_gdf[NPI_COLS]).copy()
+        historical_npis_g = np.array(adjusted_data_gdf[NPI_COLS])
+        #Get other daily features
+        adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:9]])
+        #Get future NPIs
+        future_npis = np.array(ips_gdf[NPI_COLS])
+
+        # Make prediction for each requested day
+        geo_preds = []
+        geo_preds_upper = []
+        geo_preds_lower = []
+        days_ahead = 0
+        prev_std=0 #Std deviation
+        prediction_period = 0
+        while current_date <= end_date:
+            if prediction_period<1:
+                pred_days=11
+            else:
+                pred_days=21
+            prediction_period += 1
+            # Prepare data - make check so that enough previous data exists
+            #The np array has to be copied!!!!!!!!
+            #Otherwise there is a direct link to the adjusted_additional_g which means
+            #that both arrays are updated simultaneously
+
+            #Get change over the past NB_LOOKBACK_DAYS. The predictions are the medians = 11 days ahead
+            X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:].copy() #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
+            case_in_end = X_additional[-1,0]
+            #period_change = X_additional[-1,1]-X_additional[0,1]
+            case_medians = np.median(X_additional[:,:2],axis=0)
+            X_additional = np.average(X_additional,axis=0)
+            X_additional[:2]=case_medians
+
+            #Get NPIS
+            X_npis = historical_npis_g[-NB_LOOKBACK_DAYS:].copy()
+            X_npis = np.average(X_npis,axis=0)
+
+            X = np.concatenate([X_additional,X_npis])
+            #Add
+            X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,
+                            #period_change,
+                            pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                            cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
+                            air_transport, population])
+
+            # Make the prediction from all 5 models
+            model_preds = []
+            if X[0]>threshold:
+                for model in high_models:
+                    model_preds.append(model.predict(np.array([X]))[0])
+            else:
+                for model in low_models:
+                    model_preds.append(model.predict(np.array([X]))[0])
 
 
-        #Plot
+            #pred = np.power(e,model_preds)
+            pred = np.array(model_preds)
+            pred_av = np.average(pred)
+            pred_std = np.std(pred)
+            #Order the predictions to run through the predicted mean
+            #It looks like the median in the nex section is mainly driven
+            #by the end of that section --> run from case in end of input to pred
+            #pred_half1 = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))
+            #pred_half2 = np.arange(pred_av,pred_av+(pred_av-case_in_end),(pred_av-case_in_end)/(pred_days))
+            #pred = np.concatenate([pred_half1,pred_half2])
+            pred = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))[:pred_days]
+            pred_lower = np.arange(case_in_end-4*prev_std,pred[-1]-4*pred_std,((pred[-1]-4*pred_std)-(case_in_end-4*prev_std))/pred_days)[:pred_days]
+            pred_upper = np.arange(case_in_end+4*prev_std,pred[-1]+4*pred_std,((pred[-1]+4*pred_std)-(case_in_end+4*prev_std))/pred_days)[:pred_days]
+            prev_std = pred_std
+
+            #Min 0
+            pred[pred<0]=0
+            pred_lower[pred_lower<0]=0
+            pred_upper[pred_upper<0]=0
+            #Do not allow predicting more cases than 1/21 of population per day
+            pred[pred>((1/pred_days*population)/(population/100000))]=(1/pred_days*population)/(population/100000)
+
+            # Add if it's a requested date
+            if current_date+ np.timedelta64(pred_days, 'D') >= start_date:
+                #Append the predicted dates
+                days_for_pred =  current_date+ np.timedelta64(pred_days, 'D')-start_date
+                geo_preds.extend(pred[-days_for_pred.days:])
+                geo_preds_lower.extend(pred_lower[-days_for_pred.days:])
+                geo_preds_upper.extend(pred_upper[-days_for_pred.days:])
+
+            else:
+                print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")
+
+            # Append the prediction and npi's for the next x predicted days
+            # in order to rollout predictions for further days.
+            future_additional = np.repeat(np.array([adjusted_additional_g[-1,:].copy()]),len(pred),axis=0)
+            future_additional[:,0]=pred #add predicted cases
+            future_additional[:,1]=np.cumsum(pred) #add predicted cumulative cases
+            #!!!!!!!!!!!!!!!
+            #Look up monthly temperature for predicted dates: 'monthly_temperature'
+            #!!!!!!!!!!!!!!!
+
+            adjusted_additional_g = np.append(adjusted_additional_g, future_additional,axis=0)
+            historical_npis_g = np.append(historical_npis_g, future_npis[days_ahead:days_ahead + pred_days], axis=0)
+            # Move to next period
+            current_date = current_date + np.timedelta64(pred_days, 'D')
+            days_ahead += pred_days
+
+        # Create geo_pred_df with pred column
+        geo_pred_df = ips_gdf[ID_COLS].copy()
+        geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)])#*(population/100000) Adjust for population
+
+        geo_pred_df['PredictedDailyNewCases_lower'] = np.array(geo_preds_lower[:len(geo_pred_df)])
+        geo_pred_df['PredictedDailyNewCases_upper'] = np.array(geo_preds_upper[:len(geo_pred_df)])
+        #Check
+        adjusted_data_gdf = adjusted_data[adjusted_data['GeoID'] == g]
+        adjusted_data_gdf.at[:,'smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
+        geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf.loc[:,('Date','smoothed_cases')],on='Date',how='left')
+        geo_pred_df['population']=population
+        #Vis
         fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
-        colors = {1:'b',2:'grey'}
-        for npi_scale in [1,2]:
-            #Get other daily features
-            adjusted_additional_g = np.array(adjusted_data_gdf[additional_features[:9]]).copy()
-            # Make prediction for each requested day
-            # Start predicting from start_date, unless there's a gap since last known date
-            current_date = min(last_known_date + np.timedelta64(1, 'D'), start_date)
-            geo_preds = []
-            geo_preds_upper = []
-            geo_preds_lower = []
-            days_ahead = 0
-            prev_std=0 #Std deviation
-            prediction_period = 0
-            #Get future NPIs
-            future_npis = np.array(ips_gdf[NPI_COLS]).copy()*npi_scale
-            while current_date <= end_date:
-                if prediction_period<1:
-                    pred_days=11
-                else:
-                    pred_days=21
-                prediction_period += 1
-                # Prepare data - make check so that enough previous data exists
-                #The np array has to be copied!!!!!!!!
-                #Otherwise there is a direct link to the adjusted_additional_g which means
-                #that both arrays are updated simultaneously
-
-                #Get change over the past NB_LOOKBACK_DAYS. The predictions are the medians = 11 days ahead
-                X_additional = np.array(adjusted_additional_g[-NB_LOOKBACK_DAYS:]).copy() #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
-                case_in_end = X_additional[-1,0]
-                #period_change = X_additional[-1,1]-X_additional[0,1]
-                case_medians = np.median(X_additional[:,:2],axis=0)
-                X_additional = np.average(X_additional,axis=0)
-                X_additional[:2]=case_medians
-
-                #Get NPIS
-                X_npis = historical_npis_g[-NB_LOOKBACK_DAYS:].copy()
-                X_npis = np.average(X_npis,axis=0)
-
-                X = np.concatenate([X_additional,X_npis])
-                #Add
-                X = np.append(X,[death_to_case_scale,case_death_delay,gross_net_income,population_density,
-                                #period_change,
-                                pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
-                                cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
-                                air_transport, population])
-
-                # Make the prediction from all 5 models
-                model_preds = []
-                if X[0]>threshold:
-                    for model in high_models:
-                        model_preds.append(model.predict(np.array([X]))[0])
-                else:
-                    for model in low_models:
-                        model_preds.append(model.predict(np.array([X]))[0])
-
-
-                #pred = np.power(e,model_preds)
-                pred = np.array(model_preds)
-                pred_av = np.average(pred)
-                pred_std = np.std(pred)
-                #Order the predictions to run through the predicted mean
-                #It looks like the median in the nex section is mainly driven
-                #by the end of that section --> run from case in end of input to pred
-                #pred_half1 = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))
-                #pred_half2 = np.arange(pred_av,pred_av+(pred_av-case_in_end),(pred_av-case_in_end)/(pred_days))
-                #pred = np.concatenate([pred_half1,pred_half2])
-
-                pred = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))[:pred_days]
-                pred_lower = np.arange(case_in_end-4*prev_std,pred[-1]-4*pred_std,((pred[-1]-4*pred_std)-(case_in_end-4*prev_std))/pred_days)[:pred_days]
-                pred_upper = np.arange(case_in_end+4*prev_std,pred[-1]+4*pred_std,((pred[-1]+4*pred_std)-(case_in_end+4*prev_std))/pred_days)[:pred_days]
-                prev_std = pred_std
-
-                #Min 0
-                pred[pred<0]=0
-                pred_lower[pred_lower<0]=0
-                pred_upper[pred_upper<0]=0
-                #Do not allow predicting more cases than 1/21 of population per day
-                pred[pred>((1/pred_days*population)/(population/100000))]=(1/pred_days*population)/(population/100000)
-
-                # Add if it's a requested date
-                if current_date+ np.timedelta64(pred_days, 'D') >= start_date:
-                    #Append the predicted dates
-                    days_for_pred =  current_date+ np.timedelta64(pred_days, 'D')-start_date
-                    geo_preds.extend(pred[-days_for_pred.days:])
-                    geo_preds_lower.extend(pred_lower[-days_for_pred.days:])
-                    geo_preds_upper.extend(pred_upper[-days_for_pred.days:])
-
-                else:
-                    print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")
-
-                # Append the prediction and npi's for the next x predicted days
-                # in order to rollout predictions for further days.
-                future_additional = np.repeat(np.array([adjusted_additional_g[-1,:].copy()]),len(pred),axis=0)
-                future_additional[:,0]=pred #add predicted cases
-                future_additional[:,1]=np.cumsum(pred) #add predicted cumulative cases
-                #!!!!!!!!!!!!!!!
-                #Look up monthly temperature for predicted dates: 'monthly_temperature'
-                #!!!!!!!!!!!!!!!
-
-                adjusted_additional_g = np.append(adjusted_additional_g, future_additional,axis=0)
-                historical_npis_g = np.append(historical_npis_g, future_npis[days_ahead:days_ahead + pred_days], axis=0)
-                # Move to next period
-                current_date = current_date + np.timedelta64(pred_days, 'D')
-                days_ahead += pred_days
-
-
-            # Create geo_pred_df with pred column
-            geo_pred_df = ips_gdf[ID_COLS].copy()
-            geo_pred_df['PredictedDailyNewCases'+str(npi_scale)] = np.array(geo_preds[:len(geo_pred_df)])#*(population/100000) Adjust for population
-            geo_pred_df['PredictedDailyNewCases_lower'+str(npi_scale)] = np.array(geo_preds_lower[:len(geo_pred_df)])
-            geo_pred_df['PredictedDailyNewCases_upper'+str(npi_scale)] = np.array(geo_preds_upper[:len(geo_pred_df)])
-            #Check
-            adjusted_data_gdf = adjusted_data[adjusted_data['GeoID'] == g]
-            adjusted_data_gdf.at[:,'smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
-            geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf.loc[:,('Date','smoothed_cases')],on='Date',how='left')
-            geo_pred_df['population']=population
-            #Vis
-
-            plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases'+str(npi_scale)],color=colors[npi_scale],label='Scaling:'+str(npi_scale))
-            plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases_lower'+str(npi_scale)],geo_pred_df['PredictedDailyNewCases_upper'+str(npi_scale)],alpha=0.5,color='grey')
-            plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
-
+        plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases'],color='grey')
+        plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases_lower'],geo_pred_df['PredictedDailyNewCases_upper'],alpha=0.5,color='grey')
+        plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
         plt.xticks(ticks=np.arange(0,len(geo_pred_df),7),labels= np.arange(start_date,end_date+np.timedelta64(1,'D'),np.timedelta64(7,'D'),dtype='datetime64[D]'),rotation='vertical')
         plt.title(g)
-        plt.legend()
         plt.tight_layout()
         plt.savefig('./plots/'+g+'.png',format='png')
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
-
-
 
 
     #4. Obtain output
