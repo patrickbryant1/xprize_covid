@@ -204,6 +204,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
         #Plot
         fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
+        colors = {1:'b',2:'grey'}
         for npi_scale in [1,2]:
 
             # Make prediction for each requested day
@@ -318,7 +319,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             geo_pred_df['population']=population
             #Vis
 
-            plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases'+str(npi_scale)],color='grey',label='Scaling:'+str(npi_scale))
+            plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases'+str(npi_scale)],color=colors[npi_scale],label='Scaling:'+str(npi_scale))
             plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases_lower'+str(npi_scale)],geo_pred_df['PredictedDailyNewCases_upper'+str(npi_scale)],alpha=0.5,color='grey')
             plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
 

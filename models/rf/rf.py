@@ -263,9 +263,9 @@ def fit_model(X, y, NFOLD, mode, outdir):
         corrs = []
         errors = []
 
-        reg = RandomForestRegressor(n_jobs=-1, random_state=42).fit(X_train, np.log(y_train+0.001))
+        reg = RandomForestRegressor(n_jobs=-1, random_state=42).fit(X_train, y_train)
         pred = reg.predict(X_valid)
-        pred = np.power(e,pred)
+        #pred = np.power(e,pred)
         #if mode =='high':
         #    pred[pred>5000]=5000
         #if mode=='low':
@@ -329,7 +329,7 @@ adjusted_data = adjusted_data.drop(exclude_index)
 world_areas = {1:'Latin America & Caribbean', 2:'South Asia', 3:'Sub-Saharan Africa',
                4:'Europe & Central Asia', 5:'Middle East & North Africa',
                6:'East Asia & Pacific', 7:'North America'}
-adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
+#adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
 #Get data
 X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
