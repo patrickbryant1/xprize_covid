@@ -80,7 +80,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     # Fill any missing NPIs by assuming they are the same as previous day
     for npi_col in NPI_COLS:
         hist_ips_df.update(hist_ips_df.groupby(['CountryName', 'RegionName'])[npi_col].ffill().fillna(0))
-    pdb.set_trace()
+
     # Intervention plans to forecast for: those between start_date and end_date
     ips_df = hist_ips_df[(hist_ips_df.Date >= start_date) & (hist_ips_df.Date <= end_date)]
     if len(ips_df)<1:
@@ -137,7 +137,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #Set threshold for model selection
     threshold=1.8
     geo_pred_dfs = []
-    pdb.set_trace()
 
     for g in ips_df.GeoID.unique():
         print('Predicting for', g)
@@ -328,7 +327,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
-        pdb.set_trace()
 
     #4. Obtain output
     # Combine all predictions into a single dataframe - remember to only select the requied columns later

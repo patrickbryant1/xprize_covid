@@ -56,8 +56,6 @@ def evaluate_model(feature_importances,outdir):
 
     fig,ax = plt.subplots(figsize=(4.5,9))
     plt.barh(np.arange(len(feature_names)),feature_importances_av[order],yerr=feature_importances_std[order])
-    #plt.errorbar(np.arange(len(feature_names)),feature_importances_av,)
-    #plt.yscale('log')
     plt.yticks(np.arange(len(feature_names)),labels=feature_names[order], rotation='horizontal')
     plt.tight_layout()
     plt.xlabel('MDI')
