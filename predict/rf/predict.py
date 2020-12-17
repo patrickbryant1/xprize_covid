@@ -109,12 +109,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     exclude_index = adjusted_data[(adjusted_data['CountryCode']=='BRA')&(adjusted_data['RegionCode']!='0')].index
     adjusted_data = adjusted_data.drop(exclude_index)
 
-    #Get only for certain world part
-    #Select only world area data
-    world_areas = {1:'Latin America & Caribbean', 2:'South Asia', 3:'Sub-Saharan Africa',
-                   4:'Europe & Central Asia', 5:'Middle East & North Africa',
-                   6:'East Asia & Pacific', 7:'North America'}
-    #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[7]]
+    #Get the monthly temperature data
+    monthly_temperature = pd.read_csv('../../data/temp_1991_2016.csv')
 
     #4. Run the predictor
     additional_features = ['smoothed_cases',
@@ -170,6 +166,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         if len(adjusted_data_gdf)<NB_LOOKBACK_DAYS:
             print('Not enough data for',g)
             continue
+
+        #Get country code
+        cc = adjusted_data_gdf.CountryCode.values[0]
         #Get no-repeat features
         death_to_case_scale = adjusted_data_gdf.loc[0,'death_to_case_scale']
         case_death_delay = adjusted_data_gdf.loc[0,'case_death_delay']
@@ -273,8 +272,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             pred[pred<0]=0
             pred_lower[pred_lower<0]=0
             pred_upper[pred_upper<0]=0
-            #Do not allow predicting more cases than 1/21 of population per day
-            pred[pred>((1/pred_days*population)/(population/100000))]=(1/pred_days*population)/(population/100000)
+            #Scale down cases due to population share of cumulative observations
+            #pred = pred*(1-cum_case_in_end*(population/100000)/population)
 
             # Add if it's a requested date
             if current_date+ np.timedelta64(pred_days, 'D') >= start_date:
@@ -294,6 +293,11 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             future_additional[:,1]=cum_case_in_end+np.cumsum(pred) #add predicted cumulative cases
             #!!!!!!!!!!!!!!!
             #Look up monthly temperature for predicted dates: 'monthly_temperature'
+            future_date = current_date + np.timedelta64(pred_days, 'D')
+            month =  future_date.month
+            monthly_temp = get_monthly_temp(monthly_temperature,cc,month)
+            pdb.set_trace()
+            future_additional[:,2]=monthly_temp
             #!!!!!!!!!!!!!!!
 
             adjusted_additional_g = np.append(adjusted_additional_g, future_additional,axis=0)
@@ -325,7 +329,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
-        pdb.set_trace()
+
 
 
     #4. Obtain output
@@ -339,6 +343,29 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     print("Saved predictions to", output_file_path)
 
     return None
+
+
+def get_monthly_temp(monthly_temperature,cc,month):
+    '''Get monthly temperature
+    '''
+
+    #Get monthly_temperature
+    temp_keys = {1:' Jan Average',2:' Feb Average',3:' Mar Average',4:' Apr Average',5:' May Average',6:' Jun Average',
+                7:' Jul Average',8:' Aug Average',9:' Sep Average',10:' Oct Average',11:' Nov Average',12:' Dec Average'}
+    tkey = temp_keys[month]
+    #Regions not available - where a nearby region was used instead
+    temp_conv_regions = {'ABW':'VEN','AIA':'PRI','BHS':'CUB','BMU':'CUB','CYM':'CUB','FLK':'ARG','GIB':'ESP',
+                            'GMB':'GNB','GUM':'PHL','HKG':'CHN','KOR':'JPN','MAC':'CHN', 'MSR':'PRI','PCN':'NZL',
+                            'PSE':'ISR','RKS':'SRB','SMR':'ITA','TCA':'CUB','TWN':'JPN','VGB':'DOM','VIR':'DOM'}
+    if cc in [*temp_conv_regions.keys()]:
+        country_temp= monthly_temperature[monthly_temperature['ISO3']==' '+temp_conv_regions[cc]]
+    else:
+        country_temp= monthly_temperature[monthly_temperature['ISO3']==' '+cc]
+
+
+    month_av =  np.round(np.average(country_temp[country_temp['Statistics']==tkey]['Temperature - (Celsius)']),1)
+
+    return month_av
 
 
 
