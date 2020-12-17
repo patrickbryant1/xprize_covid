@@ -481,9 +481,8 @@ print(adjusted_data[adjusted_data.isna().any(axis=1)].RegionName.unique())
 
 #Get data
 X,y =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
-
 print('Number periods in selection',len(y))
 
 pdb.set_trace()
 #Fit model
-fit_model(X,y,5,'high',outdir+'all/')
+fit_model(X,y,5,'all',outdir+'all/')

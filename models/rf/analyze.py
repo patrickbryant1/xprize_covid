@@ -50,13 +50,11 @@ def evaluate_model(feature_importances,outdir):
     #Normalize features
     order = np.argsort(feature_importances_av)
 
-    fig,ax = plt.subplots(figsize=(9,4.5))
-    plt.bar(np.arange(len(feature_names)),feature_importances_av[order],yerr=feature_importances_std[order])
-    #plt.errorbar(np.arange(len(feature_names)),feature_importances_av,)
-    #plt.yscale('log')
-    plt.xticks(np.arange(len(feature_names)),labels=feature_names[order], rotation='vertical')
+    fig,ax = plt.subplots(figsize=(4.5,9))
+    plt.barh(np.arange(len(feature_names)),feature_importances_av[order],yerr=feature_importances_std[order])
+    plt.yticks(np.arange(len(feature_names)),labels=feature_names[order], rotation='horizontal')
     plt.tight_layout()
-    plt.ylabel('MDI')
+    plt.xlabel('MDI')
     plt.title('Feature Importance (MDI)')
     plt.tight_layout()
     plt.savefig(outdir+'feature_importances_.png',format='png')
