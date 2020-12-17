@@ -6,6 +6,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 import argparse
+import pdb
 
 PREDICTED_DAILY_NEW_CASES = "PredictedDailyNewCases"
 
@@ -44,6 +45,7 @@ def validate_submission(start_date,
     all_errors = []
     # Check we got the expected columns
     all_errors += _check_columns(COLUMNS, pred_df)
+
     if not all_errors:
         # Columns are good, check we got prediction for each requested country / region
         all_errors += _check_geos(ip_df, pred_df)
@@ -51,6 +53,7 @@ def validate_submission(start_date,
         all_errors += _check_prediction_values(pred_df)
         # Check the prediction dates are correct
         all_errors += _check_days(start_date, end_date, pred_df)
+
 
     return all_errors
 
@@ -143,5 +146,6 @@ if __name__ == '__main__':
                         help="The path to the CSV file where predictions should be written")
     args = parser.parse_args()
     print("Validating predictions from", args.start_date, "to", args.end_date,"...")
-    validate_submission(args.start_date, args.end_date, args.ip_file, args.submission_file)
+    all_errors = validate_submission(args.start_date, args.end_date, args.ip_file, args.submission_file)
+    print(all_errors)
     print("Done!")
