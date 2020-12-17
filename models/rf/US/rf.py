@@ -54,7 +54,8 @@ def format_age_per_ethnicity(sex_eth_age_data):
     ethnicities = {1:'White', 2:'Black',3:'American Indian or Alaska Native',4:'Asian',5:'Native Hawaiian or Other Pacific Islander',6:'More than one race'}
     #Combining origin 1 and ethnicity gives Non-Hispanic + ethinicity (same used in COVID reportings)
     #AGE is single-year of age (0, 1, 2,... 84, 85+ years)
-    age_groups = {0:'Under 1 year',4:'1-4 years',14:'5-14 years',24:'15-24 years',34:'25-34 years',44:'35-44 years',54:'45-54 years', 64:'55-64 years', 74:'65-74 years',84:'75-84 years', 85:'85 years and over'}
+    age_groups = {0:'Under 1 year',4:'1-4 years',14:'5-14 years',24:'15-24 years',34:'25-34 years',44:'35-44 years',
+                54:'45-54 years', 64:'55-64 years', 74:'65-74 years',84:'75-84 years', 85:'85 years and over'}
     age_index = [1,4,14,24,34,44,54,64,74,84]
     #Assign columns
     extracted_data['State'] = ''
@@ -85,10 +86,10 @@ def format_age_per_ethnicity(sex_eth_age_data):
         slice = pd.DataFrame([vals],columns=extracted_data.columns)
         extracted_data=pd.concat([extracted_data,slice])
 
-        #All the ethnicities in the non Hispanic should not be summed
+        #All the ethnicities in the NON Hispanic should NOT be summed
         #Loop through origins
         non_hispanic_state = per_state[per_state['ORIGIN']==1]
-        #All the ethnicities in Hispanic should be summed
+
         for eth in ethnicities:
             vals = []
             vals.append(state)
@@ -107,8 +108,22 @@ def format_age_per_ethnicity(sex_eth_age_data):
             slice = pd.DataFrame([vals],columns=extracted_data.columns)
             extracted_data=pd.concat([extracted_data,slice])
 
+    #Extract all ethnicities and sums for the model
+    model_formatted_data = pd.DataFrame()
+    age_cols = ['Under 1 year', '1-4 years',
+       '5-14 years', '15-24 years', '25-34 years', '35-44 years',
+       '45-54 years', '55-64 years', '65-74 years', '75-84 years',
+       '85 years and over']
+    for state in extracted_data['State'].unique():
+        state_data = extracted_data[extracted_data['State']==state]
+        for eth in [*ethnicities.values()]:
+            eth_state_data = state_data[state_data['Ethnicity']==eth]
+            pdb.set_trace()
+            eth_state_sum = eth_state_data[age_cols]
+
     #Save df
     pdb.set_trace()
+    extracted_data = extracted_data.reset_index()
     extracted_data.to_csv('formatted_eth_age_data_per_state.csv')
     return extracted_data
 
