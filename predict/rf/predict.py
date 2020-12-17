@@ -225,6 +225,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #Get change over the past NB_LOOKBACK_DAYS. The predictions are the medians = 11 days ahead
             X_additional = adjusted_additional_g[-NB_LOOKBACK_DAYS:].copy() #The first col is 'smoothed_cases', then 'cumulative_smoothed_cases',
             case_in_end = X_additional[-1,0]
+            cum_case_in_end = X_additional[-1,1]
             #period_change = X_additional[-1,1]-X_additional[0,1]
             case_medians = np.median(X_additional[:,:2],axis=0)
             X_additional = np.average(X_additional,axis=0)
@@ -290,7 +291,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             # in order to rollout predictions for further days.
             future_additional = np.repeat(np.array([adjusted_additional_g[-1,:].copy()]),len(pred),axis=0)
             future_additional[:,0]=pred #add predicted cases
-            future_additional[:,1]=np.cumsum(pred) #add predicted cumulative cases
+            future_additional[:,1]=cum_case_in_end+np.cumsum(pred) #add predicted cumulative cases
             #!!!!!!!!!!!!!!!
             #Look up monthly temperature for predicted dates: 'monthly_temperature'
             #!!!!!!!!!!!!!!!
@@ -324,6 +325,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
+        pdb.set_trace()
 
 
     #4. Obtain output
@@ -335,7 +337,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #Only the required columns
     pred_df.drop(columns={'GeoID','smoothed_cases','population'}).to_csv(output_file_path, index=False)
     print("Saved predictions to", output_file_path)
-    pdb.set_trace()
+
     return None
 
 
