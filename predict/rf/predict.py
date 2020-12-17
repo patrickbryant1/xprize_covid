@@ -247,6 +247,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             if X[0]>threshold:
                 for model in high_models:
                     model_preds.append(model.predict(np.array([X]))[0])
+                for model in low_models:
+                    model_preds.append(model.predict(np.array([X]))[0])
             else:
                 for model in low_models:
                     model_preds.append(model.predict(np.array([X]))[0])
@@ -254,6 +256,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
             #pred = np.power(e,model_preds)
             pred = np.array(model_preds)
+
             #If predicting differnce to median
             pred_av = np.average(pred)
             pred_std = np.std(pred)
@@ -296,7 +299,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             future_date = current_date + np.timedelta64(pred_days, 'D')
             month =  future_date.month
             monthly_temp = get_monthly_temp(monthly_temperature,cc,month)
-            pdb.set_trace()
             future_additional[:,2]=monthly_temp
             #!!!!!!!!!!!!!!!
 
@@ -329,7 +331,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
-
 
 
     #4. Obtain output
