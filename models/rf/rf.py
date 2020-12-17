@@ -281,7 +281,6 @@ def fit_model(X, y, NFOLD, mode, outdir):
 
     #KFOLD
     NFOLD = 5
-    #kf = KFold(n_splits=NFOLD,shuffle=True, random_state=42)
     train_split, val_split = kfold(len(X),NFOLD)
 
     #Save errors
@@ -370,6 +369,5 @@ print('Number periods in high cases selection',len(y_high))
 print('Number periods in low cases selection',len(y_low))
 
 #Fit model
-#fit_model(X,y,5,'high',outdir+'high/')
 fit_model(X_high,y_high,5,'high',outdir+'high/')
-#fit_model(X_low,y_low,5,'low',outdir+'low/')
+fit_model(X_low,y_low,5,'low',outdir+'low/')

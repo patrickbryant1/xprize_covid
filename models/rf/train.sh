@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 ADJUSTED_DATA=../../data/adjusted_data.csv
-START_DATE='2020-06-01' #Date to start from
+START_DATE='2020-01-01' #Date to start from
 TRAIN_DAYS=21 #Number of days to include as the training period
 FORECAST_DAYS=21
 THRESHOLD=1.8
-OUTDIR=/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/non_log/
+OUTDIR=/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/non_log/beginning/
 
 #WORLD_AREA
 #'Latin America & Caribbean':1, 'South Asia':2, 'Sub-Saharan Africa':3,
