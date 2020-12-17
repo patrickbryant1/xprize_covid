@@ -113,7 +113,7 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     choose_uniform(X_high,y_high,500,'high')
     choose_uniform(X_low,y_low,500,'low')
     #Plot distribution
-    fig,ax = plt.subplots(figsize=(9/2.54,9/2.54))
+    fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
     plt.hist(np.log10(y_high+0.001),bins=20,alpha=0.75,label='high')
     plt.hist(np.log10(y_low+0.001),bins=20,alpha=0.75,label='low')
     plt.title('Target case disributions')
@@ -121,7 +121,7 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     plt.yticks([])
     plt.legend()
     plt.tight_layout()
-    plt.savefig(outdir+'case_distr.png',format='png')
+    plt.savefig(outdir+'case_distr.png',format='png',dpi=300)
     plt.close()
 
 
@@ -149,9 +149,12 @@ def choose_uniform(X,y,num,mode):
     prev_cases[prev_cases<1]=1
     xy_diff = y/prev_cases
     xy_diff = np.log10(xy_diff+0.01)
+    fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
     plt.hist(xy_diff,bins=50)
+    plt.title(mode+' change disribution')
+    plt.xlabel('log change in median cases per 100000')
     plt.tight_layout()
-    plt.savefig(outdir+mode+'_change_distr.png',format='png')
+    plt.savefig(outdir+mode+'_change_distr.png',format='png',dpi=300)
     plt.close()
 
 
