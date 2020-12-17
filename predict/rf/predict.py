@@ -20,7 +20,7 @@ def load_model():
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/non_log'
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/non_log/june_on'
     for i in range(5):
         try:
             low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
@@ -80,9 +80,11 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     # Fill any missing NPIs by assuming they are the same as previous day
     for npi_col in NPI_COLS:
         hist_ips_df.update(hist_ips_df.groupby(['CountryName', 'RegionName'])[npi_col].ffill().fillna(0))
-
+    pdb.set_trace()
     # Intervention plans to forecast for: those between start_date and end_date
     ips_df = hist_ips_df[(hist_ips_df.Date >= start_date) & (hist_ips_df.Date <= end_date)]
+    if len(ips_df)<1:
+        print('No historical inerventions up to start date')
 
     #2. Load the model(s)
     low_models, high_models = load_model()
@@ -102,7 +104,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #world_areas = {1:"Europe & Central Asia"}
     #adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[1]]
     adjusted_data['RegionName'] = adjusted_data['RegionName'].replace('0', np.nan)
-    adjusted_data['GeoID'] = adjusted_data['CountryName'] + '__' + adjusted_data['RegionName'].astype(str)
     adjusted_data = adjusted_data.fillna(0)
 
     #Exclude the regional data from Brazil
@@ -116,12 +117,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     additional_features = ['smoothed_cases',
                             'cumulative_smoothed_cases',
                             'monthly_temperature',
-                            # 'retail_and_recreation',
-                            # 'grocery_and_pharmacy',
-                            # 'parks',
-                            # 'transit_stations',
-                            # 'workplaces',
-                            # 'residential', #These 9 features are used as daily features
+                            #These features are used as daily features
                             'death_to_case_scale', #The rest are only used once
                             'case_death_delay',
                             'gross_net_income',
@@ -141,6 +137,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     #Set threshold for model selection
     threshold=1.8
     geo_pred_dfs = []
+    pdb.set_trace()
 
     for g in ips_df.GeoID.unique():
         print('Predicting for', g)
@@ -331,7 +328,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
-
+        pdb.set_trace()
 
     #4. Obtain output
     # Combine all predictions into a single dataframe - remember to only select the requied columns later

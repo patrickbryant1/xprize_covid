@@ -8,6 +8,10 @@ ALL_HISTORICAL_IPS=../../data/hitorical_ip.csv
 #Predit June
 #python3 predict.py -s 2020-06-07 -e 2020-06-30 -ip $ALL_HISTORICAL_IPS -o predictions_2020-06-07_2020-06-31.csv
 #Predit November
-python3 predict.py -s 2020-11-20 -e 2020-12-11 -ip $ALL_HISTORICAL_IPS -o predictions_2020-11-20_2020-12-11.csv
+#python3 predict.py -s 2020-11-20 -e 2020-12-11 -ip $ALL_HISTORICAL_IPS -o predictions_2020-11-20_2020-12-11.csv
 #1 month in January for India and Mexico
 #python3 predict.py -s 2021-01-01 -e 2021-01-31 -ip ../test_cases/future_ip.csv -o predictions_2021-01-01_2021-01-31.csv
+
+#Validate the model
+FIP=/home/patrick/covid-xprize/covid_xprize/validation/data/future_ip.csv
+python3 predict.py -s 2020-12-23 -e 2021-01-01 -ip $FIP -o predictions_2020-12-23_2021-01-01.csv
