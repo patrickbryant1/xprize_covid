@@ -243,8 +243,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             if X[0]>threshold:
                 for model in high_models:
                     model_preds.append(model.predict(np.array([X]))[0])
-                for model in low_models:
-                    model_preds.append(model.predict(np.array([X]))[0])
             else:
                 for model in low_models:
                     model_preds.append(model.predict(np.array([X]))[0])
