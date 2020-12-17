@@ -121,22 +121,23 @@ def format_age_per_ethnicity(sex_eth_age_data):
             eth_state_count = np.sum(eth_state_data[age_cols].values)
             extracted_ethnicities[eth].append(eth_state_count)
 
+    #Save the extracted data in a format fitting the model
     model_formatted_data = pd.DataFrame()
-    model_formatted_data['RegionName']=extracted_data['State'].unique()
-    for eth in extracted_ethnicities:
-        model_formatted_data[eth]=extracted_ethnicities[eth]
-    pdb.set_trace()
+    model_formatted_data['RegionName']=np.append(extracted_data['State'].unique(),'0') #Add 0, representing the whole USA
 
-    #Save df
-    extracted_data = extracted_data.reset_index()
-    extracted_data.to_csv('formatted_eth_age_data_per_state.csv')
-    return extracted_data
+    for eth in extracted_ethnicities:
+        #add total
+        extracted_ethnicities[eth].append(np.sum(extracted_ethnicities[eth]))
+        model_formatted_data[eth]=extracted_ethnicities[eth]
+
+    return model_formatted_data
 
 def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     '''Get the selected features
     '''
 
-    selected_features = ['C1_School closing',
+    selected_features = [#These first 12 are the ones the prescriptor will assign
+                        'C1_School closing',
                         'C2_Workplace closing',
                         'C3_Cancel public events',
                         'C4_Restrictions on gatherings',
@@ -147,27 +148,26 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
                         'H1_Public information campaigns',
                         'H2_Testing policy',
                         'H3_Contact tracing',
-                        'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
+                        'H6_Facial Coverings',
+                        #Country region names and indices
                         'Country_index',
                         'Region_index',
                         'CountryName',
                         'RegionName',
+                        #Cases
                         'smoothed_cases',
                         'cumulative_smoothed_cases',
-                        #'rescaled_cases',
-                        #'cumulative_rescaled_cases',
                         'death_to_case_scale',
                         'case_death_delay',
+                        #Income
                         'gross_net_income',
+                        #Pop density
                         'population_density',
+                        #Temperature
                         'monthly_temperature',
-                        #'retail_and_recreation',
-                        #'grocery_and_pharmacy',
-                        #'parks',
-                        #'transit_stations',
-                        #'workplaces',
-                        #'residential',
+                        #Culture
                         'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
+                        #Oxford features
                         'Urban population (% of total population)',
                         'Population ages 65 and above (% of total population)',
                         'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)',
@@ -175,6 +175,12 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
                         'Share of Deaths from Air Pollution (%)',
                         'CO2 emissions (metric tons per capita)',
                         'Air transport (# carrier departures worldwide)',
+                        #Ethnicity
+                        'Hispanic or Latino', 'Non-Hispanic White', 'Non-Hispanic Black',
+                        'Non-Hispanic American Indian or Alaska Native', 'Non-Hispanic Asian',
+                        'Non-Hispanic Native Hawaiian or Other Pacific Islander',
+                        'Non-Hispanic More than one race',
+                        #Total population
                         'population']
 
     #Get features
@@ -193,20 +199,11 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
         np.save(outdir+'y.npy',y)
 
 
-    high_i = np.argwhere(X[:,12]>t)
-    low_i = np.argwhere(X[:,12]<=t)
-    X_high = X[high_i][:,0,:]
-    y_high = y[high_i][:,0]
-    X_low = X[low_i][:,0,:]
-    y_low = y[low_i][:,0]
-
     #look at period differences:
-    choose_uniform(X_high,y_high,500,'high')
-    choose_uniform(X_low,y_low,500,'low')
+    choose_uniform(X,y,50,'all')
     #Plot distribution
     fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
-    plt.hist(np.log10(y_high+0.001),bins=20,alpha=0.75,label='high')
-    plt.hist(np.log10(y_low+0.001),bins=20,alpha=0.75,label='low')
+    plt.hist(np.log10(y+0.001),bins=20,alpha=0.75,label='all')
     plt.title('Target case disributions')
     plt.xlabel('log cases per 100000')
     plt.yticks([])
@@ -216,7 +213,7 @@ def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     plt.close()
 
 
-    return X_high,y_high,X_low,y_low
+    return X,y
 
 def choose_uniform(X,y,num,mode):
     '''Function for choosing data
@@ -230,7 +227,7 @@ def choose_uniform(X,y,num,mode):
     for step in np.arange(-2,2.1,0.1):
         sel = np.argwhere((xy_diff>step)&(xy_diff<=step+0.1))
         if len(sel)>num:
-            sel = np.random.choice(sel.flatten(),500,replace=False)
+            sel = np.random.choice(sel.flatten(),num,replace=False)
         chosen_i = np.concatenate([chosen_i,sel.flatten()])
 
     X = X[chosen_i]
@@ -302,7 +299,16 @@ def split_for_training(sel,train_days,forecast_days):
             air_pollution_deaths = country_region_data.loc[0,'Share of Deaths from Air Pollution (%)']
             co2_emission = country_region_data.loc[0,'CO2 emissions (metric tons per capita)']
             air_transport = country_region_data.loc[0,'Air transport (# carrier departures worldwide)']
+            #Population
             population = country_region_data.loc[0,'population']
+            #Ethnicity
+            hisp_latino = country_region_data.loc[0,'Hispanic or Latino']/population
+            white = country_region_data.loc[0,'Non-Hispanic White']/population
+            black = country_region_data.loc[0,'Non-Hispanic Black']/population
+            native = country_region_data.loc[0,'Non-Hispanic American Indian or Alaska Native']/population
+            asian = country_region_data.loc[0,'Non-Hispanic Asian']/population
+            pacific = country_region_data.loc[0,'Non-Hispanic Native Hawaiian or Other Pacific Islander']/population
+            mixed = country_region_data.loc[0,'Non-Hispanic More than one race']/population
             if region_index!=0:
                 regions.append(country_region_data.loc[0,'CountryName']+'_'+country_region_data.loc[0,'RegionName'])
             else:
@@ -312,7 +318,12 @@ def split_for_training(sel,train_days,forecast_days):
             'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
              'mas', 'uai', 'ltowvs', 'ivr','Urban population (% of total population)','Population ages 65 and above (% of total population)',
              'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
-             'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)','population'})
+             'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)',
+             'Hispanic or Latino', 'Non-Hispanic White', 'Non-Hispanic Black',
+             'Non-Hispanic American Indian or Alaska Native', 'Non-Hispanic Asian',
+             'Non-Hispanic Native Hawaiian or Other Pacific Islander',
+             'Non-Hispanic More than one race',
+             'population'})
 
             #Normalize the cases by _high'000 population
             #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/_high000)
@@ -341,7 +352,10 @@ def split_for_training(sel,train_days,forecast_days):
                                                 #period_change,
                                                 pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
                                                 cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
-                                                air_transport, population]))
+                                                air_transport,
+                                                hisp_latino, white, black,
+                                                native, asian, pacific, mixed,
+                                                population]))
                 y.append(yi)
 
     return np.array(X), np.array(y)
@@ -391,11 +405,6 @@ def fit_model(X, y, NFOLD, mode, outdir):
         pred = reg.predict(X_valid)
         pred = pred
 
-        #pred = np.power(e,pred)
-        #if mode =='high':
-        #    pred[pred>5000]=5000
-        #if mode=='low':
-        #    pred[pred>10]=10
         true = y_valid
         av_er = np.average(np.absolute(pred-true))
 
@@ -447,18 +456,34 @@ sex_eth_age_data=pd.read_csv(args.sex_eth_age_data[0])
 outdir = args.outdir[0]
 
 #Format the sex_eth_age_data
-format_age_per_ethnicity(sex_eth_age_data)
+model_formatted_data = format_age_per_ethnicity(sex_eth_age_data)
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 #Select only the USA data
 adjusted_data = adjusted_data[adjusted_data['CountryCode']=='USA']
 adjusted_data = adjusted_data.reset_index()
+#Join with model_formatted_data
+adjusted_data = pd.merge(adjusted_data,model_formatted_data,on='RegionName',how='left')
+#Add missing data for DC and Virgin Islands
+#['Washington DC', 'Virgin Islands'] do not have ethnicity measures
+ethnicities = ['Hispanic or Latino', 'Non-Hispanic White', 'Non-Hispanic Black',
+'Non-Hispanic American Indian or Alaska Native', 'Non-Hispanic Asian','Non-Hispanic Native Hawaiian or Other Pacific Islander',
+'Non-Hispanic More than one race']
+washington_eth = adjusted_data[adjusted_data['RegionName']=='Washington'].loc[:,ethnicities].values[0]
+washington_index = adjusted_data[adjusted_data['RegionName']=='Washington DC'].index
+virgin_islands_eth = [0.049, 0.156,0.76,0, 0.014, 0, 0.021]
+vi_index = adjusted_data[adjusted_data['RegionName']=='Virgin Islands'].index
+for ei in range(len(ethnicities)):
+
+    adjusted_data.loc[washington_index,ethnicities[ei]]=washington_eth[ei]
+    adjusted_data.loc[:,ethnicities[ei]]=virgin_islands_eth[ei]
+print(adjusted_data[adjusted_data.isna().any(axis=1)].RegionName.unique())
+
 #Get data
-X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
+X,y =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
-print('Number periods in high cases selection',len(y_high))
-print('Number periods in low cases selection',len(y_low))
+print('Number periods in selection',len(y))
 
+pdb.set_trace()
 #Fit model
-fit_model(X_high,y_high,5,'high',outdir+'high/')
-fit_model(X_low,y_low,5,'low',outdir+'low/')
+fit_model(X,y,5,'high',outdir+'all/')
