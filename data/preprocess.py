@@ -37,6 +37,8 @@ parser.add_argument('--world_areas', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to csv with ISO3 to world area.')
 parser.add_argument('--additional_xprize_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to csv with additional data from xprize.')
+parser.add_argument('--country_regions', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to csv with country regions from xprize.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
@@ -576,6 +578,7 @@ cultural_descriptors = pd.read_csv(args.cultural_descriptors[0],sep=';')
 cultural_descriptors=cultural_descriptors.replace('#NULL!',0)
 world_areas = pd.read_csv(args.world_areas[0])
 additional_xprize_data = pd.read_csv(args.additional_xprize_data[0])
+country_regions = pd.read_csv(args.country_regions[0])
 outdir = args.outdir[0]
 
 #Save the NPIS for testing
@@ -587,6 +590,11 @@ oxford_data[['CountryName', 'RegionName',
             'H1_Public information campaigns','H2_Testing policy',
             'H3_Contact tracing','H6_Facial Coverings']].to_csv(outdir+'hitorical_ip.csv',index=False)
 
+#Get only the regions specified by the xprize team
+oxford_data['GeoID'] = oxford_data['CountryName'] + '__' + oxford_data['RegionName'].astype(str)
+country_regions['GeoID'] = country_regions['CountryName'] + '__' + country_regions['RegionName'].astype(str)
+oxford_data = oxford_data[oxford_data['GeoID'].isin(country_regions['GeoID'].unique())]
+pdb.set_trace()
 #Parse the data
 try:
     oxford_data = pd.read_csv(outdir+'adjusted_data.csv',
