@@ -109,20 +109,25 @@ def format_age_per_ethnicity(sex_eth_age_data):
             extracted_data=pd.concat([extracted_data,slice])
 
     #Extract all ethnicities and sums for the model
-    model_formatted_data = pd.DataFrame()
-    age_cols = ['Under 1 year', '1-4 years',
-       '5-14 years', '15-24 years', '25-34 years', '35-44 years',
-       '45-54 years', '55-64 years', '65-74 years', '75-84 years',
-       '85 years and over']
+    age_cols = ['Under 1 year', '1-4 years', '5-14 years', '15-24 years', '25-34 years', '35-44 years',
+                '45-54 years', '55-64 years', '65-74 years', '75-84 years', '85 years and over']
+    extracted_ethnicities = {'Hispanic or Latino':[], 'Non-Hispanic White':[], 'Non-Hispanic Black':[],
+                            'Non-Hispanic American Indian or Alaska Native':[],'Non-Hispanic Asian':[],
+                            'Non-Hispanic Native Hawaiian or Other Pacific Islander':[],'Non-Hispanic More than one race':[]}
     for state in extracted_data['State'].unique():
         state_data = extracted_data[extracted_data['State']==state]
-        for eth in [*ethnicities.values()]:
+        for eth in [*extracted_ethnicities.keys()]:
             eth_state_data = state_data[state_data['Ethnicity']==eth]
-            pdb.set_trace()
-            eth_state_sum = eth_state_data[age_cols]
+            eth_state_count = np.sum(eth_state_data[age_cols].values)
+            extracted_ethnicities[eth].append(eth_state_count)
+
+    model_formatted_data = pd.DataFrame()
+    model_formatted_data['RegionName']=extracted_data['State'].unique()
+    for eth in extracted_ethnicities:
+        model_formatted_data[eth]=extracted_ethnicities[eth]
+    pdb.set_trace()
 
     #Save df
-    pdb.set_trace()
     extracted_data = extracted_data.reset_index()
     extracted_data.to_csv('formatted_eth_age_data_per_state.csv')
     return extracted_data
