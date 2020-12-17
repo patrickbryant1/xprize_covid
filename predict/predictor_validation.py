@@ -136,12 +136,12 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help="The path to an intervention plan .csv file")
-    parser.add_argument("-o", "--submission_file",
+    parser.add_argument("-sub", "--submission_file",
                         dest="submission_file",
                         type=str,
                         required=True,
                         help="The path to the CSV file where predictions should be written")
     args = parser.parse_args()
-    print("Generating predictions from", args.start_date, "to", args.end_date,"...")
+    print("Validating predictions from", args.start_date, "to", args.end_date,"...")
     validate_submission(args.start_date, args.end_date, args.ip_file, args.submission_file)
     print("Done!")
