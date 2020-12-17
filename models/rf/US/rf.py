@@ -23,7 +23,7 @@ import numpy as np
 
 import pdb
 #Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''Simple RF model.''')
+parser = argparse.ArgumentParser(description = '''Simple RF model specific for the USA.''')
 
 parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
@@ -37,9 +37,80 @@ parser.add_argument('--world_area', nargs=1, type= int,
                   default=sys.stdin, help = 'World area.')
 parser.add_argument('--threshold', nargs=1, type= float,
                   default=sys.stdin, help = 'Threshold.')
+parser.add_argument('--sex_eth_age_data', nargs=1, type= str,
+                default=sys.stdin, help = 'Path to data with sex age and ethnicity per state (csv).')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
+
+def format_age_per_ethnicity(sex_eth_age_data):
+    '''Extract ethnicity data per state
+    '''
+    extracted_data = pd.DataFrame()
+    sexes = {0:'Total', 1:'Male', 2:'Female'}
+    #Use only total
+    sex_eth_age_data = sex_eth_age_data[sex_eth_age_data['SEX']==0]
+    origins = {1:'Non-Hispanic',2:'Hispanic'}
+    ethnicities = {1:'White', 2:'Black',3:'American Indian or Alaska Native',4:'Asian',5:'Native Hawaiian or Other Pacific Islander',6:'More than one race'}
+    #Combining origin 1 and ethnicity gives Non-Hispanic + ethinicity (same used in COVID reportings)
+    #AGE is single-year of age (0, 1, 2,... 84, 85+ years)
+    age_groups = {0:'Under 1 year',4:'1-4 years',14:'5-14 years',24:'15-24 years',34:'25-34 years',44:'35-44 years',54:'45-54 years', 64:'55-64 years', 74:'65-74 years',84:'75-84 years', 85:'85 years and over'}
+    age_index = [1,4,14,24,34,44,54,64,74,84]
+    #Assign columns
+    extracted_data['State'] = ''
+    extracted_data['Ethnicity'] = ''
+    for age in age_groups:
+        extracted_data[age_groups[age]] = 0
+
+    for state in sex_eth_age_data['NAME'].unique():
+        per_state = sex_eth_age_data[sex_eth_age_data['NAME']==state]
+        #Loop through origins
+        hispanic_state = per_state[per_state['ORIGIN']==2]
+        vals = []
+        vals.append(state)
+        vals.append('Hispanic or Latino')
+        age_counts = np.zeros(len(age_groups))
+
+        #All the ethnicities in Hispanic should be summed
+        for eth in ethnicities:
+            hispanic_state_eth = hispanic_state[hispanic_state['RACE']==eth] #All the Hispanic ethnicities will be summed
+            hispanic_state_eth = hispanic_state_eth.reset_index()
+            #First
+            age_counts[0]+=np.sum(hispanic_state_eth.loc[0,'POPESTIMATE2019'])
+            for i in range(len(age_index)-1):
+                age_counts[i+1]+=np.sum(hispanic_state_eth.loc[age_index[i]:age_index[i+1],'POPESTIMATE2019'])
+            #Last
+            age_counts[-1]+=np.sum(hispanic_state_eth.loc[85:,'POPESTIMATE2019'])
+        vals.extend(age_counts)
+        slice = pd.DataFrame([vals],columns=extracted_data.columns)
+        extracted_data=pd.concat([extracted_data,slice])
+
+        #All the ethnicities in the non Hispanic should not be summed
+        #Loop through origins
+        non_hispanic_state = per_state[per_state['ORIGIN']==1]
+        #All the ethnicities in Hispanic should be summed
+        for eth in ethnicities:
+            vals = []
+            vals.append(state)
+            vals.append('Non-Hispanic '+ethnicities[eth])
+            age_counts = np.zeros(len(age_groups))
+
+            non_hispanic_state_eth = non_hispanic_state[non_hispanic_state['RACE']==eth] #All the Hispanic ethnicities will be summed
+            non_hispanic_state_eth =non_hispanic_state_eth.reset_index()
+            #First
+            age_counts[0]+=np.sum(non_hispanic_state_eth.loc[0,'POPESTIMATE2019'])
+            for i in range(len(age_index)-1):
+                age_counts[i+1]+=np.sum(non_hispanic_state_eth.loc[age_index[i]:age_index[i+1],'POPESTIMATE2019'])
+            #Last
+            age_counts[-1]+=np.sum(non_hispanic_state_eth.loc[85:,'POPESTIMATE2019'])
+            vals.extend(age_counts)
+            slice = pd.DataFrame([vals],columns=extracted_data.columns)
+            extracted_data=pd.concat([extracted_data,slice])
+
+    #Save df
+    pdb.set_trace()
+    extracted_data.to_csv('formatted_eth_age_data_per_state.csv')
+    return extracted_data
 
 def get_features(adjusted_data,train_days,forecast_days,t,outdir):
     '''Get the selected features
@@ -352,19 +423,16 @@ train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
 world_area = args.world_area[0]
 threshold = args.threshold[0]
+sex_eth_age_data=pd.read_csv(args.sex_eth_age_data[0])
 outdir = args.outdir[0]
 
+#Format the sex_eth_age_data
+format_age_per_ethnicity(sex_eth_age_data)
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-#Exclude the regional data from Brazil
-exclude_index = adjusted_data[(adjusted_data['CountryCode']=='BRA')&(adjusted_data['RegionCode']!='0')].index
-adjusted_data = adjusted_data.drop(exclude_index)
-
-#Select only world area data
-world_areas = {1:'Latin America & Caribbean', 2:'South Asia', 3:'Sub-Saharan Africa',
-               4:'Europe & Central Asia', 5:'Middle East & North Africa',
-               6:'East Asia & Pacific', 7:'North America'}
-#adjusted_data = adjusted_data[adjusted_data['world_area']==world_areas[world_area]]
+#Select only the USA data
+adjusted_data = adjusted_data[adjusted_data['CountryCode']=='USA']
+adjusted_data = adjusted_data.reset_index()
 #Get data
 X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 
