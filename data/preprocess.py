@@ -594,6 +594,7 @@ oxford_data[['CountryName', 'RegionName',
 oxford_data['GeoID'] = oxford_data['CountryName'] + '__' + oxford_data['RegionName'].astype(str)
 country_regions['GeoID'] = country_regions['CountryName'] + '__' + country_regions['RegionName'].astype(str)
 oxford_data = oxford_data[oxford_data['GeoID'].isin(country_regions['GeoID'].unique())]
+oxford_data = oxford_data.reset_index()
 pdb.set_trace()
 #Parse the data
 try:
