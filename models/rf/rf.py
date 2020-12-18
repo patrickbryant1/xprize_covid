@@ -278,14 +278,14 @@ def kfold(num_regions, NFOLD):
 
     return np.array(train_split), np.array(val_split)
 
-def fit_model(X, y, NFOLD, mode, outdir):
+def opt_model(X, y, NFOLD, mode, outdir):
     '''Fit the linear model
     '''
     #Fit the model
-    param_grid = {#'bootstrap': [True, False],
-     #'max_depth': [50, 100, None],
+    param_grid = {'bootstrap': [True, False],
+     'max_depth': [50, 100, None],
      'max_features': ['auto', 'sqrt'],
-     #'min_samples_leaf': [1, 2],
+     'min_samples_leaf': [1, 2],
      'min_samples_split': [2, 5],
      'n_estimators': [100, 200, 300]}
     reg = RandomForestRegressor(n_jobs=-1, random_state=42)
@@ -297,20 +297,19 @@ def fit_model(X, y, NFOLD, mode, outdir):
     with open(outdir+mode+'_opt.txt', 'a+') as file:
         file.write("# Tuning hyper-parameters \n")
         file.write("Best parameters set found on development set:" + '\n')
-        file.write(str(clf.best_params_))
+        file.write(str(rf_opt.best_params_))
         file.write('\n' + '\n' + "Grid scores on development set:" + '\n')
         means =rf_opt.cv_results_['mean_test_score']
-        store_means[score] = means
         stds = rf_opt.cv_results_['std_test_score']
-        store_stds[score] = stds
         for mean, std, params in zip(means, stds, rf_opt.cv_results_['params']):
             file.write('mean test score: ')
             file.write("%0.3f (+/-%0.03f) for %r"
                   % ( mean, std * 2, params) + '\n')
 
 
-    pdb.set_trace()
+    return None
 
+def fit_model(X, y, NFOLD, mode, outdir):
     #KFOLD
     NFOLD = 5
     train_split, val_split = kfold(len(X),NFOLD)
@@ -402,5 +401,7 @@ print('Number periods in low cases selection',len(y_low))
 
 
 #Fit model
-fit_model(X_high,y_high,5,'high',outdir+'high/')
-fit_model(X_low,y_low,5,'low',outdir+'low/')
+opt_model(X_high,y_high,5,'high',outdir+'high/')
+opt_model(X_low,y_low,5,'low',outdir+'low/')
+#fit_model(X_high,y_high,5,'high',outdir+'high/')
+#fit_model(X_low,y_low,5,'low',outdir+'low/')
