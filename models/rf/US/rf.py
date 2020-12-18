@@ -478,11 +478,13 @@ for ei in range(len(ethnicities)):
     adjusted_data.loc[washington_index,ethnicities[ei]]=washington_eth[ei]
     adjusted_data.loc[:,ethnicities[ei]]=virgin_islands_eth[ei]
 print(adjusted_data[adjusted_data.isna().any(axis=1)].RegionName.unique())
-
+#Save
+adjusted_data.to_csv(outdir+'US_adjusted_data.csv')
+pdb.set_trace()
 #Get data
 X,y =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
 print('Number periods in selection',len(y))
 
-pdb.set_trace()
+
 #Fit model
 fit_model(X,y,5,'all',outdir+'all/')
