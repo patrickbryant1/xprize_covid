@@ -13,6 +13,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn import preprocessing
 from sklearn.model_selection import KFold
 from sklearn.metrics import mutual_info_score
+from sklearn.model_selection import RandomizedSearchCV,  GridSearchCV
 from scipy.stats import pearsonr
 from scipy import stats
 from math import e
@@ -281,6 +282,34 @@ def fit_model(X, y, NFOLD, mode, outdir):
     '''Fit the linear model
     '''
     #Fit the model
+    param_grid = {#'bootstrap': [True, False],
+     #'max_depth': [50, 100, None],
+     'max_features': ['auto', 'sqrt'],
+     #'min_samples_leaf': [1, 2],
+     'min_samples_split': [2, 5],
+     'n_estimators': [100, 200, 300]}
+    reg = RandomForestRegressor(n_jobs=-1, random_state=42)
+    rf_opt = GridSearchCV(estimator = reg, param_grid = param_grid,
+                        cv = NFOLD, verbose=2, n_jobs = -1)
+    rf_opt.fit(X, y)
+
+    #Write to file
+    with open(outdir+mode+'_opt.txt', 'a+') as file:
+        file.write("# Tuning hyper-parameters \n")
+        file.write("Best parameters set found on development set:" + '\n')
+        file.write(str(clf.best_params_))
+        file.write('\n' + '\n' + "Grid scores on development set:" + '\n')
+        means =rf_opt.cv_results_['mean_test_score']
+        store_means[score] = means
+        stds = rf_opt.cv_results_['std_test_score']
+        store_stds[score] = stds
+        for mean, std, params in zip(means, stds, rf_opt.cv_results_['params']):
+            file.write('mean test score: ')
+            file.write("%0.3f (+/-%0.03f) for %r"
+                  % ( mean, std * 2, params) + '\n')
+
+
+    pdb.set_trace()
 
     #KFOLD
     NFOLD = 5
@@ -370,6 +399,7 @@ X_high,y_high,X_low,y_low =  get_features(adjusted_data,train_days,forecast_days
 
 print('Number periods in high cases selection',len(y_high))
 print('Number periods in low cases selection',len(y_low))
+
 
 #Fit model
 fit_model(X_high,y_high,5,'high',outdir+'high/')

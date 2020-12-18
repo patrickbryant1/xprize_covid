@@ -139,13 +139,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         print('Predicting for', g)
         #Get intervention plan for g
         ips_gdf = ips_df[ips_df.GeoID == g]
-        # Pull out all relevant data for g
-        try:
-            adjusted_data_gdf = adjusted_data[adjusted_data.GeoID == g]
-        except:
-            print('Region', g, 'not in data...')
-
-
 
         #Check the timelag to the last known date
         last_known_date = adjusted_data_gdf.Date.max()
@@ -158,6 +151,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         #Check if enough data to predict
         if len(adjusted_data_gdf)<NB_LOOKBACK_DAYS:
             print('Not enough data for',g)
+            #Should add zeros here
+            
             continue
 
         #Get country code
