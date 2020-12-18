@@ -309,7 +309,7 @@ def opt_model(X, y, NFOLD, mode, outdir):
 
     return None
 
-def fit_model(X, y, NFOLD, mode, outdir):
+def fit_model(model,X, y, NFOLD, mode, outdir):
     #KFOLD
     NFOLD = 5
     train_split, val_split = kfold(len(X),NFOLD)
@@ -324,7 +324,7 @@ def fit_model(X, y, NFOLD, mode, outdir):
         corrs = []
         errors = []
 
-        reg = RandomForestRegressor(n_jobs=-1, random_state=42).fit(X_train, y_train)
+        reg = model.fit(X_train, y_train)
         pred = reg.predict(X_valid)
         pred = pred
 
@@ -401,7 +401,11 @@ print('Number periods in low cases selection',len(y_low))
 
 
 #Fit model
-opt_model(X_high,y_high,5,'high',outdir+'high/')
-opt_model(X_low,y_low,5,'low',outdir+'low/')
-#fit_model(X_high,y_high,5,'high',outdir+'high/')
-#fit_model(X_low,y_low,5,'low',outdir+'low/')
+#opt_model(X_high,y_high,5,'high',outdir+'high/')
+#opt_model(X_low,y_low,5,'low',outdir+'low/')
+fit_model(RandomForestRegressor(bootstrap=True,max_depth=50,max_features='auto',
+min_samples_leaf=2,min_samples_split=5, n_estimators=100, n_jobs=-1, random_state=42),
+X_high,y_high,5,'high',outdir+'high/')
+fit_model(RandomForestRegressor(bootstrap=False,max_depth=50,max_features='sqrt',
+min_samples_leaf=2,min_samples_split=5, n_estimators=100, n_jobs=-1, random_state=42),
+X_low,y_low,5,'low',outdir+'low/')
