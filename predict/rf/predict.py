@@ -106,9 +106,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     adjusted_data['RegionName'] = adjusted_data['RegionName'].replace('0', np.nan)
     adjusted_data = adjusted_data.fillna(0)
 
-    #Exclude the regional data from Brazil
-    exclude_index = adjusted_data[(adjusted_data['CountryCode']=='BRA')&(adjusted_data['RegionCode']!='0')].index
-    adjusted_data = adjusted_data.drop(exclude_index)
 
     #Get the monthly temperature data
     monthly_temperature = pd.read_csv('../../data/temp_1991_2016.csv')
@@ -254,12 +251,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             #If predicting differnce to median
             pred_av = np.average(pred)
             pred_std = np.std(pred)
-            #Order the predictions to run through the predicted mean
-            #It looks like the median in the nex section is mainly driven
-            #by the end of that section --> run from case in end of input to pred
-            #pred_half1 = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))
-            #pred_half2 = np.arange(pred_av,pred_av+(pred_av-case_in_end),(pred_av-case_in_end)/(pred_days))
-            #pred = np.concatenate([pred_half1,pred_half2])
+            #Order the predictions to run through the predicted median
             pred = np.arange(case_in_end,pred_av,(pred_av-case_in_end)/(pred_days))[:pred_days]
             pred_lower = np.arange(case_in_end-4*prev_std,pred[-1]-4*pred_std,((pred[-1]-4*pred_std)-(case_in_end-4*prev_std))/pred_days)[:pred_days]
             pred_upper = np.arange(case_in_end+4*prev_std,pred[-1]+4*pred_std,((pred[-1]+4*pred_std)-(case_in_end+4*prev_std))/pred_days)[:pred_days]
@@ -270,7 +262,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             pred_lower[pred_lower<0]=0
             pred_upper[pred_upper<0]=0
             #Scale down cases due to population share of cumulative observations
-            #pred = pred*(1-cum_case_in_end*(population/100000)/population)
+            pred = pred*(1-cum_case_in_end*(population/100000)/population)
 
             # Add if it's a requested date
             if current_date+ np.timedelta64(pred_days, 'D') >= start_date:

@@ -581,6 +581,14 @@ additional_xprize_data = pd.read_csv(args.additional_xprize_data[0])
 country_regions = pd.read_csv(args.country_regions[0])
 outdir = args.outdir[0]
 
+
+
+#Get only the regions specified by the xprize team
+oxford_data['GeoID'] = oxford_data['CountryName'] + '__' + oxford_data['RegionName'].astype(str)
+country_regions['GeoID'] = country_regions['CountryName'] + '__' + country_regions['RegionName'].astype(str)
+oxford_data = oxford_data[oxford_data['GeoID'].isin(country_regions['GeoID'].unique())]
+oxford_data = oxford_data.reset_index()
+
 #Save the NPIS for testing
 oxford_data[['CountryName', 'RegionName',
            'Date', 'C1_School closing','C2_Workplace closing',
@@ -588,13 +596,7 @@ oxford_data[['CountryName', 'RegionName',
             'C5_Close public transport','C6_Stay at home requirements',
             'C7_Restrictions on internal movement','C8_International travel controls',
             'H1_Public information campaigns','H2_Testing policy',
-            'H3_Contact tracing','H6_Facial Coverings']].to_csv(outdir+'hitorical_ip.csv',index=False)
-
-#Get only the regions specified by the xprize team
-oxford_data['GeoID'] = oxford_data['CountryName'] + '__' + oxford_data['RegionName'].astype(str)
-country_regions['GeoID'] = country_regions['CountryName'] + '__' + country_regions['RegionName'].astype(str)
-oxford_data = oxford_data[oxford_data['GeoID'].isin(country_regions['GeoID'].unique())]
-oxford_data = oxford_data.reset_index()
+            'H3_Contact tracing','H6_Facial Coverings']].to_csv(outdir+'historical_ip.csv',index=False)
 pdb.set_trace()
 #Parse the data
 try:
@@ -607,7 +609,6 @@ try:
            "Region_index":int},
     error_bad_lines=False)
 
-    pdb.set_trace()
 
 
 except:
