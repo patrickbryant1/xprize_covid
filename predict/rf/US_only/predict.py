@@ -71,7 +71,8 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                               encoding="ISO-8859-1",
                               dtype={"RegionName": str},
                               error_bad_lines=True)
-
+    #Get only US data
+    hist_ips_df = hist_ips_df[hist_ips_df['CountryName']=='United States']
     # Add GeoID column that combines CountryName and RegionName for easier manipulation of data",
     #hist_ips_df['RegionName'] = hist_ips_df['RegionName'].fillna(0)
     hist_ips_df['GeoID'] = hist_ips_df['CountryName'] + '__' + hist_ips_df['RegionName'].astype(str)
@@ -106,7 +107,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
 
 
     #Get the monthly temperature data
-    monthly_temperature = pd.read_csv('../../data/temp_1991_2016.csv')
+    monthly_temperature = pd.read_csv('../../../data/temp_1991_2016.csv')
 
     #4. Run the predictor
     additional_features = ['smoothed_cases',
@@ -157,6 +158,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         #Select everything from df up tp current date
         adjusted_data_gdf = adjusted_data_gdf[adjusted_data_gdf['Date']<current_date]
         adjusted_data_gdf = adjusted_data_gdf.reset_index()
+
         #Check if enough data to predict
         if len(adjusted_data_gdf)<NB_LOOKBACK_DAYS:
             print('Not enough data for',g)
@@ -188,15 +190,15 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         air_transport = adjusted_data_gdf.loc[0,'Air transport (# carrier departures worldwide)']
 
         #Population
-        population = country_region_data.loc[0,'population']
+        population = adjusted_data_gdf.loc[0,'population']
         #Ethnicity
-        hisp_latino = country_region_data.loc[0,'Hispanic or Latino']/population
-        white = country_region_data.loc[0,'Non-Hispanic White']/population
-        black = country_region_data.loc[0,'Non-Hispanic Black']/population
-        native = country_region_data.loc[0,'Non-Hispanic American Indian or Alaska Native']/population
-        asian = country_region_data.loc[0,'Non-Hispanic Asian']/population
-        pacific = country_region_data.loc[0,'Non-Hispanic Native Hawaiian or Other Pacific Islander']/population
-        mixed = country_region_data.loc[0,'Non-Hispanic More than one race']/population
+        hisp_latino = adjusted_data_gdf.loc[0,'Hispanic or Latino']/population
+        white = adjusted_data_gdf.loc[0,'Non-Hispanic White']/population
+        black = adjusted_data_gdf.loc[0,'Non-Hispanic Black']/population
+        native = adjusted_data_gdf.loc[0,'Non-Hispanic American Indian or Alaska Native']/population
+        asian = adjusted_data_gdf.loc[0,'Non-Hispanic Asian']/population
+        pacific = adjusted_data_gdf.loc[0,'Non-Hispanic Native Hawaiian or Other Pacific Islander']/population
+        mixed = adjusted_data_gdf.loc[0,'Non-Hispanic More than one race']/population
 
 
         #Normalize cases to per 100'000 pop

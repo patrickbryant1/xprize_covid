@@ -479,7 +479,8 @@ for ei in range(len(ethnicities)):
     adjusted_data.loc[:,ethnicities[ei]]=virgin_islands_eth[ei]
 print(adjusted_data[adjusted_data.isna().any(axis=1)].RegionName.unique())
 #Save
-adjusted_data.to_csv(outdir+'US_adjusted_data.csv')
+adjusted_data = adjusted_data.drop(columns={'level_0', 'Unnamed: 0', 'index'})
+adjusted_data.to_csv(outdir+'US_adjusted_data.csv',index=False)
 pdb.set_trace()
 #Get data
 X,y =  get_features(adjusted_data,train_days,forecast_days,threshold,outdir)
