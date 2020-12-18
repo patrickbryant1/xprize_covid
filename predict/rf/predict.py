@@ -261,9 +261,10 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             pred_lower[pred_lower<0]=0
             pred_upper[pred_upper<0]=0
             #Scale down cases due to population share of cumulative observations
-            pred = pred*(1-cum_case_in_end*(population/100000)/population)
-            pred_lower = pred_lower*(1-cum_case_in_end*(population/100000)/population)
-            pred_upper = pred_upper*(1-cum_case_in_end*(population/100000)/population)
+            if np.median(pred)*(population/100000) >0.5*population: #If 50 % spread is reached, a downscaling begins, proportionate to the population
+                pred = pred*(1-cum_case_in_end*(population/100000)/population)
+                pred_lower = pred_lower*(1-cum_case_in_end*(population/100000)/population)
+                pred_upper = pred_upper*(1-cum_case_in_end*(population/100000)/population)
             # Add if it's a requested date
             if current_date+ np.timedelta64(pred_days, 'D') >= start_date:
                 #Append the predicted dates

@@ -154,6 +154,7 @@ def choose_uniform(X,y,num,mode):
     plt.hist(xy_diff,bins=50)
     plt.title(mode+' change disribution')
     plt.xlabel('log change in median cases per 100000')
+    plt.yticks([])
     plt.tight_layout()
     plt.savefig(outdir+mode+'_change_distr.png',format='png',dpi=300)
     plt.close()
@@ -403,7 +404,9 @@ print('Number periods in low cases selection',len(y_low))
 #Fit model
 #opt_model(X_high,y_high,5,'high',outdir+'high/')
 #opt_model(X_low,y_low,5,'low',outdir+'low/')
-fit_model(RandomForestRegressor(n_jobs=-1, random_state=42), #The default one seems to be the best one
+fit_model(RandomForestRegressor(bootstrap=True,max_depth=50,max_features='auto',
+min_samples_leaf=2,min_samples_split=5, n_estimators=100, n_jobs=-1, random_state=42),
 X_high,y_high,5,'high',outdir+'high/')
-fit_model(RandomForestRegressor(n_jobs=-1, random_state=42),
+fit_model(RandomForestRegressor(bootstrap=False,max_depth=50,max_features='sqrt',
+min_samples_leaf=2,min_samples_split=5, n_estimators=100, n_jobs=-1, random_state=42),
 X_low,y_low,5,'low',outdir+'low/')
