@@ -226,6 +226,7 @@ def feature_outcome(X_high,y_high,dct_high,X_low,y_low,dct_low,outdir):
     fig,ax = plt.subplots(figsize=(4.5/2.54,4.5/2.54))
     plt.hist(dct_low+1,alpha=0.5,label='low',bins=21)
     plt.hist(dct_high+1,alpha=0.5,label='high',bins=21)
+    plt.yticks([])
     plt.legend()
     plt.xlabel('Day of median')
     plt.tight_layout()

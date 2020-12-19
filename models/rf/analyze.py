@@ -47,12 +47,12 @@ def evaluate_model(feature_importances,outdir):
 
     feature_importances_av = np.average(feature_importances,axis=0)
     feature_importances_std = np.std(feature_importances,axis=0)
+    topn=5 #How many features to plot
     #Normalize features
     order = np.argsort(feature_importances_av)
-
-    fig,ax = plt.subplots(figsize=(4.5,9))
-    plt.barh(np.arange(len(feature_names)),feature_importances_av[order],xerr=feature_importances_std[order])
-    plt.yticks(np.arange(len(feature_names)),labels=feature_names[order], rotation='horizontal')
+    fig,ax = plt.subplots(figsize=(6/2.54,9/2.54))
+    plt.barh(np.arange(topn),feature_importances_av[order][-topn:],xerr=feature_importances_std[order][-topn:])
+    plt.yticks(np.arange(topn),labels=feature_names[order][-topn:], rotation='horizontal')
     plt.tight_layout()
     plt.xlabel('MDI')
     plt.title('Feature Importance (MDI)')
