@@ -298,15 +298,18 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         # Create geo_pred_df with pred column
         geo_pred_df = ips_gdf[ID_COLS].copy()
         geo_pred_df['PredictedDailyNewCases'] = np.array(geo_preds[:len(geo_pred_df)])#*(population/100000) Adjust for population
-
         geo_pred_df['PredictedDailyNewCases_lower'] = np.array(geo_preds_lower[:len(geo_pred_df)])
         geo_pred_df['PredictedDailyNewCases_upper'] = np.array(geo_preds_upper[:len(geo_pred_df)])
+        #Deaths
+        geo_pred_df['PredictedDailyNewDeaths'] = np.array(geo_preds[:len(geo_pred_df)])*(population/100000)/death_to_case_scale #Adjust for population
+        geo_pred_df['PredictedDailyNewDeaths_lower'] = np.array(geo_preds_lower[:len(geo_pred_df)])*(population/100000)/death_to_case_scale
+        geo_pred_df['PredictedDailyNewDeaths_upper'] = np.array(geo_preds_upper[:len(geo_pred_df)])*(population/100000)/death_to_case_scale
         #Check
         adjusted_data_gdf = adjusted_data[adjusted_data['GeoID'] == g]
         adjusted_data_gdf.at[:,'smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
-        geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf.loc[:,('Date','smoothed_cases')],on='Date',how='left')
+        geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf.loc[:,('Date','smoothed_cases','smoothed_deaths')],on='Date',how='left')
         geo_pred_df['population']=population
-        #Vis
+        #Vis cases
         fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
         plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases'],color='grey')
         plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases_lower'],geo_pred_df['PredictedDailyNewCases_upper'],alpha=0.5,color='grey')
@@ -314,10 +317,21 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         plt.xticks(ticks=np.arange(0,len(geo_pred_df),7),labels= np.arange(start_date,end_date+np.timedelta64(1,'D'),np.timedelta64(7,'D'),dtype='datetime64[D]'),rotation='vertical')
         plt.title(g)
         plt.tight_layout()
-        plt.savefig('./plots/'+g+'.png',format='png')
+        plt.savefig('./plots/'+g+'_cases.png',format='png')
+        plt.close()
+        #Vis deaths
+        fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
+        plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewDeaths'],color='grey')
+        plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewDeaths_lower'],geo_pred_df['PredictedDailyNewDeaths_upper'],alpha=0.5,color='grey')
+        plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_deaths'],color='g',alpha=0.5)
+        plt.xticks(ticks=np.arange(0,len(geo_pred_df),7),labels= np.arange(start_date,end_date+np.timedelta64(1,'D'),np.timedelta64(7,'D'),dtype='datetime64[D]'),rotation='vertical')
+        plt.title(g)
+        plt.tight_layout()
+        plt.savefig('./plots/'+g+'_deaths.png',format='png')
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
+        pdb.set_trace()
 
     #4. Obtain output
     # Combine all predictions into a single dataframe - remember to only select the requied columns later
