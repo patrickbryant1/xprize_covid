@@ -316,22 +316,24 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
         plt.xticks(ticks=np.arange(0,len(geo_pred_df),7),labels= np.arange(start_date,end_date+np.timedelta64(1,'D'),np.timedelta64(7,'D'),dtype='datetime64[D]'),rotation='vertical')
         plt.title(g)
+        plt.ylabel('Cases/100000')
         plt.tight_layout()
         plt.savefig('./plots/'+g+'_cases.png',format='png')
         plt.close()
         #Vis deaths
         fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
-        plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewDeaths'],color='grey')
-        plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewDeaths_lower'],geo_pred_df['PredictedDailyNewDeaths_upper'],alpha=0.5,color='grey')
-        plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_deaths'],color='g',alpha=0.5)
+        plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewDeaths'],color='r')
+        plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewDeaths_lower'],geo_pred_df['PredictedDailyNewDeaths_upper'],alpha=0.5,color='r')
+        plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_deaths'],color='k',alpha=0.5)
         plt.xticks(ticks=np.arange(0,len(geo_pred_df),7),labels= np.arange(start_date,end_date+np.timedelta64(1,'D'),np.timedelta64(7,'D'),dtype='datetime64[D]'),rotation='vertical')
+        plt.ylabel('Deaths')
         plt.title(g)
         plt.tight_layout()
         plt.savefig('./plots/'+g+'_deaths.png',format='png')
         plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
-        pdb.set_trace()
+
 
     #4. Obtain output
     # Combine all predictions into a single dataframe - remember to only select the requied columns later
@@ -339,8 +341,9 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     # Save to a csv file
     #All
     pred_df.to_csv('all_'+output_file_path, index=False)
+    pdb.set_trace()
     #Only the required columns
-    pred_df.drop(columns={'GeoID','smoothed_cases','population'}).to_csv(output_file_path, index=False)
+    pred_df.drop(columns={'GeoID','smoothed_cases','smoothed_deaths','population'}).to_csv(output_file_path, index=False)
     print("Saved predictions to", output_file_path)
 
     return None
