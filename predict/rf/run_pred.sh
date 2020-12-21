@@ -4,7 +4,7 @@
 #python predict.py -s 2020-08-01 -e 2020-08-04 -ip ../test_cases/2020-09-30_historical_ip.csv -o predictions_2020-08-01_2020-08-04.csv
 ALL_HISTORICAL_IPS=../../data/historical_ip.csv
 #Predit
-python3 predict.py -s 2020-11-20 -e 2020-12-11 -ip $ALL_HISTORICAL_IPS -o predictions_2020-11-20_2020-12-11.csv
+python3 predict.py -s 2020-11-21 -e 2020-12-21 -ip $ALL_HISTORICAL_IPS -o predictions_2020-11-21_2020-12-21.csv
 
 
 #Validate the model

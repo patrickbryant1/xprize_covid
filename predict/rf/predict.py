@@ -307,15 +307,15 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf.loc[:,('Date','smoothed_cases')],on='Date',how='left')
         geo_pred_df['population']=population
         #Vis
-        # fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
-        # plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases'],color='grey')
-        # plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases_lower'],geo_pred_df['PredictedDailyNewCases_upper'],alpha=0.5,color='grey')
-        # plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
-        # plt.xticks(ticks=np.arange(0,len(geo_pred_df),7),labels= np.arange(start_date,end_date+np.timedelta64(1,'D'),np.timedelta64(7,'D'),dtype='datetime64[D]'),rotation='vertical')
-        # plt.title(g)
-        # plt.tight_layout()
-        # plt.savefig('./plots/'+g+'.png',format='png')
-        # plt.close()
+        fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
+        plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases'],color='grey')
+        plt.fill_between(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases_lower'],geo_pred_df['PredictedDailyNewCases_upper'],alpha=0.5,color='grey')
+        plt.bar(np.arange(len(geo_pred_df)),geo_pred_df['smoothed_cases'],color='g',alpha=0.5)
+        plt.xticks(ticks=np.arange(0,len(geo_pred_df),7),labels= np.arange(start_date,end_date+np.timedelta64(1,'D'),np.timedelta64(7,'D'),dtype='datetime64[D]'),rotation='vertical')
+        plt.title(g)
+        plt.tight_layout()
+        plt.savefig('./plots/'+g+'.png',format='png')
+        plt.close()
         #Save
         geo_pred_dfs.append(geo_pred_df)
 

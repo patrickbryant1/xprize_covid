@@ -5,4 +5,4 @@
 #June
 #../evaluate.py --in_csv ./all_predictions_2020-06-07_2020-06-31.csv --outdir ./
 #November
-../evaluate.py --in_csv ./all_predictions_2020-11-20_2020-12-11.csv --outdir ./
+../evaluate.py --in_csv ./all_predictions_2020-11-21_2020-12-21.csv --outdir ./
