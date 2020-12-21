@@ -597,7 +597,7 @@ oxford_data[['CountryName', 'RegionName',
             'C7_Restrictions on internal movement','C8_International travel controls',
             'H1_Public information campaigns','H2_Testing policy',
             'H3_Contact tracing','H6_Facial Coverings']].to_csv(outdir+'historical_ip.csv',index=False)
-pdb.set_trace()
+
 #Parse the data
 try:
     oxford_data = pd.read_csv(outdir+'adjusted_data.csv',

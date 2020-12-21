@@ -1,5 +1,5 @@
 #Get the Oxford data
-#wget https://raw.githubusercontent.com/OxCGRT/covid-policy-tracker/master/data/OxCGRT_latest.csv
+wget https://raw.githubusercontent.com/OxCGRT/covid-policy-tracker/master/data/OxCGRT_latest.csv
 #Get the regions that will be used
 #https://github.com/leaf-ai/covid-xprize/blob/master/countries_regions.csv
 
