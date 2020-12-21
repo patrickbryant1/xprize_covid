@@ -243,7 +243,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
                 for model in low_models:
                     model_preds.append(model.predict(np.array([X]))[0])
 
-
+            pdb.set_trace()
             #pred = np.power(e,model_preds)
             pred = np.array(model_preds)
 
@@ -301,14 +301,15 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
         geo_pred_df['PredictedDailyNewCases_lower'] = np.array(geo_preds_lower[:len(geo_pred_df)])
         geo_pred_df['PredictedDailyNewCases_upper'] = np.array(geo_preds_upper[:len(geo_pred_df)])
         #Deaths
-        geo_pred_df['PredictedDailyNewDeaths'] = np.array(geo_preds[:len(geo_pred_df)])*(population/100000)/death_to_case_scale #Adjust for population
-        geo_pred_df['PredictedDailyNewDeaths_lower'] = np.array(geo_preds_lower[:len(geo_pred_df)])*(population/100000)/death_to_case_scale
-        geo_pred_df['PredictedDailyNewDeaths_upper'] = np.array(geo_preds_upper[:len(geo_pred_df)])*(population/100000)/death_to_case_scale
+        geo_pred_df['PredictedDailyNewDeaths'] = np.array(geo_preds[:len(geo_pred_df)])*(population/100000)/max(death_to_case_scale,1) #Adjust for population
+        geo_pred_df['PredictedDailyNewDeaths_lower'] = np.array(geo_preds_lower[:len(geo_pred_df)])*(population/100000)/max(death_to_case_scale,1)
+        geo_pred_df['PredictedDailyNewDeaths_upper'] = np.array(geo_preds_upper[:len(geo_pred_df)])*(population/100000)/max(death_to_case_scale,1)
         #Check
         adjusted_data_gdf = adjusted_data[adjusted_data['GeoID'] == g]
         adjusted_data_gdf.at[:,'smoothed_cases']=adjusted_data_gdf['smoothed_cases']/(population/100000)
         geo_pred_df = pd.merge(geo_pred_df,adjusted_data_gdf.loc[:,('Date','smoothed_cases','smoothed_deaths')],on='Date',how='left')
         geo_pred_df['population']=population
+
         #Vis cases
         fig,ax = plt.subplots(figsize=(6/2.54,6/2.54))
         plt.plot(np.arange(len(geo_pred_df)),geo_pred_df['PredictedDailyNewCases'],color='grey')
@@ -341,7 +342,6 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
     # Save to a csv file
     #All
     pred_df.to_csv('all_'+output_file_path, index=False)
-    pdb.set_trace()
     #Only the required columns
     pred_df.drop(columns={'GeoID','smoothed_cases','smoothed_deaths','population'}).to_csv(output_file_path, index=False)
     print("Saved predictions to", output_file_path)
