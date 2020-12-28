@@ -123,11 +123,12 @@ def main(seed=None):
         logbook.record(gen=gen, evals=len(invalid_ind), **record)
         print(logbook.stream)
 
+
     return pop, logbook
 
 pop, logbook = main()
 front = numpy.array([ind.fitness.values for ind in pop])
-
+pdb.set_trace()
 import matplotlib.pyplot as plt
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
