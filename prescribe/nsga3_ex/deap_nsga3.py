@@ -18,7 +18,7 @@ NOBJ = 3
 K = 10
 NDIM = NOBJ + K - 1
 P = 12
-H = factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
+H = factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1)) #91, the pareto front
 BOUND_LOW, BOUND_UP = 0.0, 1.0
 problem = factory.get_problem(PROBLEM, n_var=NDIM, n_obj=NOBJ)
 
@@ -27,9 +27,9 @@ Then we define the various parameters for the algorithm, including the populatio
 to the first multiple of 4 greater than H, the number of generations and variation probabilities.
 '''
 MU = int(H + (4 - H % 4))
-NGEN = 400
-CXPB = 1.0
-MUTPB = 1.0
+NGEN = 400 #Number of generations to run
+CXPB = 1.0 #The probability of mating two individuals.
+MUTPB = 1.0 #The probability of mutating an individual.
 
 '''
 Next, NSGA-III selection requires a reference point set. The reference point set serves to
@@ -64,6 +64,7 @@ toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM)
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
+#Register the evaluation, mating, mutation and selection processes
 toolbox.register("evaluate", problem.evaluate, return_values_of=["F"])
 toolbox.register("mate", tools.cxSimulatedBinaryBounded, low=BOUND_LOW, up=BOUND_UP, eta=30.0)
 toolbox.register("mutate", tools.mutPolynomialBounded, low=BOUND_LOW, up=BOUND_UP, eta=20.0, indpb=1.0/NDIM)
