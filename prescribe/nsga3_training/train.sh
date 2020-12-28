@@ -6,4 +6,4 @@ TRAIN_DAYS=21 #Number of days to include as the training period
 FORECAST_DAYS=21
 THRESHOLD=1.8
 OUTDIR=/home/patrick/results/COVID19/xprize/prescriptor/
-./deap_nsga3.py --adjusted_data $ADJUSTED_DATA --temp_data $TEMP_DATA --start_date $START_DATE --train_days $TRAIN_DAYS --forecast_days $FORECAST_DAYS --world_area $WORLD_AREA --threshold $THRESHOLD --outdir $OUTDIR
+./deap_nsga3.py --adjusted_data $ADJUSTED_DATA --temp_data $TEMP_DATA --start_date $START_DATE --train_days $TRAIN_DAYS --forecast_days $FORECAST_DAYS --threshold $THRESHOLD --outdir $OUTDIR

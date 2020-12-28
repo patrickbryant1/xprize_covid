@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+
 from deap import tools, creator, base, algorithms
 from math import factorial
 import numpy
@@ -5,6 +9,7 @@ import _pickle as pickle
 import numpy as np
 from numpy import random
 import matplotlib.pyplot as plt
+import pandas as pd
 import argparse
 import sys
 import os
@@ -66,7 +71,9 @@ def get_eval_data(adjusted_data):
         #Check regions
         country_regions = country_data['Region_index'].unique()
         for ri in country_regions:
+            #Get regional data
             country_region_data = country_data[country_data['Region_index']==ri]
+            country_region_data = country_region_data.reset_index()
 
             country_index = country_region_data.loc[0,'Country_index']
             region_index = country_region_data.loc[0,'Region_index']
@@ -105,7 +112,7 @@ def get_eval_data(adjusted_data):
             case_medians = np.median(xi[:,:2],axis=0)
             xi = np.average(xi,axis=0)
             xi[:2]=case_medians
-            pdb.set_trace()
+
             #Add
             X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
                                             #period_change,
@@ -177,6 +184,9 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, NGEN, CXPB, MUTPB):
 def load_model():
     '''Load the model
     '''
+    #Make global
+    global low_models
+    global high_models
     low_models = []
     high_models = []
     #Fetch intercepts and coefficients
@@ -188,9 +198,7 @@ def load_model():
         except:
             print('Missing fold',i)
 
-    #Make global
-    global low_models
-    global high_models
+
 
 
 
@@ -270,11 +278,10 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
                  error_bad_lines=False)
 adjusted_data = adjusted_data.fillna(0)
 #Get the monthly temperature data
-monthly_temperature = pd.read_csv(args.temp_data)
+monthly_temperature = pd.read_csv(args.temp_data[0])
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
-world_area = args.world_area[0]
 threshold = args.threshold[0]
 outdir = args.outdir[0]
 
