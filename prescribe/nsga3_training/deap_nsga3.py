@@ -29,6 +29,91 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
+def get_eval_data(adjusted_data):
+    '''Get the evaluation data
+    '''
+
+    selected_features = ['Country_index',
+                        'Region_index',
+                        'CountryName',
+                        'RegionName',
+                        'smoothed_cases',
+                        'cumulative_smoothed_cases',
+                        'death_to_case_scale',
+                        'case_death_delay',
+                        'gross_net_income',
+                        'population_density',
+                        'monthly_temperature',
+                        'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
+                        'Urban population (% of total population)',
+                        'Population ages 65 and above (% of total population)',
+                        'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)',
+                        'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
+                        'Share of Deaths from Air Pollution (%)',
+                        'CO2 emissions (metric tons per capita)',
+                        'Air transport (# carrier departures worldwide)',
+                        'population']
+
+    #Get only selected features
+    sel = adjusted_data[selected_features]
+    #Get all data
+    X = [] #Input data to predictor
+    countries = sel['Country_index'].unique()
+    populations = []
+    regions = []
+    for ci in countries:
+        country_data = sel[sel['Country_index']==ci]
+        #Check regions
+        country_regions = country_data['Region_index'].unique()
+        for ri in country_regions:
+            country_region_data = country_data[country_data['Region_index']==ri]
+
+            country_index = country_region_data.loc[0,'Country_index']
+            region_index = country_region_data.loc[0,'Region_index']
+            death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
+            case_death_delay = country_region_data.loc[0,'case_death_delay']
+            gross_net_income = country_region_data.loc[0,'gross_net_income']
+            population_density = country_region_data.loc[0,'population_density']
+            pdi = country_region_data.loc[0,'pdi'] #Power distance
+            idv = country_region_data.loc[0, 'idv'] #Individualism
+            mas = country_region_data.loc[0,'mas'] #Masculinity
+            uai = country_region_data.loc[0,'uai'] #Uncertainty
+            ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
+            ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
+            upop = country_region_data.loc[0,'Urban population (% of total population)']
+            pop65 = country_region_data.loc[0,'Population ages 65 and above (% of total population)']
+            gdp = country_region_data.loc[0,'GDP per capita (current US$)']
+            obesity = country_region_data.loc[0,'Obesity Rate (%)']
+            cancer = country_region_data.loc[0,'Cancer Rate (%)']
+            smoking_deaths = country_region_data.loc[0,'Share of Deaths from Smoking (%)']
+            pneumonia_dr = country_region_data.loc[0,'Pneumonia Death Rate (per 100K)']
+            air_pollution_deaths = country_region_data.loc[0,'Share of Deaths from Air Pollution (%)']
+            co2_emission = country_region_data.loc[0,'CO2 emissions (metric tons per capita)']
+            air_transport = country_region_data.loc[0,'Air transport (# carrier departures worldwide)']
+            population = country_region_data.loc[0,'population']
+            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
+            'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
+             'mas', 'uai', 'ltowvs', 'ivr','Urban population (% of total population)','Population ages 65 and above (% of total population)',
+             'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
+             'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)','population'})
+
+            #Normalize the cases by 100'000 population
+            country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
+            country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
+            #Get all features
+            xi = np.array(country_region_data.loc[:train_days-1])
+            case_medians = np.median(xi[:,:2],axis=0)
+            xi = np.average(xi,axis=0)
+            xi[:2]=case_medians
+            pdb.set_trace()
+            #Add
+            X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
+                                            #period_change,
+                                            pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                                            cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
+                                            air_transport, population]))
+
+
 def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, NGEN, CXPB, MUTPB):
     #https://deap.readthedocs.io/en/master/examples/nsga3.html
     #Problem definition
@@ -107,58 +192,7 @@ def load_model():
     global low_models
     global high_models
 
-def get_eval_data(data_path):
-    '''Get the evaluation data
-    '''
 
-    adjusted_data = pd.read_csv(data_path,
-                     parse_dates=['Date'],
-                     encoding="ISO-8859-1",
-                     dtype={"RegionName": str,
-                            "RegionCode": str,
-                            "Country_index":int,
-                            "Region_index":int},
-                     error_bad_lines=False)
-    adjusted_data['RegionName'] = adjusted_data['RegionName'].replace('0', np.nan)
-    adjusted_data = adjusted_data.fillna(0)
-
-    selected_features = ['C1_School closing',
-                    'C2_Workplace closing',
-                    'C3_Cancel public events',
-                    'C4_Restrictions on gatherings',
-                    'C5_Close public transport',
-                    'C6_Stay at home requirements',
-                    'C7_Restrictions on internal movement',
-                    'C8_International travel controls',
-                    'H1_Public information campaigns',
-                    'H2_Testing policy',
-                    'H3_Contact tracing',
-                    'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
-                    'Country_index',
-                    'Region_index',
-                    'CountryName',
-                    'RegionName',
-                    'smoothed_cases',
-                    'cumulative_smoothed_cases',
-                    'death_to_case_scale',
-                    'case_death_delay',
-                    'gross_net_income',
-                    'population_density',
-                    'monthly_temperature',
-                    'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
-                    'Urban population (% of total population)',
-                    'Population ages 65 and above (% of total population)',
-                    'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)',
-                    'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
-                    'Share of Deaths from Air Pollution (%)',
-                    'CO2 emissions (metric tons per capita)',
-                    'Air transport (# carrier departures worldwide)',
-                    'population']
-
-    NB_LOOKBACK_DAYS=21
-    # Make predictions for each country,region pair
-    #Set threshold for model selection
-    threshold=1.8
 
 def evalate_npis(individual):
     '''Evaluate the prescriptor by predicting the outcome using the
@@ -244,6 +278,10 @@ world_area = args.world_area[0]
 threshold = args.threshold[0]
 outdir = args.outdir[0]
 
+#Get the input data
+#Use only data from start date
+adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
+get_eval_data(adjusted_data)
 
 NOBJ = 2
 NDIM = 13 #Number of dimensions for net (prescriptor)

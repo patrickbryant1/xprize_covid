@@ -225,7 +225,7 @@ def split_for_training(sel,train_days,forecast_days):
              'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
              'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)','population'})
 
-            #Normalize the cases by _high'000 population
+            #Normalize the cases by 100'000 population
             #country_region_data['rescaled_cases']=country_region_data['rescaled_cases']/(population/_high000)
             #country_region_data['cumulative_rescaled_cases']=country_region_data['cumulative_rescaled_cases']/(population/_high000)
             country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
