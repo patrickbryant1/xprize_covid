@@ -233,27 +233,39 @@ def evaluate_npis(individual):
     '''Evaluate the prescriptor by predicting the outcome using the
     pretrained predictor.
     '''
+    #Get copy
+    X_ind = np.copy(eval_inp_data)
     #Convert to array
     individual = np.array(individual)
-    individual = np.reshape(individual,(NDIM-1,NDIM))
+    individual = np.reshape(individual,(NDIM,NDIM-1))
     #Loop through all regions
     av_preds = []
-    for ri in range(len(eval_inp_data)):
-        region_eval_inp_data = eval_inp_data[ri]
-        #Get prescriptions
-        prescr = np.dot(individual,region_eval_inp_data[:NDIM])
-        #Make sure the prescr don't exceeed the npi maxvals
-        prescr = np.minimum(prescr,ip_maxvals)
-        region_eval_inp_data[:12]=prescr
-        model_preds = []
-        if region_eval_inp_data[12]>threshold:
-            for model in high_models:
-                model_preds.append(model.predict(np.array([region_eval_inp_data]))[0])
-        else:
-            for model in low_models:
-                model_preds.append(model.predict(np.array([region_eval_inp_data]))[0])
-        av_preds.append(np.average(model_preds))
-    pdb.set_trace()
+    #Get prescriptions
+    prescr = np.dot(X_ind[:,:NDIM],individual)
+    #Make sure the prescr don't exceeed the npi maxvals
+    prescr = np.minimum(prescr,ip_maxvals)
+    X_ind[:,:12]=prescr
+    #Split into high and low
+    high_i = np.argwhere(X_ind[:,12]>t)
+    low_i = np.argwhere(X_ind[:,12]<=t)
+    X_high = X_ind[high_i][:,0,:]
+    X_low = X_ind[low_i][:,0,:]
+
+    high_model_preds = []
+    low_model_preds = []
+    for mi in range(len(high_models)):
+        high_model_preds.append(high_models[mi].predict(X_high))
+        low_model_preds.append(low_models[mi].predict(X_low))
+    #Convert to arrays
+    high_model_preds = np.average(np.array(high_model_preds),axis=0)
+    low_model_preds = np.average(np.array(low_model_preds),axis=0)
+    #Concat
+    all_preds = np.append(high_model_preds,low_model_preds)
+    #Calculate objectives
+    obj1 = np.sum(all_preds)
+    obj2 = np.sum(prescr) #should multiply with stringency
+    return obj1, obj2
+
 
 
 def train(seed,toolbox, creator,NGEN, CXPB, MUTPB):
@@ -336,9 +348,9 @@ outdir = args.outdir[0]
 #Get the input data
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-global eval_inp_data, ip_maxvals
+global eval_inp_data, ip_maxvals,t
 eval_inp_data, ip_maxvals = get_eval_inp_data(adjusted_data)
-
+t = threshold
 NOBJ = 2
 NDIM = 13 #Number of dimensions for net (prescriptor)
 P = 12  #Number of divisions considered for each objective axis
