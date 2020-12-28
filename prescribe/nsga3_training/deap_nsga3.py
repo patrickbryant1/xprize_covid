@@ -37,6 +37,19 @@ parser.add_argument('--outdir', nargs=1, type= str,
 def get_eval_inp_data(adjusted_data):
     '''Get the evaluation data
     '''
+    IP_MAX_VALUES = {'C1_School closing': 3,
+                    'C2_Workplace closing': 3,
+                    'C3_Cancel public events': 2,
+                    'C4_Restrictions on gatherings': 4,
+                    'C5_Close public transport': 2,
+                    'C6_Stay at home requirements': 3,
+                    'C7_Restrictions on internal movement': 2,
+                    'C8_International travel controls': 4,
+                    'H1_Public information campaigns': 2,
+                    'H2_Testing policy': 3,
+                    'H3_Contact tracing': 2,
+                    'H6_Facial Coverings': 4
+                    }
 
     selected_features = ['C1_School closing',
                         'C2_Workplace closing',
@@ -132,8 +145,8 @@ def get_eval_inp_data(adjusted_data):
                                             cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
                                             air_transport, population]))
 
-    return np.array(X)
-    pdb.set_trace()
+    return np.array(X), np.array([*IP_MAX_VALUES.values()])
+
 
 def load_model():
     '''Load the models
@@ -201,7 +214,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
             return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
 
     toolbox = base.Toolbox()
-    toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM**2)
+    toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM*12) #12 interventions
     toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
@@ -222,13 +235,16 @@ def evaluate_npis(individual):
     '''
     #Convert to array
     individual = np.array(individual)
-    individual = np.reshape(individual,(NDIM,NDIM))
+    individual = np.reshape(individual,(NDIM-1,NDIM))
     #Loop through all regions
+    av_preds = []
     for ri in range(len(eval_inp_data)):
         region_eval_inp_data = eval_inp_data[ri]
         #Get prescriptions
-        prescr = np.dot(individual,region_eval_inp_data[:len(individual)])
-        pdb.set_trace()
+        prescr = np.dot(individual,region_eval_inp_data[:NDIM])
+        #Make sure the prescr don't exceeed the npi maxvals
+        prescr = np.minimum(prescr,ip_maxvals)
+        region_eval_inp_data[:12]=prescr
         model_preds = []
         if region_eval_inp_data[12]>threshold:
             for model in high_models:
@@ -236,8 +252,8 @@ def evaluate_npis(individual):
         else:
             for model in low_models:
                 model_preds.append(model.predict(np.array([region_eval_inp_data]))[0])
-
-
+        av_preds.append(np.average(model_preds))
+    pdb.set_trace()
 
 
 def train(seed,toolbox, creator,NGEN, CXPB, MUTPB):
@@ -320,8 +336,8 @@ outdir = args.outdir[0]
 #Get the input data
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-global eval_inp_data
-eval_inp_data = get_eval_inp_data(adjusted_data)
+global eval_inp_data, ip_maxvals
+eval_inp_data, ip_maxvals = get_eval_inp_data(adjusted_data)
 
 NOBJ = 2
 NDIM = 13 #Number of dimensions for net (prescriptor)
