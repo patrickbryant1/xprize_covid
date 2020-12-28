@@ -38,7 +38,19 @@ def get_eval_inp_data(adjusted_data):
     '''Get the evaluation data
     '''
 
-    selected_features = ['Country_index',
+    selected_features = ['C1_School closing',
+                        'C2_Workplace closing',
+                        'C3_Cancel public events',
+                        'C4_Restrictions on gatherings',
+                        'C5_Close public transport',
+                        'C6_Stay at home requirements',
+                        'C7_Restrictions on internal movement',
+                        'C8_International travel controls',
+                        'H1_Public information campaigns',
+                        'H2_Testing policy',
+                        'H3_Contact tracing',
+                        'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
+                        'Country_index',
                         'Region_index',
                         'CountryName',
                         'RegionName',
@@ -109,9 +121,9 @@ def get_eval_inp_data(adjusted_data):
             country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
             #Get all features
             xi = np.array(country_region_data.loc[:train_days-1])
-            case_medians = np.median(xi[:,:2],axis=0)
+            case_medians = np.median(xi[:,12:14],axis=0)
             xi = np.average(xi,axis=0)
-            xi[:2]=case_medians
+            xi[12:14]=case_medians
 
             #Add
             X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
@@ -123,19 +135,23 @@ def get_eval_inp_data(adjusted_data):
     return np.array(X)
     pdb.set_trace()
 
-def evaluate_npis(individual):
-    '''Evaluate the prescriptor by predicting the outcome using the
-    pretrained predictor.
+def load_model():
+    '''Load the models
     '''
+    #Make global
+    global low_models
+    global high_models
+    low_models = []
+    high_models = []
+    #Fetch intercepts and coefficients
+    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/non_log/june_on'
+    for i in range(5):
+        try:
+            low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
+            high_models.append(pickle.load(open(modeldir+'/high/model'+str(i), 'rb')))
+        except:
+            print('Missing fold',i)
 
-    for ri in range(len(eval_inp_data)):
-        pdb.set_trace()
-        if X[0]>threshold:
-            for model in high_models:
-                model_preds.append(model.predict(np.array([X]))[0])
-        else:
-            for model in low_models:
-                model_preds.append(model.predict(np.array([X]))[0])
 
 def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
     #https://deap.readthedocs.io/en/master/examples/nsga3.html
@@ -185,7 +201,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
             return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
 
     toolbox = base.Toolbox()
-    toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM)
+    toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM**2)
     toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
@@ -199,24 +215,27 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
 
     return toolbox, creator, MU
 
-def load_model():
-    '''Load the model
+
+def evaluate_npis(individual):
+    '''Evaluate the prescriptor by predicting the outcome using the
+    pretrained predictor.
     '''
-    #Make global
-    global low_models
-    global high_models
-    low_models = []
-    high_models = []
-    #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/non_log/june_on'
-    for i in range(5):
-        try:
-            low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
-            high_models.append(pickle.load(open(modeldir+'/high/model'+str(i), 'rb')))
-        except:
-            print('Missing fold',i)
-
-
+    #Convert to array
+    individual = np.array(individual)
+    individual = np.reshape(individual,(NDIM,NDIM))
+    #Loop through all regions
+    for ri in range(len(eval_inp_data)):
+        region_eval_inp_data = eval_inp_data[ri]
+        #Get prescriptions
+        prescr = np.dot(individual,region_eval_inp_data[:len(individual)])
+        pdb.set_trace()
+        model_preds = []
+        if region_eval_inp_data[12]>threshold:
+            for model in high_models:
+                model_preds.append(model.predict(np.array([region_eval_inp_data]))[0])
+        else:
+            for model in low_models:
+                model_preds.append(model.predict(np.array([region_eval_inp_data]))[0])
 
 
 
