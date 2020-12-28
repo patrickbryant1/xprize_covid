@@ -34,7 +34,7 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
-def get_eval_data(adjusted_data):
+def get_eval_inp_data(adjusted_data):
     '''Get the evaluation data
     '''
 
@@ -120,8 +120,24 @@ def get_eval_data(adjusted_data):
                                             cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
                                             air_transport, population]))
 
+    return np.array(X)
+    pdb.set_trace()
 
-def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, NGEN, CXPB, MUTPB):
+def evaluate_npis(individual):
+    '''Evaluate the prescriptor by predicting the outcome using the
+    pretrained predictor.
+    '''
+
+    for ri in range(len(eval_inp_data)):
+        pdb.set_trace()
+        if X[0]>threshold:
+            for model in high_models:
+                model_preds.append(model.predict(np.array([X]))[0])
+        else:
+            for model in low_models:
+                model_preds.append(model.predict(np.array([X]))[0])
+
+def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
     #https://deap.readthedocs.io/en/master/examples/nsga3.html
     #Problem definition
     '''
@@ -181,6 +197,8 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, NGEN, CXPB, MUTPB):
     toolbox.register("mutate", tools.mutPolynomialBounded, low=BOUND_LOW, up=BOUND_UP, eta=20.0, indpb=1.0/NDIM)
     toolbox.register("select", tools.selNSGA3, ref_points=ref_points)
 
+    return toolbox, creator, MU
+
 def load_model():
     '''Load the model
     '''
@@ -202,13 +220,8 @@ def load_model():
 
 
 
-def evalate_npis(individual):
-    '''Evaluate the prescriptor by predicting the outcome using the
-    pretrained predictor.
-    '''
 
-
-def train(seed=None):
+def train(seed,toolbox, creator,NGEN, CXPB, MUTPB):
     '''
     The main part of the evolution is mostly similar to any other DEAP example.
     The algorithm used is close to the eaSimple() algorithm as crossover and mutation are applied to
@@ -288,7 +301,8 @@ outdir = args.outdir[0]
 #Get the input data
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-get_eval_data(adjusted_data)
+global eval_inp_data
+eval_inp_data = get_eval_inp_data(adjusted_data)
 
 NOBJ = 2
 NDIM = 13 #Number of dimensions for net (prescriptor)
@@ -297,9 +311,9 @@ BOUND_LOW, BOUND_UP = 0.0, 1.0
 NGEN = 400 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
-setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, NGEN, CXPB, MUTPB)
+toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB)
 
-pop, logbook = train()
+pop, logbook = train(42,toolbox, creator,NGEN, CXPB, MUTPB)
 front = numpy.array([ind.fitness.values for ind in pop])
 pdb.set_trace()
 
