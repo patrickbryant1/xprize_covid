@@ -89,7 +89,7 @@ def get_eval_inp_data(adjusted_data,train_days,ip_costs):
     X = [] #Input data to predictor
     regional_ipcosts = [] #Ip costs per region
 
-    for geo in sel.GeoID:
+    for geo in sel.GeoID.unique():
 
         #Get regional data
         country_region_data = sel[sel['GeoID']==geo]
@@ -239,11 +239,12 @@ def evaluate_npis(individual):
     obj1 = 0 #Cumulative preds
     obj2 = 0 #Cumulative issued NPIs
     for n in range(4): #4 21 day periods = 3 months, which should be sufficient to observe substantial changes
-        #Get prescriptions
-        prev_ip = X_ind[:,:12]
+        #Get prescriptions and scale with weights
+        prev_ip = X_ind[:,:12]*ip_weights
+        #Get cases in last period
         prev_cases = X_ind[:,12]
         #Multiply prev ip with the 2 prescr weight layers of the individual
-        pdb.set_trace()
+
         prescr = prev_ip*individual[:,0,0]*individual[:,0,1]
         #Add the case focus
         prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
@@ -385,22 +386,23 @@ P = 12  #Number of divisions considered for each objective axis
 
 #Weight boundaries
 BOUND_LOW, BOUND_UP = 0.0, 1.0
-NGEN = 10 #Number of generations to run
+NGEN = 100 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
 toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB)
 
 pop, logbook = train(42,toolbox, creator,NGEN, CXPB, MUTPB)
+
+#Get the pareto front
+front = numpy.array([ind.fitness.values for ind in pop])
 #Save
-pdb.set_trace()
 np.save(outdir+'population.npy',np.array(pop))
-
-front = numpy.array([ind.fitness.values for ind in pop]) #Get the pareto front
-pdb.set_trace()
-
+np.save(outdir+'front.npy',front)
+#Plot
 plt.scatter(front[:,0], front[:,1], c="b")
 plt.xlabel('Cases')
 plt.ylabel('Stringency')
+plt.title('Pareto front')
 plt.axis("tight")
-plt.show()
+plt.savefig(outdir+'pareto_front.png',format='png')
 pdb.set_trace()
