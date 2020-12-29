@@ -214,7 +214,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
             return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
 
     toolbox = base.Toolbox()
-    toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM*12) #12 interventions
+    toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM) #12 interventions
     toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
@@ -222,7 +222,10 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
     #Load models for evaluation
     load_model()
     toolbox.register("evaluate", evaluate_npis)
+    #eta = Crowding degree of the crossover.
+    #A high eta will produce children resembling to their parents, while a small eta will produce solutions much more different.
     toolbox.register("mate", tools.cxSimulatedBinaryBounded, low=BOUND_LOW, up=BOUND_UP, eta=30.0)
+    #indpb – Independent probability for each attribute to be mutated.
     toolbox.register("mutate", tools.mutPolynomialBounded, low=BOUND_LOW, up=BOUND_UP, eta=20.0, indpb=1.0/NDIM)
     toolbox.register("select", tools.selNSGA3, ref_points=ref_points)
 
@@ -237,13 +240,21 @@ def evaluate_npis(individual):
     X_ind = np.copy(eval_inp_data)
     #Convert to array and reshape
     individual = np.array(individual)
-    individual = np.reshape(individual,(NDIM,NDIM-1))
+    individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS))
     #Prescribe and predict for n 21 day periods
     obj1 = 0 #Cumulative preds
     obj2 = 0 #Cumulative issued NPIs
-    for n in range(4):
+    for n in range(4): #4 21 day periods = 3 months, which should be sufficient to observe substantial changes
         #Get prescriptions
-        prescr = np.dot(X_ind[:,:NDIM],individual)
+        prev_ip = X_ind[:,:12]
+        prev_cases = X_ind[:,12]
+        #Multiply prev ip with the 2 prescr weight layers of the individual
+        prescr = prev_ip*individual[:,0,0]*individual[:,0,1]
+        #Add the case focus
+        prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
+        #Now the prescr can't really increase based only on the prescr
+        #The cases will have to be high for the ips to increase
+        #Perhaps this is not such a bad thing
         #Make sure the prescr don't exceeed the npi maxvals
         prescr = np.minimum(prescr,ip_maxvals)
         X_ind[:,:12]=prescr
@@ -270,9 +281,6 @@ def evaluate_npis(individual):
         obj1 += np.sum(all_preds)
         obj2 += np.sum(prescr)
 
-    #Calculate objectives
-    obj1 = np.sum(all_preds)
-    obj2 = np.sum(prescr) #should multiply with stringency
     return obj1, obj2
 
 
@@ -361,7 +369,9 @@ global eval_inp_data, ip_maxvals,t
 eval_inp_data, ip_maxvals = get_eval_inp_data(adjusted_data, train_days)
 t = threshold
 NOBJ = 2
-NDIM = 13 #Number of dimensions for net (prescriptor)
+NUM_WEIGHTS=2
+NUM_LAYERS=2
+NDIM = 12*NUM_WEIGHTS*NUM_LAYERS #Number of dimensions for net (prescriptor): 12 ips, 2 weights (1 for the ip, 1 for the cases), 2 layeres
 P = 12  #Number of divisions considered for each objective axis
 #If P divisions are considered for each objective axis, and
 #there are N objective axes, (N+P-1) choose P reference points Will
@@ -376,6 +386,9 @@ MUTPB = 1.0 #The probability of mutating an individual.
 toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB)
 
 pop, logbook = train(42,toolbox, creator,NGEN, CXPB, MUTPB)
+#Save
+np.save(outdir+'population.npy',np.array(population))
+
 front = numpy.array([ind.fitness.values for ind in pop]) #Get the pareto front
 pdb.set_trace()
 
