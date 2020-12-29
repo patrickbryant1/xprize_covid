@@ -36,7 +36,7 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
-def get_eval_inp_data(adjusted_data,train_days):
+def get_eval_inp_data(adjusted_data,train_days,ip_costs):
     '''Get the evaluation data
     '''
     IP_MAX_VALUES = {'C1_School closing': 3,
@@ -65,10 +65,7 @@ def get_eval_inp_data(adjusted_data,train_days):
                         'H2_Testing policy',
                         'H3_Contact tracing',
                         'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
-                        'Country_index',
-                        'Region_index',
-                        'CountryName',
-                        'RegionName',
+                        'GeoID',
                         'smoothed_cases',
                         'cumulative_smoothed_cases',
                         'death_to_case_scale',
@@ -90,64 +87,59 @@ def get_eval_inp_data(adjusted_data,train_days):
     sel = adjusted_data[selected_features]
     #Get all data
     X = [] #Input data to predictor
-    countries = sel['Country_index'].unique()
-    populations = []
-    regions = []
-    for ci in countries:
-        country_data = sel[sel['Country_index']==ci]
-        #Check regions
-        country_regions = country_data['Region_index'].unique()
-        for ri in country_regions:
-            #Get regional data
-            country_region_data = country_data[country_data['Region_index']==ri]
-            country_region_data = country_region_data.reset_index()
+    regional_ipcosts = [] #Ip costs per region
 
-            country_index = country_region_data.loc[0,'Country_index']
-            region_index = country_region_data.loc[0,'Region_index']
-            death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
-            case_death_delay = country_region_data.loc[0,'case_death_delay']
-            gross_net_income = country_region_data.loc[0,'gross_net_income']
-            population_density = country_region_data.loc[0,'population_density']
-            pdi = country_region_data.loc[0,'pdi'] #Power distance
-            idv = country_region_data.loc[0, 'idv'] #Individualism
-            mas = country_region_data.loc[0,'mas'] #Masculinity
-            uai = country_region_data.loc[0,'uai'] #Uncertainty
-            ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
-            ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-            upop = country_region_data.loc[0,'Urban population (% of total population)']
-            pop65 = country_region_data.loc[0,'Population ages 65 and above (% of total population)']
-            gdp = country_region_data.loc[0,'GDP per capita (current US$)']
-            obesity = country_region_data.loc[0,'Obesity Rate (%)']
-            cancer = country_region_data.loc[0,'Cancer Rate (%)']
-            smoking_deaths = country_region_data.loc[0,'Share of Deaths from Smoking (%)']
-            pneumonia_dr = country_region_data.loc[0,'Pneumonia Death Rate (per 100K)']
-            air_pollution_deaths = country_region_data.loc[0,'Share of Deaths from Air Pollution (%)']
-            co2_emission = country_region_data.loc[0,'CO2 emissions (metric tons per capita)']
-            air_transport = country_region_data.loc[0,'Air transport (# carrier departures worldwide)']
-            population = country_region_data.loc[0,'population']
-            country_region_data = country_region_data.drop(columns={'index','Country_index', 'Region_index','CountryName',
-            'RegionName', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-             'mas', 'uai', 'ltowvs', 'ivr','Urban population (% of total population)','Population ages 65 and above (% of total population)',
-             'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
-             'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)','population'})
+    for geo in sel.GeoID:
 
-            #Normalize the cases by 100'000 population
-            country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
-            country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
-            #Get all features
-            xi = np.array(country_region_data.loc[:train_days-1])
-            case_medians = np.median(xi[:,12:14],axis=0)
-            xi = np.average(xi,axis=0)
-            xi[12:14]=case_medians
+        #Get regional data
+        country_region_data = sel[sel['GeoID']==geo]
+        country_region_data = country_region_data.reset_index()
+        #ip costs
+        regional_ipcosts.append(ip_costs[ip_costs['GeoID']==geo][IP_MAX_VALUES.keys()].values[0])
 
-            #Add
-            X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
-                                            #period_change,
-                                            pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
-                                            cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
-                                            air_transport, population]))
+        death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
+        case_death_delay = country_region_data.loc[0,'case_death_delay']
+        gross_net_income = country_region_data.loc[0,'gross_net_income']
+        population_density = country_region_data.loc[0,'population_density']
+        pdi = country_region_data.loc[0,'pdi'] #Power distance
+        idv = country_region_data.loc[0, 'idv'] #Individualism
+        mas = country_region_data.loc[0,'mas'] #Masculinity
+        uai = country_region_data.loc[0,'uai'] #Uncertainty
+        ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
+        ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
+        upop = country_region_data.loc[0,'Urban population (% of total population)']
+        pop65 = country_region_data.loc[0,'Population ages 65 and above (% of total population)']
+        gdp = country_region_data.loc[0,'GDP per capita (current US$)']
+        obesity = country_region_data.loc[0,'Obesity Rate (%)']
+        cancer = country_region_data.loc[0,'Cancer Rate (%)']
+        smoking_deaths = country_region_data.loc[0,'Share of Deaths from Smoking (%)']
+        pneumonia_dr = country_region_data.loc[0,'Pneumonia Death Rate (per 100K)']
+        air_pollution_deaths = country_region_data.loc[0,'Share of Deaths from Air Pollution (%)']
+        co2_emission = country_region_data.loc[0,'CO2 emissions (metric tons per capita)']
+        air_transport = country_region_data.loc[0,'Air transport (# carrier departures worldwide)']
+        population = country_region_data.loc[0,'population']
+        country_region_data = country_region_data.drop(columns={'index','GeoID', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
+         'mas', 'uai', 'ltowvs', 'ivr','Urban population (% of total population)','Population ages 65 and above (% of total population)',
+         'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
+         'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)','population'})
 
-    return np.array(X), np.array([*IP_MAX_VALUES.values()])
+        #Normalize the cases by 100'000 population
+        country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
+        country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
+        #Get all features
+        xi = np.array(country_region_data.loc[:train_days-1])
+        case_medians = np.median(xi[:,12:14],axis=0)
+        xi = np.average(xi,axis=0)
+        xi[12:14]=case_medians
+
+        #Add
+        X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
+                                        #period_change,
+                                        pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
+                                        cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
+                                        air_transport, population]))
+
+    return np.array(X), np.array([*IP_MAX_VALUES.values()]), np.array(regional_ipcosts)
 
 
 def load_model():
@@ -251,6 +243,7 @@ def evaluate_npis(individual):
         prev_ip = X_ind[:,:12]
         prev_cases = X_ind[:,12]
         #Multiply prev ip with the 2 prescr weight layers of the individual
+        pdb.set_trace()
         prescr = prev_ip*individual[:,0,0]*individual[:,0,1]
         #Add the case focus
         prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
@@ -279,13 +272,17 @@ def evaluate_npis(individual):
         all_preds = np.append(high_model_preds,low_model_preds)
         #Below 0 not allowed
         all_preds[all_preds<0]=0
-        #Update X_ind
-        X_ind[:,12]=all_preds
+
         #Add cases and NPI sums
-        diff = all_preds/prev_cases
-        diff[prev_cases==0]=1
+        #Check where 0
+        zind = np.argwhere(X_ind[:,12]==0)
+        X_ind[:,12][zind]=all_preds[zind]
+        diff = all_preds/X_ind[:,12]
         obj1 += np.sum(diff)
         obj2 += np.sum(prescr)
+
+        #Update X_ind
+        X_ind[:,12]=all_preds
 
     return obj1, obj2
 
@@ -363,6 +360,7 @@ adjusted_data = adjusted_data.fillna(0)
 #Get the monthly temperature data
 monthly_temperature = pd.read_csv(args.temp_data[0])
 ip_costs = pd.read_csv(args.ip_costs[0])
+ip_costs['GeoID'] = ip_costs['CountryName'] + '__' + ip_costs['RegionName'].astype(str)
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
@@ -372,8 +370,8 @@ outdir = args.outdir[0]
 #Get the input data
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-global eval_inp_data, ip_maxvals,t
-eval_inp_data, ip_maxvals = get_eval_inp_data(adjusted_data, train_days)
+global eval_inp_data, ip_maxvals, ip_weights, t
+eval_inp_data, ip_maxvals, ip_weights = get_eval_inp_data(adjusted_data, train_days, ip_costs)
 t = threshold
 NOBJ = 2
 NUM_WEIGHTS=2
@@ -394,7 +392,8 @@ toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUT
 
 pop, logbook = train(42,toolbox, creator,NGEN, CXPB, MUTPB)
 #Save
-np.save(outdir+'population.npy',np.array(population))
+pdb.set_trace()
+np.save(outdir+'population.npy',np.array(pop))
 
 front = numpy.array([ind.fitness.values for ind in pop]) #Get the pareto front
 pdb.set_trace()
