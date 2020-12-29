@@ -34,7 +34,7 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
-def get_eval_inp_data(adjusted_data):
+def get_eval_inp_data(adjusted_data,train_days):
     '''Get the evaluation data
     '''
     IP_MAX_VALUES = {'C1_School closing': 3,
@@ -182,7 +182,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
     '''
     Then we define the various parameters for the algorithm, including the population size set
     to the first multiple of 4 greater than H, the number of generations and variation probabilities.
-    If twelve divisions (P = 12) are considered for each objective axis,
+    If twelve divisions (P = 12) are considered for each objective axis and there are 3 objectives,
     91 reference points will be created, according to equation (10).
     (3+12-1) choose 12 = 14 choose 12 = 14!/[(14-12)!12!]=14*13/2=91
     '''
@@ -235,32 +235,41 @@ def evaluate_npis(individual):
     '''
     #Get copy
     X_ind = np.copy(eval_inp_data)
-    #Convert to array
+    #Convert to array and reshape
     individual = np.array(individual)
     individual = np.reshape(individual,(NDIM,NDIM-1))
-    #Loop through all regions
-    av_preds = []
-    #Get prescriptions
-    prescr = np.dot(X_ind[:,:NDIM],individual)
-    #Make sure the prescr don't exceeed the npi maxvals
-    prescr = np.minimum(prescr,ip_maxvals)
-    X_ind[:,:12]=prescr
-    #Split into high and low
-    high_i = np.argwhere(X_ind[:,12]>t)
-    low_i = np.argwhere(X_ind[:,12]<=t)
-    X_high = X_ind[high_i][:,0,:]
-    X_low = X_ind[low_i][:,0,:]
+    #Prescribe and predict for n 21 day periods
+    obj1 = 0 #Cumulative preds
+    obj2 = 0 #Cumulative issued NPIs
+    for n in range(4):
+        #Get prescriptions
+        prescr = np.dot(X_ind[:,:NDIM],individual)
+        #Make sure the prescr don't exceeed the npi maxvals
+        prescr = np.minimum(prescr,ip_maxvals)
+        X_ind[:,:12]=prescr
+        #Split into high and low
+        high_i = np.argwhere(X_ind[:,12]>t)
+        low_i = np.argwhere(X_ind[:,12]<=t)
+        X_high = X_ind[high_i][:,0,:]
+        X_low = X_ind[low_i][:,0,:]
 
-    high_model_preds = []
-    low_model_preds = []
-    for mi in range(len(high_models)):
-        high_model_preds.append(high_models[mi].predict(X_high))
-        low_model_preds.append(low_models[mi].predict(X_low))
-    #Convert to arrays
-    high_model_preds = np.average(np.array(high_model_preds),axis=0)
-    low_model_preds = np.average(np.array(low_model_preds),axis=0)
-    #Concat
-    all_preds = np.append(high_model_preds,low_model_preds)
+        high_model_preds = []
+        low_model_preds = []
+        for mi in range(len(high_models)):
+            high_model_preds.append(high_models[mi].predict(X_high))
+            low_model_preds.append(low_models[mi].predict(X_low))
+        #Convert to arrays
+        high_model_preds = np.average(np.array(high_model_preds),axis=0)
+        low_model_preds = np.average(np.array(low_model_preds),axis=0)
+        #Concat
+        X_ind = np.append(X_high, X_low,axis=0)
+        all_preds = np.append(high_model_preds,low_model_preds)
+        #Update X_ind
+        X_ind[:,12]=all_preds
+        #Add cases and NPI sums
+        obj1 += np.sum(all_preds)
+        obj2 += np.sum(prescr)
+
     #Calculate objectives
     obj1 = np.sum(all_preds)
     obj2 = np.sum(prescr) #should multiply with stringency
@@ -349,25 +358,30 @@ outdir = args.outdir[0]
 #Use only data from start date
 adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
 global eval_inp_data, ip_maxvals,t
-eval_inp_data, ip_maxvals = get_eval_inp_data(adjusted_data)
+eval_inp_data, ip_maxvals = get_eval_inp_data(adjusted_data, train_days)
 t = threshold
 NOBJ = 2
 NDIM = 13 #Number of dimensions for net (prescriptor)
 P = 12  #Number of divisions considered for each objective axis
+#If P divisions are considered for each objective axis, and
+#there are N objective axes, (N+P-1) choose P reference points Will
+#be created = (N+P-1)!/((N+P-1-P)!P!)
+#If N=2 and P= 12 --> 13!/(12!*1!)=13
+
+#Weight boundaries
 BOUND_LOW, BOUND_UP = 0.0, 1.0
-NGEN = 400 #Number of generations to run
+NGEN = 100 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
 toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB)
 
 pop, logbook = train(42,toolbox, creator,NGEN, CXPB, MUTPB)
-front = numpy.array([ind.fitness.values for ind in pop])
+front = numpy.array([ind.fitness.values for ind in pop]) #Get the pareto front
 pdb.set_trace()
 
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-
-ax.scatter(front[:,0], front[:,1],front[:,2], c="b")
+plt.scatter(front[:,0], front[:,1], c="b")
+plt.xlabel('Cases')
+plt.ylabel('Stringency')
 plt.axis("tight")
 plt.show()
 pdb.set_trace()
