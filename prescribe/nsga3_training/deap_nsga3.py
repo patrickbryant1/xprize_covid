@@ -164,13 +164,9 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
     #https://deap.readthedocs.io/en/master/examples/nsga3.html
     #Problem definition
     '''
-    First we need to define the problem we want to work on. We will use the first problem tested in the paper,
-    3 objectives DTLZ2 with k = 10 and p = 12. We will use pymop for problem implementation as it
-    provides the exact Pareto front that we will use later for computing the performance of the algorithm.
-    https://www.egr.msu.edu/~kdeb/papers/k2012009.pdf
-    Test problem: https://tik-old.ee.ethz.ch/file//3ec604450bf683daaf27f9027e69f44d/DTLZ2004a.pdf
+    #Number of models in the pareto front
     '''
-    H = factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1)) #Number of models in the pareto front
+    H = factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
 
 
     '''
@@ -276,10 +272,10 @@ def evaluate_npis(individual):
 
         #Add cases and NPI sums
         #Check where 0
-        zind = np.argwhere(X_ind[:,12]==0)
-        X_ind[:,12][zind]=all_preds[zind]
-        diff = all_preds/X_ind[:,12]
-        obj1 += np.sum(diff)
+        #zind = np.argwhere(X_ind[:,12]==0)
+        #X_ind[:,12][zind]=all_preds[zind]
+        #diff = all_preds/X_ind[:,12]
+        obj1 += np.sum(all_preds)
         obj2 += np.sum(prescr)
 
         #Update X_ind
