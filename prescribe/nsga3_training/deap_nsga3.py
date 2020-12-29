@@ -22,6 +22,8 @@ parser.add_argument('--adjusted_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to processed data file.')
 parser.add_argument('--temp_data', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to data file with monthly temperatures.')
+parser.add_argument('--ip_costs', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to data file with ip costs per region.')
 parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
 parser.add_argument('--train_days', nargs=1, type= int,
@@ -275,10 +277,14 @@ def evaluate_npis(individual):
         #Concat
         X_ind = np.append(X_high, X_low,axis=0)
         all_preds = np.append(high_model_preds,low_model_preds)
+        #Below 0 not allowed
+        all_preds[all_preds<0]=0
         #Update X_ind
         X_ind[:,12]=all_preds
         #Add cases and NPI sums
-        obj1 += np.sum(all_preds)
+        diff = all_preds/prev_cases
+        diff[prev_cases==0]=1
+        obj1 += np.sum(diff)
         obj2 += np.sum(prescr)
 
     return obj1, obj2
@@ -356,6 +362,7 @@ adjusted_data = pd.read_csv(args.adjusted_data[0],
 adjusted_data = adjusted_data.fillna(0)
 #Get the monthly temperature data
 monthly_temperature = pd.read_csv(args.temp_data[0])
+ip_costs = pd.read_csv(args.ip_costs[0])
 start_date = args.start_date[0]
 train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
@@ -380,7 +387,7 @@ P = 12  #Number of divisions considered for each objective axis
 
 #Weight boundaries
 BOUND_LOW, BOUND_UP = 0.0, 1.0
-NGEN = 100 #Number of generations to run
+NGEN = 10 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
 toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB)
