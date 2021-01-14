@@ -166,7 +166,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
     '''
     #Number of models in the pareto front
     '''
-    H = factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
+    H = 100 #factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
 
 
     '''
@@ -382,7 +382,7 @@ P = 12  #Number of divisions considered for each objective axis
 
 #Weight boundaries
 BOUND_LOW, BOUND_UP = 0.0, 1.0
-NGEN = 100 #Number of generations to run
+NGEN = 200 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
 toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB)
