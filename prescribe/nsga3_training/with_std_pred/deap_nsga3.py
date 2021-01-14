@@ -15,149 +15,24 @@ import sys
 import os
 import pdb
 
+#Inser predictor path. NOTE! This will have to be absoulate in the sandbox
+sys.path.insert(0, "../../standard_predictor/")
+import predict
 #Arguments for argparse module:
 parser = argparse.ArgumentParser(description = '''Simple RF model.''')
 
-parser.add_argument('--adjusted_data', nargs=1, type= str,
-                  default=sys.stdin, help = 'Path to processed data file.')
-parser.add_argument('--temp_data', nargs=1, type= str,
-                  default=sys.stdin, help = 'Path to data file with monthly temperatures.')
+parser.add_argument('--pred_dir', nargs=1, type= str,
+                  default=sys.stdin, help = 'Path to prediction directory.')
 parser.add_argument('--ip_costs', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to data file with ip costs per region.')
 parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
-parser.add_argument('--train_days', nargs=1, type= int,
-                  default=sys.stdin, help = 'Days to include in fitting.')
 parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
-parser.add_argument('--threshold', nargs=1, type= float,
-                  default=sys.stdin, help = 'Threshold.')
 parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
-def get_eval_inp_data(adjusted_data,train_days,ip_costs):
-    '''Get the evaluation data
-    '''
-    IP_MAX_VALUES = {'C1_School closing': 3,
-                    'C2_Workplace closing': 3,
-                    'C3_Cancel public events': 2,
-                    'C4_Restrictions on gatherings': 4,
-                    'C5_Close public transport': 2,
-                    'C6_Stay at home requirements': 3,
-                    'C7_Restrictions on internal movement': 2,
-                    'C8_International travel controls': 4,
-                    'H1_Public information campaigns': 2,
-                    'H2_Testing policy': 3,
-                    'H3_Contact tracing': 2,
-                    'H6_Facial Coverings': 4
-                    }
-
-    selected_features = ['C1_School closing',
-                        'C2_Workplace closing',
-                        'C3_Cancel public events',
-                        'C4_Restrictions on gatherings',
-                        'C5_Close public transport',
-                        'C6_Stay at home requirements',
-                        'C7_Restrictions on internal movement',
-                        'C8_International travel controls',
-                        'H1_Public information campaigns',
-                        'H2_Testing policy',
-                        'H3_Contact tracing',
-                        'H6_Facial Coverings', #These first 12 are the ones the prescriptor will assign
-                        'GeoID',
-                        'smoothed_cases',
-                        'cumulative_smoothed_cases',
-                        'death_to_case_scale',
-                        'case_death_delay',
-                        'gross_net_income',
-                        'population_density',
-                        'monthly_temperature',
-                        'pdi', 'idv', 'mas', 'uai', 'ltowvs', 'ivr',
-                        'Urban population (% of total population)',
-                        'Population ages 65 and above (% of total population)',
-                        'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)',
-                        'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
-                        'Share of Deaths from Air Pollution (%)',
-                        'CO2 emissions (metric tons per capita)',
-                        'Air transport (# carrier departures worldwide)',
-                        'population']
-
-    #Get only selected features
-    sel = adjusted_data[selected_features]
-    #Get all data
-    X = [] #Input data to predictor
-    regional_ipcosts = [] #Ip costs per region
-
-    for geo in sel.GeoID.unique():
-
-        #Get regional data
-        country_region_data = sel[sel['GeoID']==geo]
-        country_region_data = country_region_data.reset_index()
-        #ip costs
-        regional_ipcosts.append(ip_costs[ip_costs['GeoID']==geo][IP_MAX_VALUES.keys()].values[0])
-
-        death_to_case_scale = country_region_data.loc[0,'death_to_case_scale']
-        case_death_delay = country_region_data.loc[0,'case_death_delay']
-        gross_net_income = country_region_data.loc[0,'gross_net_income']
-        population_density = country_region_data.loc[0,'population_density']
-        pdi = country_region_data.loc[0,'pdi'] #Power distance
-        idv = country_region_data.loc[0, 'idv'] #Individualism
-        mas = country_region_data.loc[0,'mas'] #Masculinity
-        uai = country_region_data.loc[0,'uai'] #Uncertainty
-        ltowvs = country_region_data.loc[0,'ltowvs'] #Long term orientation,  describes how every society has to maintain some links with its own past while dealing with the challenges of the present and future
-        ivr = country_region_data.loc[0,'ivr'] #Indulgence, Relatively weak control is called “Indulgence” and relatively strong control is called “Restraint”.
-        upop = country_region_data.loc[0,'Urban population (% of total population)']
-        pop65 = country_region_data.loc[0,'Population ages 65 and above (% of total population)']
-        gdp = country_region_data.loc[0,'GDP per capita (current US$)']
-        obesity = country_region_data.loc[0,'Obesity Rate (%)']
-        cancer = country_region_data.loc[0,'Cancer Rate (%)']
-        smoking_deaths = country_region_data.loc[0,'Share of Deaths from Smoking (%)']
-        pneumonia_dr = country_region_data.loc[0,'Pneumonia Death Rate (per 100K)']
-        air_pollution_deaths = country_region_data.loc[0,'Share of Deaths from Air Pollution (%)']
-        co2_emission = country_region_data.loc[0,'CO2 emissions (metric tons per capita)']
-        air_transport = country_region_data.loc[0,'Air transport (# carrier departures worldwide)']
-        population = country_region_data.loc[0,'population']
-        country_region_data = country_region_data.drop(columns={'index','GeoID', 'death_to_case_scale', 'case_death_delay', 'gross_net_income','population_density','pdi', 'idv',
-         'mas', 'uai', 'ltowvs', 'ivr','Urban population (% of total population)','Population ages 65 and above (% of total population)',
-         'GDP per capita (current US$)', 'Obesity Rate (%)', 'Cancer Rate (%)', 'Share of Deaths from Smoking (%)', 'Pneumonia Death Rate (per 100K)',
-         'Share of Deaths from Air Pollution (%)','CO2 emissions (metric tons per capita)', 'Air transport (# carrier departures worldwide)','population'})
-
-        #Normalize the cases by 100'000 population
-        country_region_data['smoothed_cases']=country_region_data['smoothed_cases']/(population/100000)
-        country_region_data['cumulative_smoothed_cases']=country_region_data['cumulative_smoothed_cases']/(population/100000)
-        #Get all features
-        xi = np.array(country_region_data.loc[:train_days-1])
-        case_medians = np.median(xi[:,12:14],axis=0)
-        xi = np.average(xi,axis=0)
-        xi[12:14]=case_medians
-
-        #Add
-        X.append(np.append(xi.flatten(),[death_to_case_scale,case_death_delay,gross_net_income,population_density,
-                                        #period_change,
-                                        pdi, idv, mas, uai, ltowvs, ivr,upop, pop65, gdp, obesity,
-                                        cancer, smoking_deaths, pneumonia_dr, air_pollution_deaths, co2_emission,
-                                        air_transport, population]))
-
-    return np.array(X), np.array([*IP_MAX_VALUES.values()]), np.array(regional_ipcosts)
-
-
-def load_model():
-    '''Load the models
-    '''
-    #Make global
-    global low_models
-    global high_models
-    low_models = []
-    high_models = []
-    #Fetch intercepts and coefficients
-    modeldir='/home/patrick/results/COVID19/xprize/simple_rf/comparing_median/all_regions/3_weeks/non_log/june_on'
-    for i in range(5):
-        try:
-            low_models.append(pickle.load(open(modeldir+'/low/model'+str(i), 'rb')))
-            high_models.append(pickle.load(open(modeldir+'/high/model'+str(i), 'rb')))
-        except:
-            print('Missing fold',i)
 
 
 def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
@@ -250,26 +125,11 @@ def evaluate_npis(individual):
         #Make sure the prescr don't exceeed the npi maxvals
         prescr = np.minimum(prescr,ip_maxvals)
         X_ind[:,:12]=prescr
-        #Split into high and low
-        high_i = np.argwhere(X_ind[:,12]>t)
-        low_i = np.argwhere(X_ind[:,12]<=t)
-        X_high = X_ind[high_i][:,0,:]
-        X_low = X_ind[low_i][:,0,:]
 
-        high_model_preds = []
-        low_model_preds = []
-        for mi in range(len(high_models)):
-            high_model_preds.append(high_models[mi].predict(X_high))
-            low_model_preds.append(low_models[mi].predict(X_low))
-        #Convert to arrays
-        high_model_preds = np.average(np.array(high_model_preds),axis=0)
-        low_model_preds = np.average(np.array(low_model_preds),axis=0)
-        #Concat
-        X_ind = np.append(X_high, X_low,axis=0)
-        all_preds = np.append(high_model_preds,low_model_preds)
-        #Below 0 not allowed
-        all_preds[all_preds<0]=0
-
+        pred_df = predict(start_date: str,
+                end_date: str,
+                path_to_ips_file: str,
+                output_file_path)
         #Add cases and NPI sums
         #Check where 0
         #zind = np.argwhere(X_ind[:,12]==0)
@@ -345,31 +205,14 @@ def train(seed,toolbox, creator,NGEN, CXPB, MUTPB):
 #Params for NSGA3
 #Parse args
 args = parser.parse_args()
-adjusted_data = pd.read_csv(args.adjusted_data[0],
-                 parse_dates=['Date'],
-                 encoding="ISO-8859-1",
-                 dtype={"RegionName": str,
-                        "RegionCode": str,
-                        "Country_index":int,
-                        "Region_index":int},
-                 error_bad_lines=False)
-adjusted_data = adjusted_data.fillna(0)
-#Get the monthly temperature data
-monthly_temperature = pd.read_csv(args.temp_data[0])
+
 ip_costs = pd.read_csv(args.ip_costs[0])
 ip_costs['GeoID'] = ip_costs['CountryName'] + '__' + ip_costs['RegionName'].astype(str)
 start_date = args.start_date[0]
-train_days = args.train_days[0]
 forecast_days = args.forecast_days[0]
-threshold = args.threshold[0]
 outdir = args.outdir[0]
+pdb.set_trace()
 
-#Get the input data
-#Use only data from start date
-adjusted_data = adjusted_data[adjusted_data['Date']>=start_date]
-global eval_inp_data, ip_maxvals, ip_weights, t
-eval_inp_data, ip_maxvals, ip_weights = get_eval_inp_data(adjusted_data, train_days, ip_costs)
-t = threshold
 NOBJ = 2
 NUM_WEIGHTS=2
 NUM_LAYERS=2

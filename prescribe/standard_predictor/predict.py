@@ -3,7 +3,7 @@
 import argparse
 import os
 
-from covid_xprize.standard_predictor.xprize_predictor import XPrizePredictor
+from xprize_predictor import XPrizePredictor
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -33,36 +33,36 @@ def predict(start_date: str,
     # Generate the predictions
     preds_df = predictor.predict(start_date, end_date, path_to_ips_file)
     # Create the output path
-    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+    #os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
     # Save to a csv file
-    preds_df.to_csv(output_file_path, index=False)
-    print(f"Saved predictions to {output_file_path}")
-
-
-# !!! PLEASE DO NOT EDIT. THIS IS THE OFFICIAL COMPETITION API !!!
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--start_date",
-                        dest="start_date",
-                        type=str,
-                        required=True,
-                        help="Start date from which to predict, included, as YYYY-MM-DD. For example 2020-08-01")
-    parser.add_argument("-e", "--end_date",
-                        dest="end_date",
-                        type=str,
-                        required=True,
-                        help="End date for the last prediction, included, as YYYY-MM-DD. For example 2020-08-31")
-    parser.add_argument("-ip", "--interventions_plan",
-                        dest="ip_file",
-                        type=str,
-                        required=True,
-                        help="The path to an intervention plan .csv file")
-    parser.add_argument("-o", "--output_file",
-                        dest="output_file",
-                        type=str,
-                        required=True,
-                        help="The path to the CSV file where predictions should be written")
-    args = parser.parse_args()
-    print(f"Generating predictions from {args.start_date} to {args.end_date}...")
-    predict(args.start_date, args.end_date, args.ip_file, args.output_file)
-    print("Done!")
+    #preds_df.to_csv(output_file_path, index=False)
+    #print(f"Saved predictions to {output_file_path}")
+    return preds_df
+#
+# # !!! PLEASE DO NOT EDIT. THIS IS THE OFFICIAL COMPETITION API !!!
+# if __name__ == '__main__':
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("-s", "--start_date",
+#                         dest="start_date",
+#                         type=str,
+#                         required=True,
+#                         help="Start date from which to predict, included, as YYYY-MM-DD. For example 2020-08-01")
+#     parser.add_argument("-e", "--end_date",
+#                         dest="end_date",
+#                         type=str,
+#                         required=True,
+#                         help="End date for the last prediction, included, as YYYY-MM-DD. For example 2020-08-31")
+#     parser.add_argument("-ip", "--interventions_plan",
+#                         dest="ip_file",
+#                         type=str,
+#                         required=True,
+#                         help="The path to an intervention plan .csv file")
+#     parser.add_argument("-o", "--output_file",
+#                         dest="output_file",
+#                         type=str,
+#                         required=True,
+#                         help="The path to the CSV file where predictions should be written")
+#     args = parser.parse_args()
+#     print(f"Generating predictions from {args.start_date} to {args.end_date}...")
+#     predict(args.start_date, args.end_date, args.ip_file, args.output_file)
+#     print("Done!")
