@@ -16,6 +16,7 @@ from keras.layers import Input
 from keras.layers import LSTM
 from keras.layers import Lambda
 from keras.models import Model
+import pdb
 
 
 DATA_FILE_PATH = './OxCGRT_latest.csv'
@@ -145,6 +146,7 @@ class XPrizePredictor(object):
         cnpis_df = npis_df[npis_df.GeoID == g]
         npis_sequence = np.array(cnpis_df[NPI_COLUMNS])
         # Get the predictions with the passed NPIs
+        pdb.set_trace()
         preds = self._roll_out_predictions(self.predictor,
                                            initial_context_input,
                                            initial_action_input,
@@ -336,6 +338,7 @@ class XPrizePredictor(object):
             # Use the passed actions
             action_sequence = future_action_sequence[d]
             action_input[:, -1] = action_sequence
+            pdb.set_trace()
             pred = predictor.predict([context_input, action_input])
             pred_output[d] = pred
             context_input[:, :-1] = context_input[:, 1:]

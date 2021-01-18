@@ -43,11 +43,7 @@ def load_model():
     DATA_FILE = './OxCGRT_latest.csv'
     path_to_ips_file='../../../data/historical_ip.csv'
     predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, DATA_FILE)
-    # Generate the predictions
-    start_date='2020-06-01'
-    end_date='2020-06-22'
-    preds_df = predictor.predict(start_date, end_date, path_to_ips_file)
-    pdb.set_trace()
+
 
 def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
     #https://deap.readthedocs.io/en/master/examples/nsga3.html
@@ -124,7 +120,7 @@ def evaluate_npis(individual):
     #Prescribe and predict for n 21 day periods
     obj1 = 0 #Cumulative preds
     obj2 = 0 #Cumulative issued NPIs
-    for n in range(4): #4 21 day periods = 3 months, which should be sufficient to observe substantial changes
+    for n in range(2): #4 21 day periods, which should be sufficient to observe substantial changes
         #Get prescriptions and scale with weights
         prev_ip = X_ind[:,:12]*ip_weights
         #Get cases in last period
@@ -141,10 +137,12 @@ def evaluate_npis(individual):
         prescr = np.minimum(prescr,ip_maxvals)
         X_ind[:,:12]=prescr
 
-        pred_df = predict(start_date: str,
-                end_date: str,
-                path_to_ips_file: str,
-                output_file_path)
+        # Generate the predictions
+        start_date='2020-06-01'
+        end_date='2020-06-22'
+        pdb.set_trace()
+        preds_df = predictor.predict(start_date, end_date, path_to_ips_file)
+
         #Add cases and NPI sums
         #Check where 0
         #zind = np.argwhere(X_ind[:,12]==0)
