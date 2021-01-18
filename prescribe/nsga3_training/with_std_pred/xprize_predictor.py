@@ -94,7 +94,7 @@ class XPrizePredictor(object):
     def predict(self,
                 start_date_str: str,
                 end_date_str: str,
-                npis_df: str) -> pd.DataFrame:
+                npis_df: pd.DataFrame):
         start_date = pd.to_datetime(start_date_str, format='%Y-%m-%d')
         end_date = pd.to_datetime(end_date_str, format='%Y-%m-%d')
         nb_days = (end_date - start_date).days + 1

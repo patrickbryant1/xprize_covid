@@ -34,10 +34,12 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
-def load_model():
+def load_model(start_date,end_date):
     '''Load the standard predictor
     '''
-    NPI_COLUMNS = ['C1_School closing',
+    NPI_COLUMNS = ['GeoID',
+                   'Date',
+                   'C1_School closing',
                    'C2_Workplace closing',
                    'C3_Cancel public events',
                    'C4_Restrictions on gatherings',
@@ -59,13 +61,15 @@ def load_model():
                             dtype={"RegionName": str,
                                    "RegionCode": str},
                             error_bad_lines=False)
-    npis_df = data[NPI_COLUMNS]
-    pdb.set_trace()
     # GeoID is CountryName / RegionName
     # np.where usage: if A then B else C
-    latest_df["GeoID"] = np.where(latest_df["RegionName"].isnull(),
-                                  latest_df["CountryName"],
-                                  latest_df["CountryName"] + ' / ' + latest_df["RegionName"])
+    data["GeoID"] = np.where(data["RegionName"].isnull(),
+                                  data["CountryName"],
+                                  data["CountryName"] + ' / ' + data["RegionName"])
+
+    npis_df = data[NPI_COLUMNS]
+    npis_inp_data = npis_df[(npis_df.Date >= start_date) & (npis_df.Date <= end_date)]
+    pdb.set_trace()
 
     predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, DATA_FILE)
 
@@ -250,7 +254,6 @@ ip_costs['GeoID'] = ip_costs['CountryName'] + '__' + ip_costs['RegionName'].asty
 start_date = args.start_date[0]
 forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
-pdb.set_trace()
 
 NOBJ = 2
 NUM_WEIGHTS=2
@@ -267,6 +270,8 @@ BOUND_LOW, BOUND_UP = 0.0, 1.0
 NGEN = 200 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
+#Start train date, forecast days before start_date
+start_inp_date = 
 toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB)
 
 pop, logbook = train(42,toolbox, creator,NGEN, CXPB, MUTPB)
