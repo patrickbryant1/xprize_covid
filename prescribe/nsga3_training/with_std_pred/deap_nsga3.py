@@ -37,11 +37,36 @@ parser.add_argument('--outdir', nargs=1, type= str,
 def load_model():
     '''Load the standard predictor
     '''
+    NPI_COLUMNS = ['C1_School closing',
+                   'C2_Workplace closing',
+                   'C3_Cancel public events',
+                   'C4_Restrictions on gatherings',
+                   'C5_Close public transport',
+                   'C6_Stay at home requirements',
+                   'C7_Restrictions on internal movement',
+                   'C8_International travel controls',
+                   'H1_Public information campaigns',
+                   'H2_Testing policy',
+                   'H3_Contact tracing',
+                   'H6_Facial Coverings']
 
     # Fixed weights for the standard predictor.
     MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
     DATA_FILE = './OxCGRT_latest.csv'
-    path_to_ips_file='../../../data/historical_ip.csv'
+    data = pd.read_csv(DATA_FILE,
+                            parse_dates=['Date'],
+                            encoding="ISO-8859-1",
+                            dtype={"RegionName": str,
+                                   "RegionCode": str},
+                            error_bad_lines=False)
+    npis_df = data[NPI_COLUMNS]
+    pdb.set_trace()
+    # GeoID is CountryName / RegionName
+    # np.where usage: if A then B else C
+    latest_df["GeoID"] = np.where(latest_df["RegionName"].isnull(),
+                                  latest_df["CountryName"],
+                                  latest_df["CountryName"] + ' / ' + latest_df["RegionName"])
+
     predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, DATA_FILE)
 
 
@@ -120,7 +145,10 @@ def evaluate_npis(individual):
     #Prescribe and predict for n 21 day periods
     obj1 = 0 #Cumulative preds
     obj2 = 0 #Cumulative issued NPIs
-    for n in range(2): #4 21 day periods, which should be sufficient to observe substantial changes
+    #Start and end dates
+    start_date='2020-06-01'
+    end_date='2020-06-22'
+    for n in range(2): #2 21 day periods, which should be sufficient to observe substantial changes
         #Get prescriptions and scale with weights
         prev_ip = X_ind[:,:12]*ip_weights
         #Get cases in last period
@@ -137,9 +165,7 @@ def evaluate_npis(individual):
         prescr = np.minimum(prescr,ip_maxvals)
         X_ind[:,:12]=prescr
 
-        # Generate the predictions
-        start_date='2020-06-01'
-        end_date='2020-06-22'
+        #Generate the predictions
         pdb.set_trace()
         preds_df = predictor.predict(start_date, end_date, path_to_ips_file)
 
