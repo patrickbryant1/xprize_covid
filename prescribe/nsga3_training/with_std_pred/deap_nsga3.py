@@ -34,7 +34,20 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
+def load_model():
+    '''Load the standard predictor
+    '''
 
+    # Fixed weights for the standard predictor.
+    MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
+    DATA_FILE = './OxCGRT_latest.csv'
+    path_to_ips_file='../../../data/historical_ip.csv'
+    predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, DATA_FILE)
+    # Generate the predictions
+    start_date='2020-06-01'
+    end_date='2020-06-22'
+    preds_df = predictor.predict(start_date, end_date, path_to_ips_file)
+    pdb.set_trace()
 
 def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
     #https://deap.readthedocs.io/en/master/examples/nsga3.html
@@ -97,17 +110,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
 
     return toolbox, creator, MU
 
-def load_model():
-    '''Load the standard predictor
-    '''
 
-    # Fixed weights for the standard predictor.
-    MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
-    DATA_FILE = './OxCGRT_latest.csv'
-    predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, DATA_FILE)
-    # Generate the predictions
-    preds_df = predictor.predict(start_date, end_date, path_to_ips_file)
-    pdb.set_trace()
 
 def evaluate_npis(individual):
     '''Evaluate the prescriptor by predicting the outcome using the
