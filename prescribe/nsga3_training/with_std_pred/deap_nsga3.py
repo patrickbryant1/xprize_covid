@@ -13,8 +13,19 @@ import pandas as pd
 import argparse
 import sys
 import os
-from xprize_predictor import XPrizePredictor
 import time
+
+#Xprize predictor
+# Suppress noisy Tensorflow debug logging
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import keras.backend as K
+from keras.callbacks import EarlyStopping
+from keras.constraints import Constraint
+from keras.layers import Dense
+from keras.layers import Input
+from keras.layers import LSTM
+from keras.layers import Lambda
+from keras.models import Model
 import pdb
 
 #Inser predictor path. NOTE! This will have to be absoulate in the sandbox
@@ -37,11 +48,75 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
-def load_model(start_date,lookback_days,ip_costs):
+# Construct model
+class Positive(Constraint):
+
+    def __call__(self, w):
+        return K.abs(w)
+
+# Functions to be used for lambda layers in model
+def _combine_r_and_d(x):
+    r, d = x
+    return r * (1. - d)
+
+def construct_model(nb_context, nb_action, lstm_size=32, nb_lookback_days=21):
+    '''Create the std predictor
+    '''
+    # Create context encoder
+    context_input = Input(shape=(nb_lookback_days, nb_context),
+                          name='context_input')
+    x = LSTM(lstm_size, name='context_lstm')(context_input)
+    context_output = Dense(units=1,
+                           activation='softplus',
+                           name='context_dense')(x)
+
+    # Create action encoder
+    # Every aspect is monotonic and nonnegative except final bias
+    action_input = Input(shape=(nb_lookback_days, nb_action),
+                         name='action_input')
+    x = LSTM(units=lstm_size,
+             kernel_constraint=Positive(),
+             recurrent_constraint=Positive(),
+             bias_constraint=Positive(),
+             return_sequences=False,
+             name='action_lstm')(action_input)
+    action_output = Dense(units=1,
+                          activation='sigmoid',
+                          kernel_constraint=Positive(),
+                          name='action_dense')(x)
+
+    # Create prediction model
+    model_output = Lambda(_combine_r_and_d, name='prediction')(
+        [context_output, action_output])
+    model = Model(inputs=[context_input, action_input],
+                  outputs=[model_output])
+    model.compile(loss='mae', optimizer='adam')
+
+    return model
+
+def load_model():
     '''Load the standard predictor
     '''
+    global predictor
+    # Load model weights
+    nb_context = 1  # Only time series of new cases rate is used as context
+    nb_action = 12 #the NPI columns
+    LSTM_SIZE = 32
+    NB_LOOKBACK_DAYS = 21
+    predictor = construct_model(nb_context=nb_context,
+                                nb_action=nb_action,
+                                lstm_size=LSTM_SIZE,
+                                nb_lookback_days=NB_LOOKBACK_DAYS)
+    # Fixed weights for the standard predictor.
+    MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
+    predictor.load_weights(MODEL_WEIGHTS_FILE)
+    pdb.set_trace()
+
+def load_inp_data(start_date,lookback_days,ip_costs):
+    '''Load the input data for the standard predictor
+    '''
     #Define global to use for all inds
-    global X_prescr_inp, npis_data, ip_maxvals, ip_weights, predictor
+    global X_prescr_inp, npis_data, ip_maxvals, ip_weights
 
     DATA_COLUMNS = ['CountryName',
                     'RegionName',
@@ -79,16 +154,14 @@ def load_model(start_date,lookback_days,ip_costs):
                     }
     #Set ip maxvals
     ip_maxvals = np.array([*IP_MAX_VALUES.values()])
-
-    # Fixed weights for the standard predictor.
-    MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
-    DATA_FILE = '../../../data/adjusted_data.csv' #Preprocessed data
+    #Preprocessed data
+    DATA_FILE = '../../../data/adjusted_data.csv'
     data = pd.read_csv(DATA_FILE,
-                            parse_dates=['Date'],
-                            encoding="ISO-8859-1",
-                            dtype={"RegionName": str,
-                                   "RegionCode": str},
-                            error_bad_lines=False)
+                        parse_dates=['Date'],
+                        encoding="ISO-8859-1",
+                        dtype={"RegionName": str,
+                        "RegionCode": str},
+                        error_bad_lines=False)
     data["RegionName"]= data["RegionName"].replace('0',np.nan)
     data["GeoID"] = np.where(data["RegionName"].isnull(),
                                   data["CountryName"],
@@ -107,6 +180,8 @@ def load_model(start_date,lookback_days,ip_costs):
     #Get ip costs
     ip_weights = []
     X_prescr_inp = []
+    X_pred_inp = []
+    populations = []
     for geo in prescr_inp_data.GeoID.unique():
         geo_data = prescr_inp_data[prescr_inp_data['GeoID']==geo]
         X_geo= np.average(geo_data[DATA_COLUMNS[-12:]],axis=0)
@@ -114,11 +189,13 @@ def load_model(start_date,lookback_days,ip_costs):
         X_prescr_inp.append(X_geo)
         #Get ip weights
         ip_weights.append(ip_costs[ip_costs['GeoID']==geo][DATA_COLUMNS[-12:]].values[0])
+        #Get input for predictor model
+        X_pred_inp
     #Convert to array
     X_prescr_inp = np.array(X_prescr_inp)
     ip_weights = np.array(ip_weights)
-    #Load predictor
-    predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, './OxCGRT_latest.csv')
+
+    return None
 
 
 def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, lookback_days,ip_costs):
@@ -127,7 +204,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
     '''
     #Number of models in the pareto front
     '''
-    H = 100 #factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
+    H = 10 #factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
 
 
     '''
@@ -171,7 +248,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
 
     #Register the evaluation, mating, mutation and selection processes
     #Load models for evaluation
-    load_model(start_date, lookback_days,ip_costs)
+    load_model()
     toolbox.register("evaluate", evaluate_npis)
     #eta = Crowding degree of the crossover.
     #A high eta will produce children resembling to their parents, while a small eta will produce solutions much more different.
@@ -182,6 +259,22 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
 
     return toolbox, creator, MU
 
+
+def _roll_out_predictions(predictor, initial_context_input, initial_action_input, future_action_sequence):
+    nb_roll_out_days = future_action_sequence.shape[0]
+    pred_output = np.zeros(nb_roll_out_days)
+    context_input = np.expand_dims(np.copy(initial_context_input), axis=0)
+    action_input = np.expand_dims(np.copy(initial_action_input), axis=0)
+    for d in range(nb_roll_out_days):
+        action_input[:, :-1] = action_input[:, 1:]
+        # Use the passed actions
+        action_sequence = future_action_sequence[d]
+        action_input[:, -1] = action_sequence
+        pred = predictor.predict([context_input, action_input])
+        pred_output[d] = pred
+        context_input[:, :-1] = context_input[:, 1:]
+        context_input[:, -1] = pred
+    return pred_output
 
 
 def evaluate_npis(individual):
@@ -231,6 +324,8 @@ def evaluate_npis(individual):
         #Generate the predictions
         #time
         #tic = time.clock()
+        #This is running in the wrong way now. New cases will be used by reading in the Oxford df at each step.
+        #The predictor has to be extracted
         preds_df = predictor.predict(current_date, current_date + np.timedelta64(forecast_days-1, 'D'),npis_data_ind)
         #toc = time.clock()
         #print(np.round((toc-tic)/60,2))
@@ -256,7 +351,6 @@ def evaluate_npis(individual):
         obj1 += np.sum(median_case_preds)
         obj2 += np.sum(prescr)
 
-    pdb.set_trace()
     return obj1, obj2
 
 
@@ -330,7 +424,10 @@ start_date = args.start_date[0]
 lookback_days = args.lookback_days[0]
 forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
+#Load the model input data
+load_inp_data(start_date, lookback_days,ip_costs)
 
+#Create the prescriptor setup
 NOBJ = 2
 NUM_WEIGHTS=2
 NUM_LAYERS=2
@@ -343,7 +440,7 @@ P = 12  #Number of divisions considered for each objective axis
 
 #Weight boundaries
 BOUND_LOW, BOUND_UP = 0.0, 1.0
-NGEN = 200 #Number of generations to run
+NGEN = 20 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
 
