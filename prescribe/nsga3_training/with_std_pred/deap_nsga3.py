@@ -34,7 +34,7 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
-def load_model(start_date,end_date):
+def load_model(start_date,lookback_days):
     '''Load the standard predictor
     '''
     NPI_COLUMNS = ['GeoID',
@@ -67,14 +67,15 @@ def load_model(start_date,end_date):
                                   data["CountryName"],
                                   data["CountryName"] + ' / ' + data["RegionName"])
 
-    npis_df = data[NPI_COLUMNS]
-    npis_inp_data = npis_df[(npis_df.Date >= start_date) & (npis_df.Date <= end_date)]
+    inp_data = data[(data.Date >= start_date) & (data.Date <= (start_date + np.timedelta64(lookback_days, 'D')))]
+    npis_inp_data = inp_data[NPI_COLUMNS]
+    case_inp_data =  data['ConfirmedCases']
     pdb.set_trace()
 
     predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, DATA_FILE)
 
 
-def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
+def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, lookback_days):
     #https://deap.readthedocs.io/en/master/examples/nsga3.html
     #Problem definition
     '''
@@ -124,7 +125,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB):
 
     #Register the evaluation, mating, mutation and selection processes
     #Load models for evaluation
-    load_model()
+    load_model(start_date, lookback_days)
     toolbox.register("evaluate", evaluate_npis)
     #eta = Crowding degree of the crossover.
     #A high eta will produce children resembling to their parents, while a small eta will produce solutions much more different.
@@ -142,7 +143,8 @@ def evaluate_npis(individual):
     pretrained predictor.
     '''
     #Get copy
-    X_ind = np.copy(eval_inp_data)
+    
+    X_ind = np.copy(npis_inp_data)
     #Convert to array and reshape
     individual = np.array(individual)
     individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS))
@@ -150,8 +152,8 @@ def evaluate_npis(individual):
     obj1 = 0 #Cumulative preds
     obj2 = 0 #Cumulative issued NPIs
     #Start and end dates
-    start_date='2020-06-01'
-    end_date='2020-06-22'
+    current_date=start_date+ np.timedelta64(lookback_days, 'D')
+
     for n in range(2): #2 21 day periods, which should be sufficient to observe substantial changes
         #Get prescriptions and scale with weights
         prev_ip = X_ind[:,:12]*ip_weights
@@ -252,6 +254,7 @@ args = parser.parse_args()
 ip_costs = pd.read_csv(args.ip_costs[0])
 ip_costs['GeoID'] = ip_costs['CountryName'] + '__' + ip_costs['RegionName'].astype(str)
 start_date = args.start_date[0]
+lookback_days = args.lookback_days[0]
 forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
 
@@ -270,9 +273,8 @@ BOUND_LOW, BOUND_UP = 0.0, 1.0
 NGEN = 200 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
-#Start train date, forecast days before start_date
-start_inp_date = 
-toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB)
+
+toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB,start_date,lookback_days)
 
 pop, logbook = train(42,toolbox, creator,NGEN, CXPB, MUTPB)
 
