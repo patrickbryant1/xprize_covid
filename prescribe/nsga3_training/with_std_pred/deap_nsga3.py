@@ -191,11 +191,12 @@ def load_inp_data(start_date,lookback_days,ip_costs):
     #Normalize cases for prescriptor
     data['smoothed_cases']=data['smoothed_cases']/(data['population']/100000)
 
-    #Format prescr inp data for prescriptor
-    #Get ip costs
+    #Format prescr inp data for prescriptor and pred for predictor
     ip_weights = []
     X_prescr_inp = []
     X_pred_context_inp = []
+    X_pred_total_cases = []
+    X_pred_new_cases = []
     populations = []
     for geo in data.GeoID.unique():
         geo_data = data[data['GeoID']==geo]
@@ -297,7 +298,7 @@ def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_t
         new_new_cases.append(new_cases)
     return new_new_cases
 
-def roll_out_predictions(predictor, context_input, action_input, future_action_sequence):
+def roll_out_predictions(predictor, context_input, action_input, future_action_sequence, prev_confirmed_cases, prev_new_cases, pop_sizes):
     '''The predictions happen in steps of one day, why they have to be rolled out day by day.
     They also have to be converted to daily cases as some kind of ratios are predicted
     '''
@@ -325,7 +326,7 @@ def roll_out_predictions(predictor, context_input, action_input, future_action_s
     # Gather info to convert to total cases
     prev_confirmed_cases = np.array(cdf.ConfirmedCases) #Cumulative cases
     prev_new_cases = np.array(cdf.NewCases) #Daily cases
-    initial_total_cases = prev_confirmed_cases[-1]
+    initial_total_cases = prev_confirmed_cases[-1] #Initial total cases
     pred_new_cases = convert_ratios_to_total_cases(pred_output,WINDOW_SIZE,prev_new_cases, initial_total_cases, pop_size)
 
     return pred_new_cases
