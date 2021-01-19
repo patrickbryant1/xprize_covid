@@ -230,10 +230,10 @@ def evaluate_npis(individual):
             #hard to follow but also confuse the public
         #Generate the predictions
         #time
-        tic = time.clock()
+        #tic = time.clock()
         preds_df = predictor.predict(current_date, current_date + np.timedelta64(forecast_days-1, 'D'),npis_data_ind)
-        toc = time.clock()
-        print(np.round((toc-tic)/60,2))
+        #toc = time.clock()
+        #print(np.round((toc-tic)/60,2))
         #Add GeoID
         preds_df["GeoID"] = np.where(preds_df["RegionName"].isnull(),
                                       preds_df["CountryName"],
@@ -245,8 +245,7 @@ def evaluate_npis(individual):
             geo_pop = npis_data_ind[npis_data_ind['GeoID']==geo].population.values[0]
             median_case_preds.append(np.median(geo_pred_ind.PredictedDailyNewCases.values/(geo_pop/100000)))
 
-        #Update X_ind
-        pdb.set_trace()
+        #Update X_ind with preds
         X_ind[:,12]=median_case_preds
 
         #Add cases and NPI sums
@@ -254,12 +253,10 @@ def evaluate_npis(individual):
         #zind = np.argwhere(X_ind[:,12]==0)
         #X_ind[:,12][zind]=all_preds[zind]
         #diff = all_preds/X_ind[:,12]
-        obj1 += np.sum(all_preds)
+        obj1 += np.sum(median_case_preds)
         obj2 += np.sum(prescr)
 
-        #Update X_ind with case predictions
-        X_ind[:,12]=all_preds
-
+    pdb.set_trace()
     return obj1, obj2
 
 
