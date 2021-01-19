@@ -36,9 +36,12 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
-def load_model(start_date,lookback_days):
+def load_model(start_date,lookback_days,ip_costs):
     '''Load the standard predictor
     '''
+    #Define global to use for all inds
+    global X_prescr_inp, npis_data, ip_maxvals, ip_weights
+
     DATA_COLUMNS = ['GeoID',
                    'Date',
                    'smoothed_cases',
@@ -57,6 +60,22 @@ def load_model(start_date,lookback_days):
                    'H2_Testing policy',
                    'H3_Contact tracing',
                    'H6_Facial Coverings']
+
+    IP_MAX_VALUES = {'C1_School closing': 3,
+                    'C2_Workplace closing': 3,
+                    'C3_Cancel public events': 2,
+                    'C4_Restrictions on gatherings': 4,
+                    'C5_Close public transport': 2,
+                    'C6_Stay at home requirements': 3,
+                    'C7_Restrictions on internal movement': 2,
+                    'C8_International travel controls': 4,
+                    'H1_Public information campaigns': 2,
+                    'H2_Testing policy': 3,
+                    'H3_Contact tracing': 2,
+                    'H6_Facial Coverings': 4
+                    }
+    #Set ip maxvals
+    ip_maxvals = np.array([*IP_MAX_VALUES.values()])
 
     # Fixed weights for the standard predictor.
     MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
@@ -78,17 +97,24 @@ def load_model(start_date,lookback_days):
     inp_data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days, 'D')))]
     prescr_inp_data =  inp_data.drop(columns={'ConfirmedCases','ConfirmedDeaths','population'})
     #Format prescr inp data for prescriptor
+    #Get ip costs
+    ip_weights = []
     X_prescr_inp = []
     for geo in prescr_inp_data.GeoID.unique():
         geo_data = prescr_inp_data[prescr_inp_data['GeoID']==geo]
         X_geo= np.average(geo_data[DATA_COLUMNS[-12:]],axis=0)
         X_geo = np.append(X_geo,np.median(geo_data['smoothed_cases']))
         X_prescr_inp.append(X_geo)
+        #Get ip weights
+        ip_weights.append(ip_costs[ip_costs['GeoID']==geo][DATA_COLUMNS[-12:]].values[0])
+    #Convert to array
+    X_prescr_inp = np.array(X_prescr_inp)
+    ip_weights = np.array(ip_weights)
     #Load predictor
     predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, DATA_FILE)
 
 
-def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, lookback_days):
+def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, lookback_days,ip_costs):
     #https://deap.readthedocs.io/en/master/examples/nsga3.html
     #Problem definition
     '''
@@ -138,7 +164,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
 
     #Register the evaluation, mating, mutation and selection processes
     #Load models for evaluation
-    load_model(start_date, lookback_days)
+    load_model(start_date, lookback_days,ip_costs)
     toolbox.register("evaluate", evaluate_npis)
     #eta = Crowding degree of the crossover.
     #A high eta will produce children resembling to their parents, while a small eta will produce solutions much more different.
@@ -156,8 +182,8 @@ def evaluate_npis(individual):
     pretrained predictor.
     '''
     #Get copy
-
-    X_ind = np.copy(npis_inp_data)
+    X_ind = np.copy(X_prescr_inp)
+    npis_data_ind = npis_data.copy()
     #Convert to array and reshape
     individual = np.array(individual)
     individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS))
@@ -165,7 +191,7 @@ def evaluate_npis(individual):
     obj1 = 0 #Cumulative preds
     obj2 = 0 #Cumulative issued NPIs
     #Start and end dates
-    current_date=start_date+ np.timedelta64(lookback_days, 'D')
+    current_date=pd.to_datetime(start_date, format='%Y-%m-%d')+ np.timedelta64(lookback_days, 'D')
 
     for n in range(2): #2 21 day periods, which should be sufficient to observe substantial changes
         #Get prescriptions and scale with weights
@@ -173,7 +199,6 @@ def evaluate_npis(individual):
         #Get cases in last period
         prev_cases = X_ind[:,12]
         #Multiply prev ip with the 2 prescr weight layers of the individual
-
         prescr = prev_ip*individual[:,0,0]*individual[:,0,1]
         #Add the case focus
         prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
@@ -186,7 +211,7 @@ def evaluate_npis(individual):
 
         #Generate the predictions
         pdb.set_trace()
-        preds_df = predictor.predict(start_date, end_date, path_to_ips_file)
+        preds_df = predictor.predict(current_date, current_date + np.timedelta64(forecast_days, 'D'),npis_data_ind)
 
         #Add cases and NPI sums
         #Check where 0
@@ -196,7 +221,7 @@ def evaluate_npis(individual):
         obj1 += np.sum(all_preds)
         obj2 += np.sum(prescr)
 
-        #Update X_ind
+        #Update X_ind with case predictions
         X_ind[:,12]=all_preds
 
     return obj1, obj2
@@ -287,7 +312,7 @@ NGEN = 200 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
 
-toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB,start_date,lookback_days)
+toolbox, creator, MU = setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB,start_date,lookback_days,ip_costs)
 
 pop, logbook = train(42,toolbox, creator,NGEN, CXPB, MUTPB)
 

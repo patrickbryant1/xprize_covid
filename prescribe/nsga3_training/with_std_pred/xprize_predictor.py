@@ -92,11 +92,11 @@ class XPrizePredictor(object):
         self.country_samples = self._create_country_samples(self.df, geos)
 
     def predict(self,
-                start_date_str: str,
-                end_date_str: str,
-                npis_df: pd.DataFrame):
-        start_date = pd.to_datetime(start_date_str, format='%Y-%m-%d')
-        end_date = pd.to_datetime(end_date_str, format='%Y-%m-%d')
+                start_date,
+                end_date,
+                npis_df):
+        #start_date = pd.to_datetime(start_date_str, format='%Y-%m-%d')
+        #end_date = pd.to_datetime(end_date_str, format='%Y-%m-%d')
         nb_days = (end_date - start_date).days + 1
 
         # Load the npis into a DataFrame, handling regions
