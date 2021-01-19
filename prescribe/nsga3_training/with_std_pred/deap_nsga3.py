@@ -116,7 +116,7 @@ def load_inp_data(start_date,lookback_days,ip_costs):
     '''Load the input data for the standard predictor
     '''
     #Define global to use for all inds
-    global X_prescr_inp, npis_data, ip_maxvals, ip_weights
+    global X_prescr_inp, npis_data, ip_maxvals, ip_weights, X_pred_context_inp
 
     DATA_COLUMNS = ['CountryName',
                     'RegionName',
@@ -172,14 +172,21 @@ def load_inp_data(start_date,lookback_days,ip_costs):
     data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days-1, 'D')))]
 
     #They predict percent change in new cases
+    #This prediction ration is also the input to the next step
     # Compute percent change in new cases and deaths each day
-    df['CaseRatio'] = df.groupby('GeoID').SmoothNewCases.pct_change(
-    ).fillna(0).replace(np.inf, 0) + 1
-
     # Add column for proportion of population infected
-    df['ProportionInfected'] = df['ConfirmedCases'] / df['Population']
+    data['ProportionInfected'] = data['ConfirmedCases'] / data['population']
+    # Compute number of new cases and deaths each day
+    data['NewCases'] = data.groupby('GeoID').ConfirmedCases.diff().fillna(0)
+    # Replace negative values (which do not make sense for these columns) with 0
+    data['NewCases'] = data['NewCases'].clip(lower=0)
+    # Compute smoothed versions of new cases and deaths each day using a 7 day window
+    data['SmoothNewCases'] = data.groupby('GeoID')['NewCases'].rolling(7, center=False).mean().fillna(0).reset_index(0, drop=True)
+    # Compute percent change in new cases and deaths each day
+    data['CaseRatio'] = data.groupby('GeoID').SmoothNewCases.pct_change(
+    ).fillna(0).replace(np.inf, 0) + 1
     # Create column of value to predict
-    df['PredictionRatio'] = df['CaseRatio'] / (1 - df['ProportionInfected'])
+    data['PredictionRatio'] = data['CaseRatio'] / (1 - data['ProportionInfected'])
     #Normalize cases for prescriptor
     data['smoothed_cases']=data['smoothed_cases']/(data['population']/100000)
 
@@ -187,7 +194,7 @@ def load_inp_data(start_date,lookback_days,ip_costs):
     #Get ip costs
     ip_weights = []
     X_prescr_inp = []
-    X_pred_inp = []
+    X_pred_context_inp = []
     populations = []
     for geo in data.GeoID.unique():
         geo_data = data[data['GeoID']==geo]
@@ -196,12 +203,12 @@ def load_inp_data(start_date,lookback_days,ip_costs):
         X_prescr_inp.append(X_geo)
         #Get ip weights
         ip_weights.append(ip_costs[ip_costs['GeoID']==geo][DATA_COLUMNS[-12:]].values[0])
-        #Get input for predictor model
-
-        X_pred_inp
+        #Get input for predictor model. The context here is the PredictionRatio
+        X_pred_context_inp.append(geo_data['PredictionRatio'].values)
     #Convert to array
     X_prescr_inp = np.array(X_prescr_inp)
     ip_weights = np.array(ip_weights)
+    X_pred_context_inp = np.array(X_pred_context_inp)
 
     return None
 
