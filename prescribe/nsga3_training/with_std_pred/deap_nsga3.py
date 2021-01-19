@@ -307,7 +307,9 @@ def train(seed,toolbox, creator,NGEN, CXPB, MUTPB):
 args = parser.parse_args()
 
 ip_costs = pd.read_csv(args.ip_costs[0])
-ip_costs['GeoID'] = ip_costs['CountryName'] + '__' + ip_costs['RegionName'].astype(str)
+ip_costs['GeoID'] = np.where(ip_costs["RegionName"].isnull(),
+                              ip_costs["CountryName"],
+                              ip_costs["CountryName"] + ' / ' + ip_costs["RegionName"])
 start_date = args.start_date[0]
 lookback_days = args.lookback_days[0]
 forecast_days = args.forecast_days[0]
