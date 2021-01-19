@@ -28,6 +28,8 @@ parser.add_argument('--ip_costs', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to data file with ip costs per region.')
 parser.add_argument('--start_date', nargs=1, type= str,
                   default=sys.stdin, help = 'Date to start from.')
+parser.add_argument('--lookback_days', nargs=1, type= int,
+                  default=sys.stdin, help = 'Days to lookback for forecast.')
 parser.add_argument('--forecast_days', nargs=1, type= int,
                   default=sys.stdin, help = 'Days to forecast.')
 parser.add_argument('--outdir', nargs=1, type= str,
@@ -37,8 +39,12 @@ parser.add_argument('--outdir', nargs=1, type= str,
 def load_model(start_date,lookback_days):
     '''Load the standard predictor
     '''
-    NPI_COLUMNS = ['GeoID',
+    DATA_COLUMNS = ['GeoID',
                    'Date',
+                   'smoothed_cases',
+                   'ConfirmedCases',
+                   'ConfirmedDeaths',
+                   'population',
                    'C1_School closing',
                    'C2_Workplace closing',
                    'C3_Cancel public events',
@@ -54,24 +60,31 @@ def load_model(start_date,lookback_days):
 
     # Fixed weights for the standard predictor.
     MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
-    DATA_FILE = './OxCGRT_latest.csv'
+    DATA_FILE = '../../../data/adjusted_data.csv' #Preprocessed data
     data = pd.read_csv(DATA_FILE,
                             parse_dates=['Date'],
                             encoding="ISO-8859-1",
                             dtype={"RegionName": str,
                                    "RegionCode": str},
                             error_bad_lines=False)
-    # GeoID is CountryName / RegionName
+    # GeoID is CountryName__RegionName (This they changed to "/", but I changed it back)
     # np.where usage: if A then B else C
-    data["GeoID"] = np.where(data["RegionName"].isnull(),
-                                  data["CountryName"],
-                                  data["CountryName"] + ' / ' + data["RegionName"])
-
-    inp_data = data[(data.Date >= start_date) & (data.Date <= (start_date + np.timedelta64(lookback_days, 'D')))]
-    npis_inp_data = inp_data[NPI_COLUMNS]
-    case_inp_data =  data['ConfirmedCases']
-    pdb.set_trace()
-
+    data = data[DATA_COLUMNS]
+    #Normalize cases for prescriptor
+    data['smoothed_cases']=data['smoothed_cases']/(data['population']/100000)
+    #Get only npi data
+    npis_data = data.drop(columns={'smoothed_cases','ConfirmedCases','ConfirmedDeaths','population'})
+    #Get inp data for prescriptor
+    inp_data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days, 'D')))]
+    prescr_inp_data =  inp_data.drop(columns={'ConfirmedCases','ConfirmedDeaths','population'})
+    #Format prescr inp data for prescriptor
+    X_prescr_inp = []
+    for geo in prescr_inp_data.GeoID.unique():
+        geo_data = prescr_inp_data[prescr_inp_data['GeoID']==geo]
+        X_geo= np.average(geo_data[DATA_COLUMNS[-12:]],axis=0)
+        X_geo = np.append(X_geo,np.median(geo_data['smoothed_cases']))
+        X_prescr_inp.append(X_geo)
+    #Load predictor
     predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, DATA_FILE)
 
 
@@ -143,7 +156,7 @@ def evaluate_npis(individual):
     pretrained predictor.
     '''
     #Get copy
-    
+
     X_ind = np.copy(npis_inp_data)
     #Convert to array and reshape
     individual = np.array(individual)

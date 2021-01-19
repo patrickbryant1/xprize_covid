@@ -232,7 +232,7 @@ class XPrizePredictor(object):
         # np.where usage: if A then B else C
         latest_df["GeoID"] = np.where(latest_df["RegionName"].isnull(),
                                       latest_df["CountryName"],
-                                      latest_df["CountryName"] + ' / ' + latest_df["RegionName"])
+                                      latest_df["CountryName"] + '__' + latest_df["RegionName"])
         return latest_df
 
     @staticmethod
