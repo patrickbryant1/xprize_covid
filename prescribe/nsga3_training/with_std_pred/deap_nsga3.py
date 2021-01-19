@@ -40,26 +40,28 @@ def load_model(start_date,lookback_days,ip_costs):
     '''Load the standard predictor
     '''
     #Define global to use for all inds
-    global X_prescr_inp, npis_data, ip_maxvals, ip_weights
+    global X_prescr_inp, npis_data, ip_maxvals, ip_weights, predictor
 
-    DATA_COLUMNS = ['GeoID',
-                   'Date',
-                   'smoothed_cases',
-                   'ConfirmedCases',
-                   'ConfirmedDeaths',
-                   'population',
-                   'C1_School closing',
-                   'C2_Workplace closing',
-                   'C3_Cancel public events',
-                   'C4_Restrictions on gatherings',
-                   'C5_Close public transport',
-                   'C6_Stay at home requirements',
-                   'C7_Restrictions on internal movement',
-                   'C8_International travel controls',
-                   'H1_Public information campaigns',
-                   'H2_Testing policy',
-                   'H3_Contact tracing',
-                   'H6_Facial Coverings']
+    DATA_COLUMNS = ['CountryName',
+                    'RegionName',
+                    'GeoID',
+                    'Date',
+                    'smoothed_cases',
+                    'ConfirmedCases',
+                    'ConfirmedDeaths',
+                    'population',
+                    'C1_School closing',
+                    'C2_Workplace closing',
+                    'C3_Cancel public events',
+                    'C4_Restrictions on gatherings',
+                    'C5_Close public transport',
+                    'C6_Stay at home requirements',
+                    'C7_Restrictions on internal movement',
+                    'C8_International travel controls',
+                    'H1_Public information campaigns',
+                    'H2_Testing policy',
+                    'H3_Contact tracing',
+                    'H6_Facial Coverings']
 
     IP_MAX_VALUES = {'C1_School closing': 3,
                     'C2_Workplace closing': 3,
@@ -86,6 +88,10 @@ def load_model(start_date,lookback_days,ip_costs):
                             dtype={"RegionName": str,
                                    "RegionCode": str},
                             error_bad_lines=False)
+    data["RegionName"]= data["RegionName"].replace('0',np.nan)
+    data["GeoID"] = np.where(data["RegionName"].isnull(),
+                                  data["CountryName"],
+                                  data["CountryName"] + ' / ' + data["RegionName"])
     # GeoID is CountryName__RegionName (This they changed to "/", but I changed it back)
     # np.where usage: if A then B else C
     data = data[DATA_COLUMNS]
@@ -111,7 +117,7 @@ def load_model(start_date,lookback_days,ip_costs):
     X_prescr_inp = np.array(X_prescr_inp)
     ip_weights = np.array(ip_weights)
     #Load predictor
-    predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, DATA_FILE)
+    predictor = XPrizePredictor(MODEL_WEIGHTS_FILE, './OxCGRT_latest.csv')
 
 
 def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, lookback_days,ip_costs):
@@ -213,18 +219,17 @@ def evaluate_npis(individual):
         new_dates = np.arange(current_date,current_date + np.timedelta64(forecast_days, 'D'), dtype='datetime64[D]')
         geo_i = 0
         for geo in npis_data_ind.GeoID.unique():
-            geo_ind_data = npis_data_ind[npis_data_ind['GeoID']==geo]
+            geo_inds = npis_data_ind[npis_data_ind['GeoID']==geo].index
             #Assign new dates
-            geo_ind_data.at[:,['Date']]=new_dates
+            npis_data_ind.at[geo_inds,['Date']]=new_dates
             #Assign new prescriptions
-            geo_ind_data.at[:,geo_ind_data.columns[-12:]]=prescr[geo_i,:]
+            npis_data_ind.at[geo_inds,npis_data_ind.columns[-12:]]=prescr[geo_i,:]
             #I choose to keep these stable over a three week period as changing them
             #on e.g. a daily or weekly basis in various degrees will not only make them
             #hard to follow but also confuse the public
         #Generate the predictions
-        pdb.set_trace()
         preds_df = predictor.predict(current_date, current_date + np.timedelta64(forecast_days-1, 'D'),npis_data_ind)
-
+        pdb.set_trace()
         #Add cases and NPI sums
         #Check where 0
         #zind = np.argwhere(X_ind[:,12]==0)
