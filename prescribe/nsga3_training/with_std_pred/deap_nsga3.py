@@ -315,6 +315,7 @@ def roll_out_predictions(predictor, initial_context_input, initial_action_input,
         # Use the passed actions
         action_sequence = future_action_sequence[d]
         action_input[:, -1] = action_sequence
+        pdb.set_trace()
         pred = predictor.predict([context_input, action_input])
         pred_output[d] = pred
         context_input[:, :-1] = context_input[:, 1:]
@@ -328,7 +329,7 @@ def roll_out_predictions(predictor, initial_context_input, initial_action_input,
     prev_confirmed_cases = np.array(cdf.ConfirmedCases)
     prev_new_cases = np.array(cdf.NewCases)
     initial_total_cases = prev_confirmed_cases[-1]
-    pred_new_cases = self._convert_ratios_to_total_cases(pred_output,WINDOW_SIZE,prev_new_cases, initial_total_cases, pop_size)
+    pred_new_cases = convert_ratios_to_total_cases(pred_output,WINDOW_SIZE,prev_new_cases, initial_total_cases, pop_size)
 
     return pred_new_cases
 
@@ -340,7 +341,7 @@ def evaluate_npis(individual):
     '''
     #Get copy
     X_ind = np.copy(X_prescr_inp)
-    npis_data_ind = npis_data.copy()
+    X_context_ind = np.copy(X_pred_context_inp)
     #Convert to array and reshape
     individual = np.array(individual)
     individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS))
@@ -366,36 +367,19 @@ def evaluate_npis(individual):
         prescr = np.minimum(prescr,ip_maxvals)
         X_ind[:,:12]=prescr
         #Distribute the prescriptions in the forecast period
-        #Define the new dates
-        new_dates = np.arange(current_date,current_date + np.timedelta64(forecast_days, 'D'), dtype='datetime64[D]')
-        geo_i = 0
-        for geo in npis_data_ind.GeoID.unique():
-            geo_inds = npis_data_ind[npis_data_ind['GeoID']==geo].index
-            #Assign new dates
-            npis_data_ind.at[geo_inds,['Date']]=new_dates
-            #Assign new prescriptions
-            npis_data_ind.at[geo_inds,npis_data_ind.columns[-12:]]=prescr[geo_i,:]
-            #I choose to keep these stable over a three week period as changing them
-            #on e.g. a daily or weekly basis in various degrees will not only make them
-            #hard to follow but also confuse the public
+        #I choose to keep these stable over a three week period as changing them
+        #on e.g. a daily or weekly basis in various degrees will not only make them
+        #hard to follow but also confuse the public
         #Generate the predictions
         #time
         #tic = time.clock()
-        #This is running in the wrong way now. New cases will be used by reading in the Oxford df at each step.
-        #The predictor has to be extracted
-        preds_df = predictor.predict(current_date, current_date + np.timedelta64(forecast_days-1, 'D'),npis_data_ind)
+        future_action_sequence = np.tile(prescr,(forecast_days,1,1))
+        previous_action_sequence = np.tile(prev_ip,(forecast_days,1,1))
+        preds = roll_out_predictions(predictor, X_context_ind, previous_action_sequence, future_action_sequence)
         #toc = time.clock()
         #print(np.round((toc-tic)/60,2))
-        #Add GeoID
-        preds_df["GeoID"] = np.where(preds_df["RegionName"].isnull(),
-                                      preds_df["CountryName"],
-                                      preds_df["CountryName"] + ' / ' + preds_df["RegionName"])
-        #Add the predictions to the next step
-        median_case_preds = []
-        for geo in npis_data_ind.GeoID.unique():
-            geo_pred_ind = preds_df[preds_df['GeoID']==geo]
-            geo_pop = npis_data_ind[npis_data_ind['GeoID']==geo].population.values[0]
-            median_case_preds.append(np.median(geo_pred_ind.PredictedDailyNewCases.values/(geo_pop/100000)))
+        pdb.set_trace()
+        median_case_preds = np.median(preds)
 
         #Update X_ind with preds
         X_ind[:,12]=median_case_preds
@@ -483,7 +467,7 @@ forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
 #Load the model input data
 load_inp_data(start_date, lookback_days,ip_costs)
-
+global forecast_days #Make accessible
 #Create the prescriptor setup
 NOBJ = 2
 NUM_WEIGHTS=2
