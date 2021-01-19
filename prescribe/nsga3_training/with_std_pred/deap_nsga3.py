@@ -14,6 +14,7 @@ import argparse
 import sys
 import os
 from xprize_predictor import XPrizePredictor
+import time
 import pdb
 
 #Inser predictor path. NOTE! This will have to be absoulate in the sandbox
@@ -100,7 +101,7 @@ def load_model(start_date,lookback_days,ip_costs):
     #Get inp data for prescriptor
     inp_data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days-1, 'D')))]
     #Get only npi data
-    npis_data = inp_data.drop(columns={'smoothed_cases','ConfirmedCases','ConfirmedDeaths','population'})
+    npis_data = inp_data.drop(columns={'smoothed_cases','ConfirmedCases','ConfirmedDeaths'})
     prescr_inp_data =  inp_data.drop(columns={'ConfirmedCases','ConfirmedDeaths','population'})
     #Format prescr inp data for prescriptor
     #Get ip costs
@@ -228,8 +229,26 @@ def evaluate_npis(individual):
             #on e.g. a daily or weekly basis in various degrees will not only make them
             #hard to follow but also confuse the public
         #Generate the predictions
+        #time
+        tic = time.clock()
         preds_df = predictor.predict(current_date, current_date + np.timedelta64(forecast_days-1, 'D'),npis_data_ind)
+        toc = time.clock()
+        print(np.round((toc-tic)/60,2))
+        #Add GeoID
+        preds_df["GeoID"] = np.where(preds_df["RegionName"].isnull(),
+                                      preds_df["CountryName"],
+                                      preds_df["CountryName"] + ' / ' + preds_df["RegionName"])
+        #Add the predictions to the next step
+        median_case_preds = []
+        for geo in npis_data_ind.GeoID.unique():
+            geo_pred_ind = preds_df[preds_df['GeoID']==geo]
+            geo_pop = npis_data_ind[npis_data_ind['GeoID']==geo].population.values[0]
+            median_case_preds.append(np.median(geo_pred_ind.PredictedDailyNewCases.values/(geo_pop/100000)))
+
+        #Update X_ind
         pdb.set_trace()
+        X_ind[:,12]=median_case_preds
+
         #Add cases and NPI sums
         #Check where 0
         #zind = np.argwhere(X_ind[:,12]==0)
