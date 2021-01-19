@@ -166,30 +166,38 @@ def load_inp_data(start_date,lookback_days,ip_costs):
     data["GeoID"] = np.where(data["RegionName"].isnull(),
                                   data["CountryName"],
                                   data["CountryName"] + ' / ' + data["RegionName"])
-    # GeoID is CountryName__RegionName (This they changed to "/", but I changed it back)
-    # np.where usage: if A then B else C
+
+    #Get inp data for prescriptor
     data = data[DATA_COLUMNS]
+    data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days-1, 'D')))]
+
+    #They predict percent change in new cases
+    # Compute percent change in new cases and deaths each day
+    df['CaseRatio'] = df.groupby('GeoID').SmoothNewCases.pct_change(
+    ).fillna(0).replace(np.inf, 0) + 1
+
+    # Add column for proportion of population infected
+    df['ProportionInfected'] = df['ConfirmedCases'] / df['Population']
+    # Create column of value to predict
+    df['PredictionRatio'] = df['CaseRatio'] / (1 - df['ProportionInfected'])
     #Normalize cases for prescriptor
     data['smoothed_cases']=data['smoothed_cases']/(data['population']/100000)
-    #Get inp data for prescriptor
-    inp_data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days-1, 'D')))]
-    #Get only npi data
-    npis_data = inp_data.drop(columns={'smoothed_cases','ConfirmedCases','ConfirmedDeaths'})
-    prescr_inp_data =  inp_data.drop(columns={'ConfirmedCases','ConfirmedDeaths','population'})
+
     #Format prescr inp data for prescriptor
     #Get ip costs
     ip_weights = []
     X_prescr_inp = []
     X_pred_inp = []
     populations = []
-    for geo in prescr_inp_data.GeoID.unique():
-        geo_data = prescr_inp_data[prescr_inp_data['GeoID']==geo]
+    for geo in data.GeoID.unique():
+        geo_data = data[data['GeoID']==geo]
         X_geo= np.average(geo_data[DATA_COLUMNS[-12:]],axis=0)
         X_geo = np.append(X_geo,np.median(geo_data['smoothed_cases']))
         X_prescr_inp.append(X_geo)
         #Get ip weights
         ip_weights.append(ip_costs[ip_costs['GeoID']==geo][DATA_COLUMNS[-12:]].values[0])
         #Get input for predictor model
+
         X_pred_inp
     #Convert to array
     X_prescr_inp = np.array(X_prescr_inp)
@@ -260,7 +268,15 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
     return toolbox, creator, MU
 
 
-def _roll_out_predictions(predictor, initial_context_input, initial_action_input, future_action_sequence):
+def roll_out_predictions(predictor, initial_context_input, initial_action_input, future_action_sequence):
+    '''The predictions happen in steps of one day, why they have to be rolled out day by day.
+    They also have to be converted to daily cases as some kind of ratios are predicted
+    '''
+    context_column = 'PredictionRatio'
+    action_columns = NPI_COLUMNS
+    outcome_column = 'PredictionRatio'
+
+    WINDOW_SIZE = 7
     nb_roll_out_days = future_action_sequence.shape[0]
     pred_output = np.zeros(nb_roll_out_days)
     context_input = np.expand_dims(np.copy(initial_context_input), axis=0)
@@ -274,8 +290,48 @@ def _roll_out_predictions(predictor, initial_context_input, initial_action_input
         pred_output[d] = pred
         context_input[:, :-1] = context_input[:, 1:]
         context_input[:, -1] = pred
-    return pred_output
 
+    #Convert to daily new cases
+    # Compute number of new cases and deaths each day
+    df['NewCases'] = df.groupby('GeoID').ConfirmedCases.diff().fillna(0)
+    initial_total_cases = prev_confirmed_cases[-1]
+    # Gather info to convert to total cases
+    prev_confirmed_cases = np.array(cdf.ConfirmedCases)
+    prev_new_cases = np.array(cdf.NewCases)
+    initial_total_cases = prev_confirmed_cases[-1]
+    pred_new_cases = self._convert_ratios_to_total_cases(pred_output,WINDOW_SIZE,prev_new_cases, initial_total_cases, pop_size)
+
+    return pred_new_cases
+
+def convert_ratio_to_new_cases(ratio,
+                                window_size,
+                                prev_new_cases_list,
+                                prev_pct_infected):
+    return (ratio * (1 - prev_pct_infected) - 1) * \
+           (window_size * np.mean(prev_new_cases_list[-window_size:])) \
+           + prev_new_cases_list[-window_size]
+
+def convert_ratios_to_total_cases(ratios,
+                                   window_size,
+                                   prev_new_cases,
+                                   initial_total_cases,
+                                   pop_size):
+    new_new_cases = []
+    prev_new_cases_list = list(prev_new_cases)
+    curr_total_cases = initial_total_cases
+    for ratio in ratios:
+        new_cases = self._convert_ratio_to_new_cases(ratio,
+                                                     window_size,
+                                                     prev_new_cases_list,
+                                                     curr_total_cases / pop_size)
+        # new_cases can't be negative!
+        new_cases = max(0, new_cases)
+        # Which means total cases can't go down
+        curr_total_cases += new_cases
+        # Update prev_new_cases_list for next iteration of the loop
+        prev_new_cases_list.append(new_cases)
+        new_new_cases.append(new_cases)
+    return new_new_cases
 
 def evaluate_npis(individual):
     '''Evaluate the prescriptor by predicting the outcome using the
