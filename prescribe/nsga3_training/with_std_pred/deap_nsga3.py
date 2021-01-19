@@ -99,7 +99,7 @@ def load_model():
     '''
     global predictor
     # Load model weights
-    nb_context = 1  # Only time series of new cases rate is used as context
+    nb_context = 1  # Only time series of new cases rate is used as context (PredictionRatio)
     nb_action = 12 #the NPI columns
     LSTM_SIZE = 32
     NB_LOOKBACK_DAYS = 21
@@ -110,7 +110,8 @@ def load_model():
     # Fixed weights for the standard predictor.
     MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
     predictor.load_weights(MODEL_WEIGHTS_FILE)
-    pdb.set_trace()
+
+    return None
 
 def load_inp_data(start_date,lookback_days,ip_costs):
     '''Load the input data for the standard predictor
@@ -275,6 +276,27 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
     return toolbox, creator, MU
 
 
+def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_total_cases,pop_size):
+    '''Convert the ratios to get the case number output
+    '''
+    new_new_cases = []
+    prev_new_cases_list = list(prev_new_cases)
+    curr_total_cases = initial_total_cases
+    for ratio in ratios:
+        prev_pct_infected = curr_total_cases / pop_size
+        new_cases = (ratio * (1 - prev_pct_infected) - 1) * \
+                    (window_size * np.mean(prev_new_cases_list[-window_size:])) \
+                    + prev_new_cases_list[-window_size]
+        # new_cases can't be negative!
+        new_cases = max(0, new_cases)
+        # Which means total cases can't go down
+        curr_total_cases += new_cases
+
+        # Update prev_new_cases_list for next iteration of the loop
+        prev_new_cases_list.append(new_cases)
+        new_new_cases.append(new_cases)
+    return new_new_cases
+
 def roll_out_predictions(predictor, initial_context_input, initial_action_input, future_action_sequence):
     '''The predictions happen in steps of one day, why they have to be rolled out day by day.
     They also have to be converted to daily cases as some kind of ratios are predicted
@@ -310,35 +332,7 @@ def roll_out_predictions(predictor, initial_context_input, initial_action_input,
 
     return pred_new_cases
 
-def convert_ratio_to_new_cases(ratio,
-                                window_size,
-                                prev_new_cases_list,
-                                prev_pct_infected):
-    return (ratio * (1 - prev_pct_infected) - 1) * \
-           (window_size * np.mean(prev_new_cases_list[-window_size:])) \
-           + prev_new_cases_list[-window_size]
 
-def convert_ratios_to_total_cases(ratios,
-                                   window_size,
-                                   prev_new_cases,
-                                   initial_total_cases,
-                                   pop_size):
-    new_new_cases = []
-    prev_new_cases_list = list(prev_new_cases)
-    curr_total_cases = initial_total_cases
-    for ratio in ratios:
-        new_cases = self._convert_ratio_to_new_cases(ratio,
-                                                     window_size,
-                                                     prev_new_cases_list,
-                                                     curr_total_cases / pop_size)
-        # new_cases can't be negative!
-        new_cases = max(0, new_cases)
-        # Which means total cases can't go down
-        curr_total_cases += new_cases
-        # Update prev_new_cases_list for next iteration of the loop
-        prev_new_cases_list.append(new_cases)
-        new_new_cases.append(new_cases)
-    return new_new_cases
 
 def evaluate_npis(individual):
     '''Evaluate the prescriptor by predicting the outcome using the
