@@ -91,10 +91,10 @@ def load_model(start_date,lookback_days,ip_costs):
     data = data[DATA_COLUMNS]
     #Normalize cases for prescriptor
     data['smoothed_cases']=data['smoothed_cases']/(data['population']/100000)
-    #Get only npi data
-    npis_data = data.drop(columns={'smoothed_cases','ConfirmedCases','ConfirmedDeaths','population'})
     #Get inp data for prescriptor
-    inp_data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days, 'D')))]
+    inp_data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days-1, 'D')))]
+    #Get only npi data
+    npis_data = inp_data.drop(columns={'smoothed_cases','ConfirmedCases','ConfirmedDeaths','population'})
     prescr_inp_data =  inp_data.drop(columns={'ConfirmedCases','ConfirmedDeaths','population'})
     #Format prescr inp data for prescriptor
     #Get ip costs
@@ -208,10 +208,22 @@ def evaluate_npis(individual):
         #Make sure the prescr don't exceeed the npi maxvals
         prescr = np.minimum(prescr,ip_maxvals)
         X_ind[:,:12]=prescr
-
+        #Distribute the prescriptions in the forecast period
+        #Define the new dates
+        new_dates = np.arange(current_date,current_date + np.timedelta64(forecast_days, 'D'), dtype='datetime64[D]')
+        geo_i = 0
+        for geo in npis_data_ind.GeoID.unique():
+            geo_ind_data = npis_data_ind[npis_data_ind['GeoID']==geo]
+            #Assign new dates
+            geo_ind_data.at[:,['Date']]=new_dates
+            #Assign new prescriptions
+            geo_ind_data.at[:,geo_ind_data.columns[-12:]]=prescr[geo_i,:]
+            #I choose to keep these stable over a three week period as changing them
+            #on e.g. a daily or weekly basis in various degrees will not only make them
+            #hard to follow but also confuse the public
         #Generate the predictions
         pdb.set_trace()
-        preds_df = predictor.predict(current_date, current_date + np.timedelta64(forecast_days, 'D'),npis_data_ind)
+        preds_df = predictor.predict(current_date, current_date + np.timedelta64(forecast_days-1, 'D'),npis_data_ind)
 
         #Add cases and NPI sums
         #Check where 0
