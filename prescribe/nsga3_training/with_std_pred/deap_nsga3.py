@@ -297,37 +297,34 @@ def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_t
         new_new_cases.append(new_cases)
     return new_new_cases
 
-def roll_out_predictions(predictor, initial_context_input, initial_action_input, future_action_sequence):
+def roll_out_predictions(predictor, context_input, action_input, future_action_sequence):
     '''The predictions happen in steps of one day, why they have to be rolled out day by day.
     They also have to be converted to daily cases as some kind of ratios are predicted
     '''
     context_column = 'PredictionRatio'
-    action_columns = NPI_COLUMNS
     outcome_column = 'PredictionRatio'
-
+    #Expand inp dims for NN
+    context_input = np.expand_dims(context_input,axis=2)
     WINDOW_SIZE = 7
-    nb_roll_out_days = future_action_sequence.shape[0]
-    pred_output = np.zeros(nb_roll_out_days)
-    context_input = np.expand_dims(np.copy(initial_context_input), axis=0)
-    action_input = np.expand_dims(np.copy(initial_action_input), axis=0)
+    nb_roll_out_days = future_action_sequence.shape[1]
+    pred_output = np.zeros((future_action_sequence.shape[0],nb_roll_out_days))
     for d in range(nb_roll_out_days):
-        action_input[:, :-1] = action_input[:, 1:]
-        # Use the passed actions
-        action_sequence = future_action_sequence[d]
-        action_input[:, -1] = action_sequence
-        pdb.set_trace()
-        pred = predictor.predict([context_input, action_input])
-        pred_output[d] = pred
-        context_input[:, :-1] = context_input[:, 1:]
-        context_input[:, -1] = pred
 
+        #context input: (None, 21, 1)
+        #action input  (None, 21, 12)
+        pred = predictor.predict([context_input, action_input])
+        pred_output[:,d] = pred[:,0]
+        #Add the new action input according to the predictions
+        action_input[:,-d+1,:] = future_action_sequence[:,d,:]
+        context_input[:,-d+1,:] = pred
+
+    pdb.set_trace()
     #Convert to daily new cases
     # Compute number of new cases and deaths each day
-    df['NewCases'] = df.groupby('GeoID').ConfirmedCases.diff().fillna(0)
     initial_total_cases = prev_confirmed_cases[-1]
     # Gather info to convert to total cases
-    prev_confirmed_cases = np.array(cdf.ConfirmedCases)
-    prev_new_cases = np.array(cdf.NewCases)
+    prev_confirmed_cases = np.array(cdf.ConfirmedCases) #Cumulative cases
+    prev_new_cases = np.array(cdf.NewCases) #Daily cases
     initial_total_cases = prev_confirmed_cases[-1]
     pred_new_cases = convert_ratios_to_total_cases(pred_output,WINDOW_SIZE,prev_new_cases, initial_total_cases, pop_size)
 
@@ -373,9 +370,14 @@ def evaluate_npis(individual):
         #Generate the predictions
         #time
         #tic = time.clock()
-        future_action_sequence = np.tile(prescr,(forecast_days,1,1))
-        previous_action_sequence = np.tile(prev_ip,(forecast_days,1,1))
-        preds = roll_out_predictions(predictor, X_context_ind, previous_action_sequence, future_action_sequence)
+
+        #Repeat the array for each region
+        future_action_sequence = []
+        previous_action_sequence = []
+        for ri in range(prescr.shape[0]):
+            future_action_sequence.append(np.tile(prescr[ri,:],[21,1]))
+            previous_action_sequence.append(np.tile(prev_ip[ri,:],[21,1]))
+        preds = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence))
         #toc = time.clock()
         #print(np.round((toc-tic)/60,2))
         pdb.set_trace()
@@ -467,7 +469,7 @@ forecast_days = args.forecast_days[0]
 outdir = args.outdir[0]
 #Load the model input data
 load_inp_data(start_date, lookback_days,ip_costs)
-global forecast_days #Make accessible
+
 #Create the prescriptor setup
 NOBJ = 2
 NUM_WEIGHTS=2
