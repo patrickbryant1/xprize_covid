@@ -292,19 +292,18 @@ def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_t
     curr_total_cases = initial_total_cases
     for days_ahead in range(ratios.shape[1]): #each ratio will contain predictions for a region
         prev_pct_infected = curr_total_cases / pop_sizes
-        pdb.set_trace()
+
         new_cases = (ratios[:,days_ahead] * (1 - prev_pct_infected) - 1) * \
-                    (window_size * np.mean(prev_new_cases[:,-window_size:]),axis=1) \
-                    + prev_new_cases_list[-window_size]
+                    (window_size * np.mean(prev_new_cases[:,-window_size:],axis=1)) \
+                    + prev_new_cases[:,-window_size]
         # new_cases can't be negative!
-        new_cases = max(0, new_cases)
+        new_cases[new_cases<0]=0
         # Which means total cases can't go down
         curr_total_cases += new_cases
-
         # Update prev_new_cases_list for next iteration of the loop
-        prev_new_cases_list.append(new_cases)
-        new_new_cases.append(new_cases)
-    return new_new_cases
+        prev_new_cases = np.concatenate((prev_new_cases,np.expand_dims(new_cases,axis=1)),axis=1)
+
+    return prev_new_cases[:,-ratios.shape[1]:]
 
 def roll_out_predictions(predictor, context_input, action_input, future_action_sequence, prev_confirmed_cases, prev_new_cases, pop_sizes):
     '''The predictions happen in steps of one day, why they have to be rolled out day by day.
@@ -387,6 +386,7 @@ def evaluate_npis(individual):
         preds = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,populations)
         toc = time.clock()
         print(np.round(toc-tic))
+        #preds have shape n_regions x forecast_days
         pdb.set_trace()
         median_case_preds = np.median(preds)
 
