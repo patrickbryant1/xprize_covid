@@ -332,7 +332,7 @@ def roll_out_predictions(predictor, context_input, action_input, future_action_s
     initial_total_cases = prev_confirmed_cases[:,-1] #Initial total cases
     pred_new_cases = convert_ratios_to_total_cases(pred_output,WINDOW_SIZE,prev_new_cases, initial_total_cases, pop_sizes)
 
-    return pred_new_cases
+    return pred_new_cases, pred_output
 
 
 
@@ -383,12 +383,17 @@ def evaluate_npis(individual):
 
         #time
         tic = time.clock()
-        preds = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,populations)
+        pred_new_cases, pred_output = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,populations)
         toc = time.clock()
-        print(np.round(toc-tic))
+        print(np.round(toc-tic,2))
         #preds have shape n_regions x forecast_days
-        pdb.set_trace()
-        median_case_preds = np.median(preds)
+        #Update X_context_ind
+        X_context_ind = np.copy(pred_output)
+        #Update new cases and toatl cases
+        X_new_cases_ind = np.copy(pred_new_cases)
+        #Get cumulative cases
+        X_total_cases_ind = np.cumsum(np.concatenate((np.expand_dims(X_total_cases_ind[:,-1],axis=1),X_new_cases_ind),axis=1),axis=1)[:,1:]
+        median_case_preds = np.median(pred_new_cases,axis=1)/(populations/100000)
 
         #Update X_ind with preds
         X_ind[:,12]=median_case_preds
