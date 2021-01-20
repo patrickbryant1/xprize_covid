@@ -117,7 +117,7 @@ def load_inp_data(start_date,lookback_days,ip_costs):
     '''Load the input data for the standard predictor
     '''
     #Define global to use for all inds
-    global X_prescr_inp, npis_data, ip_maxvals, ip_weights, X_pred_context_inp
+    global X_prescr_inp, npis_data, ip_maxvals, ip_weights, X_pred_context_inp, X_pred_total_cases, X_pred_new_cases, populations
 
     DATA_COLUMNS = ['CountryName',
                     'RegionName',
@@ -207,10 +207,18 @@ def load_inp_data(start_date,lookback_days,ip_costs):
         ip_weights.append(ip_costs[ip_costs['GeoID']==geo][DATA_COLUMNS[-12:]].values[0])
         #Get input for predictor model. The context here is the PredictionRatio
         X_pred_context_inp.append(geo_data['PredictionRatio'].values)
+        #Get the total and new cases needed for the predictor ratio conversions
+        X_pred_total_cases.append(geo_data['ConfirmedCases'].values)
+        X_pred_new_cases.append(geo_data['SmoothNewCases'].values)
+        populations.append(geo_data.population.values[0])
+
     #Convert to array
     X_prescr_inp = np.array(X_prescr_inp)
     ip_weights = np.array(ip_weights)
     X_pred_context_inp = np.array(X_pred_context_inp)
+    X_pred_total_cases = np.array(X_pred_total_cases)
+    X_pred_new_cases = np.array(X_pred_new_cases)
+    populations = np.array(populations)
 
     return None
 
@@ -277,16 +285,16 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
     return toolbox, creator, MU
 
 
-def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_total_cases,pop_size):
+def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_total_cases,pop_sizes):
     '''Convert the ratios to get the case number output
     '''
     new_new_cases = []
-    prev_new_cases_list = list(prev_new_cases)
     curr_total_cases = initial_total_cases
-    for ratio in ratios:
-        prev_pct_infected = curr_total_cases / pop_size
-        new_cases = (ratio * (1 - prev_pct_infected) - 1) * \
-                    (window_size * np.mean(prev_new_cases_list[-window_size:])) \
+    for days_ahead in range(ratios.shape[1]): #each ratio will contain predictions for a region
+        prev_pct_infected = curr_total_cases / pop_sizes
+        pdb.set_trace()
+        new_cases = (ratios[:,days_ahead] * (1 - prev_pct_infected) - 1) * \
+                    (window_size * np.mean(prev_new_cases[:,-window_size:]),axis=1) \
                     + prev_new_cases_list[-window_size]
         # new_cases can't be negative!
         new_cases = max(0, new_cases)
@@ -319,15 +327,11 @@ def roll_out_predictions(predictor, context_input, action_input, future_action_s
         action_input[:,-d+1,:] = future_action_sequence[:,d,:]
         context_input[:,-d+1,:] = pred
 
-    pdb.set_trace()
     #Convert to daily new cases
     # Compute number of new cases and deaths each day
-    initial_total_cases = prev_confirmed_cases[-1]
     # Gather info to convert to total cases
-    prev_confirmed_cases = np.array(cdf.ConfirmedCases) #Cumulative cases
-    prev_new_cases = np.array(cdf.NewCases) #Daily cases
-    initial_total_cases = prev_confirmed_cases[-1] #Initial total cases
-    pred_new_cases = convert_ratios_to_total_cases(pred_output,WINDOW_SIZE,prev_new_cases, initial_total_cases, pop_size)
+    initial_total_cases = prev_confirmed_cases[:,-1] #Initial total cases
+    pred_new_cases = convert_ratios_to_total_cases(pred_output,WINDOW_SIZE,prev_new_cases, initial_total_cases, pop_sizes)
 
     return pred_new_cases
 
@@ -340,6 +344,8 @@ def evaluate_npis(individual):
     #Get copy
     X_ind = np.copy(X_prescr_inp)
     X_context_ind = np.copy(X_pred_context_inp)
+    X_total_cases_ind = np.copy(X_pred_total_cases)
+    X_new_cases_ind = np.copy(X_pred_new_cases)
     #Convert to array and reshape
     individual = np.array(individual)
     individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS))
@@ -369,18 +375,18 @@ def evaluate_npis(individual):
         #on e.g. a daily or weekly basis in various degrees will not only make them
         #hard to follow but also confuse the public
         #Generate the predictions
-        #time
-        #tic = time.clock()
-
         #Repeat the array for each region
         future_action_sequence = []
         previous_action_sequence = []
         for ri in range(prescr.shape[0]):
             future_action_sequence.append(np.tile(prescr[ri,:],[21,1]))
             previous_action_sequence.append(np.tile(prev_ip[ri,:],[21,1]))
-        preds = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence))
-        #toc = time.clock()
-        #print(np.round((toc-tic)/60,2))
+
+        #time
+        tic = time.clock()
+        preds = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,populations)
+        toc = time.clock()
+        print(np.round(toc-tic))
         pdb.set_trace()
         median_case_preds = np.median(preds)
 
