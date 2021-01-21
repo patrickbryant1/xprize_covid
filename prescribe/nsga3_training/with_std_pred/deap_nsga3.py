@@ -229,7 +229,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
     '''
     #Number of models in the pareto front
     '''
-    H = 10 #factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
+    H = 100 #factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
 
 
     '''
@@ -382,10 +382,10 @@ def evaluate_npis(individual):
             previous_action_sequence.append(np.tile(prev_ip[ri,:],[21,1]))
 
         #time
-        tic = time.clock()
+        #tic = time.clock()
         pred_new_cases, pred_output = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,populations)
-        toc = time.clock()
-        print(np.round(toc-tic,2))
+        #toc = time.clock()
+        #print(np.round(toc-tic,2))
         #preds have shape n_regions x forecast_days
         #Update X_context_ind
         X_context_ind = np.copy(pred_output)
@@ -399,10 +399,7 @@ def evaluate_npis(individual):
         X_ind[:,12]=median_case_preds
 
         #Add cases and NPI sums
-        #Check where 0
-        #zind = np.argwhere(X_ind[:,12]==0)
-        #X_ind[:,12][zind]=all_preds[zind]
-        #diff = all_preds/X_ind[:,12]
+        #By adding over the total period - not only the final values will matter
         obj1 += np.sum(median_case_preds)
         obj2 += np.sum(prescr)
 
@@ -495,7 +492,7 @@ P = 12  #Number of divisions considered for each objective axis
 
 #Weight boundaries
 BOUND_LOW, BOUND_UP = 0.0, 1.0
-NGEN = 20 #Number of generations to run
+NGEN = 200 #Number of generations to run
 CXPB = 1.0 #The probability of mating two individuals.
 MUTPB = 1.0 #The probability of mutating an individual.
 
