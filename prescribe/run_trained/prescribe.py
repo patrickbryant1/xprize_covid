@@ -204,8 +204,19 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
                         'C6_Stay at home requirements', 'C7_Restrictions on internal movement',
                         'C8_International travel controls', 'H1_Public information campaigns',
                         'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings', 'smoothed_cases']
+    #Create the output df
+    OUTPUT_COLS = ['CountryName', 'RegionName','C1_School closing', 'C2_Workplace closing',
+                    'C3_Cancel public events', 'C4_Restrictions on gatherings', 'C5_Close public transport',
+                    'C6_Stay at home requirements', 'C7_Restrictions on internal movement', 'C8_International travel controls',
+                    'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings']
+    out_df = pd.DataFrame()
+    out_df['Date']=np.arange(start_date,end_date,np.timedelta64(1, 'D'))
+    for out_col in OUTPUT_COLS:
+        out_df[out_col]=''
+
 
     #Go through each region and prescribe
+    prescr_dfs = []
     for g in case_data.GeoID.unique():
         print('Predicting for', g)
         #Get data for g
@@ -232,9 +243,6 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             print('Not enough data for',g)
             #Should add zeros here
             continue
-
-        #Start and end dates
-        current_date=pd.to_datetime(start_date, format='%Y-%m-%d')+ np.timedelta64(lookback_days, 'D')
 
         #Number of models
         n_inds = 10
@@ -263,8 +271,10 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
 
         individual = np.array(reshaped_inds)
 
+        #Create prescr
+        #Num prescriptors, num pred days, num NPIs
+        prescr_g = np.zeros((n_inds,(end_date-start_date).days,12))
         while current_date <= end_date:
-
             #Get prescriptions and scale with weights
             prev_ip = X_ind[:,:12].copy()
             #Get cases in last period
@@ -289,8 +299,8 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             future_action_sequence = []
             previous_action_sequence = []
             for pi in range(individual.shape[0]):
-                future_action_sequence.append(np.tile(prescr[pi,:],[21,1]))
-                previous_action_sequence.append(np.tile(prev_ip[pi,:],[21,1]))
+                future_action_sequence.append(np.tile(prescr[pi,:],[forecast_days,1]))
+                previous_action_sequence.append(np.tile(prev_ip[pi,:],[forecast_days,1]))
             #time
             #tic = time.clock()
 
@@ -311,21 +321,40 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             X_ind[:,12]=median_case_preds
 
             # Add if it's a requested date
-            if current_date+ np.timedelta64(pred_days, 'D') >= start_date:
+            if current_date+ np.timedelta64(forecast_days, 'D') >= start_date:
                 #Append the predicted dates
-                days_for_pred =  current_date+ np.timedelta64(pred_days, 'D')-start_date
-                geo_preds.extend(pred[-days_for_pred.days:])
-
+                days_for_pred = min(current_date+ np.timedelta64(forecast_days, 'D'),end_date)-start_date
+                #Days in
+                days_in = (current_date-start_date).days
+                #Days to add
+                days_to_add = days_for_pred.days-days_in
+                for pi in range(n_inds):
+                    try:
+                        prescr_g[pi,days_in:days_in+days_to_add,:]=np.tile(prescr[pi,:],[days_to_add,1])
+                    except:
+                        pdb.set_trace()
             else:
-                print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")
+                print(current_date.strftime('%Y-%m-%d'),"- Skipped (intermediate missing daily cases)")
 
             #Increase date
             # Move to next period
             current_date = current_date + np.timedelta64(forecast_days, 'D')
-            pdb.set_trace()
-    # Save to a csv file
-    # prescription_df.to_csv(output_file_path, index=False)
-    # print('Prescriptions saved to', output_file_path)
+
+        #Create a df of prescriptions
+        for pi in range(n_inds):
+            prescr_g_df = out_df.copy()
+            prescr_g_df['CountryName']=gdf.CountryName.values[0]
+            prescr_g_df['RegionName']=gdf.RegionName.values[0]
+            prescr_g_df[OUTPUT_COLS[2:]]=prescr_g[pi,:,:] #The first two cols are country and region names
+            prescr_g_df['PrescriptionIndex']=pi+1
+            #save
+            prescr_dfs.append(prescr_g_df)
+
+    prescription_df = pd.concat(prescr_dfs)
+    #Save to a csv file
+    prescription_df.to_csv(output_file_path, index=False)
+    print('Prescriptions saved to', output_file_path)
+    pdb.set_trace()
 
 
 

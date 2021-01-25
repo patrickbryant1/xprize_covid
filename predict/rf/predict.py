@@ -268,7 +268,7 @@ def predict(start_date, end_date, path_to_ips_file, output_file_path):
             # Add if it's a requested date
             if current_date+ np.timedelta64(pred_days, 'D') >= start_date:
                 #Append the predicted dates
-                days_for_pred =  current_date+ np.timedelta64(pred_days, 'D')-start_date
+                days_for_pred = current_date+ np.timedelta64(pred_days, 'D')-start_date
                 geo_preds.extend(pred[-days_for_pred.days:])
                 geo_preds_lower.extend(pred_lower[-days_for_pred.days:])
                 geo_preds_upper.extend(pred_upper[-days_for_pred.days:])
