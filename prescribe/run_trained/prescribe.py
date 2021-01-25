@@ -223,6 +223,10 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
     predictor, prescriptor_weights = load_model()
 
 
+    # Save to a csv file
+    # prescription_df.to_csv(output_file_path, index=False)
+    # print('Prescriptions saved to', output_file_path)
+
 
 
 def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_total_cases,pop_sizes):
