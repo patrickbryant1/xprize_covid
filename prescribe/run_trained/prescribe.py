@@ -48,47 +48,6 @@ parser.add_argument('--outdir', nargs=1, type= str,
                   default=sys.stdin, help = 'Path to output directory. Include /in end')
 
 ###FUNCTIONS###
-def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost_file):
-    '''Prescribe using the pretrained prescriptor
-    The output df should contain Date, CountryName, RegionName, intervention plan, intervention index (up to 10 in total)
-    '''
-
-    start_date = pd.to_datetime(start_date_str, format='%Y-%m-%d')
-    end_date = pd.to_datetime(end_date_str, format='%Y-%m-%d')
-
-    # Load the past IPs data
-    past_ips_df = load_ips_file(path_to_prior_ips_file)
-    geos = past_ips_df['GeoID'].unique()
-
-    # Load historical data with basic preprocessing
-    print("Loading historical data...")
-    df = prepare_historical_df()
-
-    # Restrict it to dates before the start_date
-    df = df[df['Date'] <= start_date]
-
-    ip_costs = pd.read_csv(args.ip_costs[0]),
-                            parse_dates=['Date'],
-                            encoding="ISO-8859-1",
-                            error_bad_lines=False)
-
-    ip_costs['GeoID'] = np.where(ip_costs["RegionName"].isnull(),
-                                  ip_costs["CountryName"],
-                                  ip_costs["CountryName"] + ' / ' + ip_costs["RegionName"])
-
-
-
-
-
-    lookback_days = 21
-    forecast_days = 21
-
-    #Load the model input data
-    load_inp_data(start_date, lookback_days,ip_costs)
-    #Load model for case prediction and the predcriptor
-    predictor, prescriptor_weights = load_model()
-
-    #load
 
 
 
@@ -159,11 +118,9 @@ def load_model():
 
     return predictor, prescriptor_weights
 
-def load_inp_data(start_date,lookback_days,ip_costs):
-    '''Load the input data for the standard predictor
+def load_inp_data(start_date,lookback_days):
+    '''Load the input data for the standard predictor and prescriptor
     '''
-    #Define global to use for all inds
-    global X_prescr_inp, npis_data, ip_maxvals, ip_weights, X_pred_context_inp, X_pred_total_cases, X_pred_new_cases, populations
 
     DATA_COLUMNS = ['CountryName',
                     'RegionName',
@@ -173,18 +130,7 @@ def load_inp_data(start_date,lookback_days,ip_costs):
                     'ConfirmedCases',
                     'ConfirmedDeaths',
                     'population',
-                    'C1_School closing',
-                    'C2_Workplace closing',
-                    'C3_Cancel public events',
-                    'C4_Restrictions on gatherings',
-                    'C5_Close public transport',
-                    'C6_Stay at home requirements',
-                    'C7_Restrictions on internal movement',
-                    'C8_International travel controls',
-                    'H1_Public information campaigns',
-                    'H2_Testing policy',
-                    'H3_Contact tracing',
-                    'H6_Facial Coverings']
+                    ]
 
     IP_MAX_VALUES = {'C1_School closing': 3,
                     'C2_Workplace closing': 3,
@@ -216,7 +162,7 @@ def load_inp_data(start_date,lookback_days,ip_costs):
 
     #Get inp data for prescriptor
     data = data[DATA_COLUMNS]
-    data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days-1, 'D')))]
+    data = data[(data.Date <= start_date)]
 
     #They predict percent change in new cases
     #This prediction ration is also the input to the next step
@@ -237,36 +183,44 @@ def load_inp_data(start_date,lookback_days,ip_costs):
     #Normalize cases for prescriptor
     data['smoothed_cases']=data['smoothed_cases']/(data['population']/100000)
 
-    #Format prescr inp data for prescriptor and pred for predictor
-    ip_weights = []
-    X_prescr_inp = []
-    X_pred_context_inp = []
-    X_pred_total_cases = []
-    X_pred_new_cases = []
-    populations = []
-    for geo in data.GeoID.unique():
-        geo_data = data[data['GeoID']==geo]
-        X_geo= np.average(geo_data[DATA_COLUMNS[-12:]],axis=0)
-        X_geo = np.append(X_geo,np.median(geo_data['smoothed_cases']))
-        X_prescr_inp.append(X_geo)
-        #Get ip weights
-        ip_weights.append(ip_costs[ip_costs['GeoID']==geo][DATA_COLUMNS[-12:]].values[0])
-        #Get input for predictor model. The context here is the PredictionRatio
-        X_pred_context_inp.append(geo_data['PredictionRatio'].values)
-        #Get the total and new cases needed for the predictor ratio conversions
-        X_pred_total_cases.append(geo_data['ConfirmedCases'].values)
-        X_pred_new_cases.append(geo_data['SmoothNewCases'].values)
-        populations.append(geo_data.population.values[0])
+    pdb.set_trace()
+    return data, ip_maxvals
 
-    #Convert to array
-    X_prescr_inp = np.array(X_prescr_inp)
-    ip_weights = np.array(ip_weights)
-    X_pred_context_inp = np.array(X_pred_context_inp)
-    X_pred_total_cases = np.array(X_pred_total_cases)
-    X_pred_new_cases = np.array(X_pred_new_cases)
-    populations = np.array(populations)
+def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost_file):
+    '''Prescribe using the pretrained prescriptor
+    The output df should contain Date, CountryName, RegionName, intervention plan, intervention index (up to 10 in total)
+    '''
 
-    return None
+    start_date = pd.to_datetime(start_date_str, format='%Y-%m-%d')
+    end_date = pd.to_datetime(end_date_str, format='%Y-%m-%d')
+
+    # Load the past IPs data
+    past_ips_df =  pd.read_csv(path_to_prior_ips_file,
+                            parse_dates=['Date'],
+                            encoding="ISO-8859-1",
+                            error_bad_lines=False)
+    # Restrict it to dates before the start_date
+    past_ips_df = past_ips_df[past_ips_df['Date'] <= start_date]
+    #Load the IP costs
+    ip_costs = pd.read_csv(path_to_cost_file,
+                            parse_dates=['Date'],
+                            encoding="ISO-8859-1",
+                            error_bad_lines=False)
+
+    ip_costs['GeoID'] = np.where(ip_costs["RegionName"].isnull(),
+                                  ip_costs["CountryName"],
+                                  ip_costs["CountryName"] + ' / ' + ip_costs["RegionName"])
+
+
+
+    lookback_days = 21
+    forecast_days = 21
+    #Load the model input data
+    data, ip_maxvals = load_inp_data(start_date,lookback_days)
+    #Join the past_ips_data with the data
+    pdb.set_trace()
+    #Load model for case prediction and the predcriptor
+    predictor, prescriptor_weights = load_model()
 
 
 
