@@ -295,7 +295,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             #tic = time.clock()
 
             pred_new_cases, pred_output = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,g_population)
-            pdb.set_trace()
+
             #toc = time.clock()
             #print(np.round(toc-tic,2))
             #preds have shape n_regions x forecast_days
@@ -305,11 +305,24 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             X_new_cases_ind = np.copy(pred_new_cases)
             #Get cumulative cases
             X_total_cases_ind = np.cumsum(np.concatenate((np.expand_dims(X_total_cases_ind[:,-1],axis=1),X_new_cases_ind),axis=1),axis=1)[:,1:]
-            median_case_preds = np.median(pred_new_cases,axis=1)/(populations/100000)
+            median_case_preds = np.median(pred_new_cases,axis=1)/(g_population/100000)
 
             #Update X_ind with preds
             X_ind[:,12]=median_case_preds
 
+            # Add if it's a requested date
+            if current_date+ np.timedelta64(pred_days, 'D') >= start_date:
+                #Append the predicted dates
+                days_for_pred =  current_date+ np.timedelta64(pred_days, 'D')-start_date
+                geo_preds.extend(pred[-days_for_pred.days:])
+
+            else:
+                print(current_date.strftime('%Y-%m-%d'), pred, "- Skipped (intermediate missing daily cases)")
+
+            #Increase date
+            # Move to next period
+            current_date = current_date + np.timedelta64(forecast_days, 'D')
+            pdb.set_trace()
     # Save to a csv file
     # prescription_df.to_csv(output_file_path, index=False)
     # print('Prescriptions saved to', output_file_path)
