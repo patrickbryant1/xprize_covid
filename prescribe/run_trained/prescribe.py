@@ -210,7 +210,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
                     'C6_Stay at home requirements', 'C7_Restrictions on internal movement', 'C8_International travel controls',
                     'H1_Public information campaigns', 'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings']
     out_df = pd.DataFrame()
-    out_df['Date']=np.arange(start_date,end_date,np.timedelta64(1, 'D'))
+    out_df['Date']=np.arange(start_date,end_date+np.timedelta64(1, 'D'),np.timedelta64(1, 'D'))
     for out_col in OUTPUT_COLS:
         out_df[out_col]=''
 
@@ -355,6 +355,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
     prescription_df.to_csv(output_file_path, index=False)
     print('Prescriptions saved to', output_file_path)
     pdb.set_trace()
+    return None
 
 
 
