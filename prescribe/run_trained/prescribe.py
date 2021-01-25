@@ -188,9 +188,11 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
     ip_costs['GeoID'] = np.where(ip_costs["RegionName"].isnull(),
                                   ip_costs["CountryName"],
                                   ip_costs["CountryName"] + ' / ' + ip_costs["RegionName"])
-
+    #Prescriptor parameters
     lookback_days = 21
     forecast_days = 21
+    NUM_WEIGHTS=2
+    NUM_LAYERS=2
     #Load the model input data
     case_data, ip_maxvals = load_inp_data(start_date,lookback_days)
     #Load model for case prediction and the predcriptor
@@ -240,16 +242,19 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
         X_g = gdf[prescriptor_cols].values
         X_ind = np.average(X_g[-lookback_days:,:],axis=0)
         X_ind[-1] = np.median(X_g[-lookback_days:,12],axis=0)
-
+        X_ind = np.tile(X_ind,[2,1])
         #Should do this for all 10 prescriptor models - can run simultaneously
         individual = prescriptor_weights[0]
+        individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS)))
+
         while current_date <= end_date:
 
             #Get prescriptions and scale with weights
-            prev_ip = X_ind[:,:12].copy()
+            prev_ip = X_ind[:12].copy()
             #Get cases in last period
-            prev_cases = X_ind[:,12]
+            prev_cases = X_ind[12]
             #Multiply prev ip with the 2 prescr weight layers of the individual
+
             prescr = prev_ip*g_ip_costs*individual[:,0,0]*individual[:,0,1]
             #Add the case focus
             prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
@@ -258,18 +263,15 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             #Perhaps this is not such a bad thing
             #Make sure the prescr don't exceeed the npi maxvals
             prescr = np.minimum(prescr,ip_maxvals)
-            X_ind[:,:12]=prescr
+            X_ind[:12]=prescr
             #Distribute the prescriptions in the forecast period
             #I choose to keep these stable over a three week period as changing them
             #on e.g. a daily or weekly basis in various degrees will not only make them
             #hard to follow but also confuse the public
             #Generate the predictions
             #Repeat the array for each prescritpr (individual)
-            future_action_sequence = []
-            previous_action_sequence = []
-            for ri in range(prescr.shape[0]):
-                future_action_sequence.append(np.tile(prescr[ri,:],[21,1]))
-                previous_action_sequence.append(np.tile(prev_ip[ri,:],[21,1]))
+            future_action_sequence = np.tile(prescr[ri,:],[21,1]))
+            previous_action_sequence = np.tile(prev_ip[ri,:],[21,1]))
 
             #time
             #tic = time.clock()
