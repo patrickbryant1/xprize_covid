@@ -2,12 +2,8 @@
 # -*- coding: utf-8 -*-
 
 
-from deap import tools, creator, base, algorithms
-from math import factorial
-import numpy
-import _pickle as pickle
+
 import numpy as np
-from numpy import random
 import matplotlib.pyplot as plt
 import pandas as pd
 import argparse
@@ -28,29 +24,9 @@ from keras.layers import Lambda
 from keras.models import Model
 import pdb
 
-#Inser predictor path. NOTE! This will have to be absoulate in the sandbox
-sys.path.insert(0, "../../standard_predictor/")
-import predict
-#Arguments for argparse module:
-parser = argparse.ArgumentParser(description = '''Simple RF model.''')
-
-parser.add_argument('--pred_dir', nargs=1, type= str,
-                  default=sys.stdin, help = 'Path to prediction directory.')
-parser.add_argument('--ip_costs', nargs=1, type= str,
-                  default=sys.stdin, help = 'Path to data file with ip costs per region.')
-parser.add_argument('--start_date', nargs=1, type= str,
-                  default=sys.stdin, help = 'Date to start from.')
-parser.add_argument('--lookback_days', nargs=1, type= int,
-                  default=sys.stdin, help = 'Days to lookback for forecast.')
-parser.add_argument('--forecast_days', nargs=1, type= int,
-                  default=sys.stdin, help = 'Days to forecast.')
-parser.add_argument('--outdir', nargs=1, type= str,
-                  default=sys.stdin, help = 'Path to output directory. Include /in end')
+########REMEMBER!!! All paths will have to be absoulate in the sandbox########
 
 ###FUNCTIONS###
-
-
-
 # Construct model
 class Positive(Constraint):
 
@@ -114,7 +90,7 @@ def load_model():
     predictor.load_weights(MODEL_WEIGHTS_FILE)
 
     #Save
-    prescriptor_weights = np.save(outdir+'population.npy',np.array(pop))
+    prescriptor_weights = np.load('./prescr_weights/population.npy',allow_pickle=True)
 
     return predictor, prescriptor_weights
 
@@ -129,8 +105,7 @@ def load_inp_data(start_date,lookback_days):
                     'smoothed_cases',
                     'ConfirmedCases',
                     'ConfirmedDeaths',
-                    'population',
-                    ]
+                    'population']
 
     IP_MAX_VALUES = {'C1_School closing': 3,
                     'C2_Workplace closing': 3,
@@ -145,16 +120,19 @@ def load_inp_data(start_date,lookback_days):
                     'H3_Contact tracing': 2,
                     'H6_Facial Coverings': 4
                     }
+
     #Set ip maxvals
+
     ip_maxvals = np.array([*IP_MAX_VALUES.values()])
     #Preprocessed data
-    DATA_FILE = '../../../data/adjusted_data.csv'
+    DATA_FILE = '../../data/adjusted_data.csv'
     data = pd.read_csv(DATA_FILE,
                         parse_dates=['Date'],
                         encoding="ISO-8859-1",
                         dtype={"RegionName": str,
                         "RegionCode": str},
                         error_bad_lines=False)
+
     data["RegionName"]= data["RegionName"].replace('0',np.nan)
     data["GeoID"] = np.where(data["RegionName"].isnull(),
                                   data["CountryName"],
@@ -176,8 +154,7 @@ def load_inp_data(start_date,lookback_days):
     # Compute smoothed versions of new cases and deaths each day using a 7 day window
     data['SmoothNewCases'] = data.groupby('GeoID')['NewCases'].rolling(7, center=False).mean().fillna(0).reset_index(0, drop=True)
     # Compute percent change in new cases and deaths each day
-    data['CaseRatio'] = data.groupby('GeoID').SmoothNewCases.pct_change(
-    ).fillna(0).replace(np.inf, 0) + 1
+    data['CaseRatio'] = data.groupby('GeoID').SmoothNewCases.pct_change().fillna(0).replace(np.inf, 0) + 1
     # Create column of value to predict
     data['PredictionRatio'] = data['CaseRatio'] / (1 - data['ProportionInfected'])
     #Normalize cases for prescriptor
@@ -186,7 +163,7 @@ def load_inp_data(start_date,lookback_days):
     pdb.set_trace()
     return data, ip_maxvals
 
-def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost_file):
+def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost_file, output_file_path):
     '''Prescribe using the pretrained prescriptor
     The output df should contain Date, CountryName, RegionName, intervention plan, intervention index (up to 10 in total)
     '''
@@ -203,7 +180,6 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
     past_ips_df = past_ips_df[past_ips_df['Date'] <= start_date]
     #Load the IP costs
     ip_costs = pd.read_csv(path_to_cost_file,
-                            parse_dates=['Date'],
                             encoding="ISO-8859-1",
                             error_bad_lines=False)
 
@@ -351,7 +327,6 @@ def evaluate_npis(individual):
 
 
 ##########MAIN###########
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--start_date",
@@ -382,6 +357,5 @@ if __name__ == '__main__':
                         required=True,
                         help="The path to an intervention plan .csv file")
     args = parser.parse_args()
-    print(f"Generating prescriptions from {args.start_date} to {args.end_date}...")
     prescribe(args.start_date, args.end_date, args.prev_file, args.cost_file, args.output_file)
     print("Done!")
