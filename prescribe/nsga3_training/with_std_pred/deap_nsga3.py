@@ -229,7 +229,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
     '''
     #Number of models in the pareto front
     '''
-    H = 100 #factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
+    H = 10 #factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
 
 
     '''
@@ -356,11 +356,11 @@ def evaluate_npis(individual):
 
     for n in range(2): #2 21 day periods, which should be sufficient to observe substantial changes
         #Get prescriptions and scale with weights
-        prev_ip = X_ind[:,:12]*ip_weights
+        prev_ip = X_ind[:,:12].copy()
         #Get cases in last period
         prev_cases = X_ind[:,12]
         #Multiply prev ip with the 2 prescr weight layers of the individual
-        prescr = prev_ip*individual[:,0,0]*individual[:,0,1]
+        prescr = prev_ip*ip_weights*individual[:,0,0]*individual[:,0,1]
         #Add the case focus
         prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
         #Now the prescr can't really increase based only on the prescr

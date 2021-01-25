@@ -234,21 +234,23 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
         #Start and end dates
         current_date=pd.to_datetime(start_date, format='%Y-%m-%d')+ np.timedelta64(lookback_days, 'D')
 
-        #Should do this for all 10 prescriptor models
+
         #Prescribe while end date is not passed
-         #This consists of the 12 NPIs averaged over the past 21 days and the median smoothed cases per 100'000 population in that period
+        #This consists of the 12 NPIs averaged over the past 21 days and the median smoothed cases per 100'000 population in that period
         X_g = gdf[prescriptor_cols].values
         X_ind = np.average(X_g[-lookback_days:,:],axis=0)
         X_ind[-1] = np.median(X_g[-lookback_days:,12],axis=0)
-        pdb.set_trace()
+
+        #Should do this for all 10 prescriptor models - can run simultaneously
+        individual = prescriptor_weights[0]
         while current_date <= end_date:
 
             #Get prescriptions and scale with weights
-            prev_ip = X_ind[:,:12]*ip_weights
+            prev_ip = X_ind[:,:12].copy()
             #Get cases in last period
             prev_cases = X_ind[:,12]
             #Multiply prev ip with the 2 prescr weight layers of the individual
-            prescr = prev_ip*individual[:,0,0]*individual[:,0,1]
+            prescr = prev_ip*g_ip_costs*individual[:,0,0]*individual[:,0,1]
             #Add the case focus
             prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
             #Now the prescr can't really increase based only on the prescr
@@ -262,7 +264,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             #on e.g. a daily or weekly basis in various degrees will not only make them
             #hard to follow but also confuse the public
             #Generate the predictions
-            #Repeat the array for each region
+            #Repeat the array for each prescritpr (individual)
             future_action_sequence = []
             previous_action_sequence = []
             for ri in range(prescr.shape[0]):
@@ -271,6 +273,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
 
             #time
             #tic = time.clock()
+            pdb.set_trace()
             pred_new_cases, pred_output = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,populations)
             #toc = time.clock()
             #print(np.round(toc-tic,2))
