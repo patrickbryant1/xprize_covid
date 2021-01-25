@@ -59,5 +59,8 @@ for region in in_csv['GeoID'].unique():
         geo_prescr = geo_data[geo_data.PrescriptionIndex==pi][NPI_COLS].values
         stringency[pi-1]+=np.sum(geo_prescr)
 
-pdb.set_trace()
+
 plt.bar(np.arange(len(stringency)),stringency)
+plt.ylabel('Cumulative stringency')
+plt.show()
+pdb.set_trace()
