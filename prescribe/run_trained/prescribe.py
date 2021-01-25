@@ -50,13 +50,13 @@ parser.add_argument('--outdir', nargs=1, type= str,
 ###FUNCTIONS###
 def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost_file):
     '''Prescribe using the pretrained prescriptor
+    The output df should contain Date, CountryName, RegionName, intervention plan, intervention index (up to 10 in total)
     '''
 
     start_date = pd.to_datetime(start_date_str, format='%Y-%m-%d')
     end_date = pd.to_datetime(end_date_str, format='%Y-%m-%d')
 
     # Load the past IPs data
-    print("Loading past IPs data...")
     past_ips_df = load_ips_file(path_to_prior_ips_file)
     geos = past_ips_df['GeoID'].unique()
 
@@ -67,22 +67,29 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
     # Restrict it to dates before the start_date
     df = df[df['Date'] <= start_date]
 
-ip_costs = pd.read_csv(args.ip_costs[0])
-ip_costs['GeoID'] = np.where(ip_costs["RegionName"].isnull(),
-                              ip_costs["CountryName"],
-                              ip_costs["CountryName"] + ' / ' + ip_costs["RegionName"])
-start_date = args.start_date[0]
-lookback_days = args.lookback_days[0]
-forecast_days = args.forecast_days[0]
-outdir = args.outdir[0]
-#Load the model input data
-load_inp_data(start_date, lookback_days,ip_costs)
-#Load model for case prediction
-load_model()
+    ip_costs = pd.read_csv(args.ip_costs[0]),
+                            parse_dates=['Date'],
+                            encoding="ISO-8859-1",
+                            error_bad_lines=False)
 
-#Save
-np.save(outdir+'population.npy',np.array(pop))
-np.save(outdir+'front.npy',front)
+    ip_costs['GeoID'] = np.where(ip_costs["RegionName"].isnull(),
+                                  ip_costs["CountryName"],
+                                  ip_costs["CountryName"] + ' / ' + ip_costs["RegionName"])
+
+
+
+
+
+    lookback_days = 21
+    forecast_days = 21
+
+    #Load the model input data
+    load_inp_data(start_date, lookback_days,ip_costs)
+    #Load model for case prediction and the predcriptor
+    predictor, prescriptor_weights = load_model()
+
+    #load
+
 
 
 # Construct model
@@ -134,7 +141,6 @@ def construct_model(nb_context, nb_action, lstm_size=32, nb_lookback_days=21):
 def load_model():
     '''Load the standard predictor
     '''
-    global predictor
     # Load model weights
     nb_context = 1  # Only time series of new cases rate is used as context (PredictionRatio)
     nb_action = 12 #the NPI columns
@@ -148,7 +154,10 @@ def load_model():
     MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
     predictor.load_weights(MODEL_WEIGHTS_FILE)
 
-    return None
+    #Save
+    prescriptor_weights = np.save(outdir+'population.npy',np.array(pop))
+
+    return predictor, prescriptor_weights
 
 def load_inp_data(start_date,lookback_days,ip_costs):
     '''Load the input data for the standard predictor
