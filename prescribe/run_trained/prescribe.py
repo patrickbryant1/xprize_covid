@@ -160,7 +160,6 @@ def load_inp_data(start_date,lookback_days):
     #Normalize cases for prescriptor
     data['smoothed_cases']=data['smoothed_cases']/(data['population']/100000)
 
-    pdb.set_trace()
     return data, ip_maxvals
 
 def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost_file, output_file_path):
@@ -178,6 +177,9 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
                             error_bad_lines=False)
     # Restrict it to dates before the start_date
     past_ips_df = past_ips_df[past_ips_df['Date'] <= start_date]
+    past_ips_df['GeoID'] = np.where(past_ips_df["RegionName"].isnull(),
+                                  past_ips_df["CountryName"],
+                                  past_ips_df["CountryName"] + ' / ' + past_ips_df["RegionName"])
     #Load the IP costs
     ip_costs = pd.read_csv(path_to_cost_file,
                             encoding="ISO-8859-1",
@@ -187,17 +189,102 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
                                   ip_costs["CountryName"],
                                   ip_costs["CountryName"] + ' / ' + ip_costs["RegionName"])
 
-
-
     lookback_days = 21
     forecast_days = 21
     #Load the model input data
-    data, ip_maxvals = load_inp_data(start_date,lookback_days)
-    #Join the past_ips_data with the data
-    pdb.set_trace()
+    case_data, ip_maxvals = load_inp_data(start_date,lookback_days)
     #Load model for case prediction and the predcriptor
     predictor, prescriptor_weights = load_model()
 
+    #Columns for prescriptor
+    prescriptor_cols = ['C1_School closing', 'C2_Workplace closing', 'C3_Cancel public events',
+                        'C4_Restrictions on gatherings', 'C5_Close public transport',
+                        'C6_Stay at home requirements', 'C7_Restrictions on internal movement',
+                        'C8_International travel controls', 'H1_Public information campaigns',
+                        'H2_Testing policy', 'H3_Contact tracing', 'H6_Facial Coverings', 'smoothed_cases']
+
+    #Go through each region and prescribe
+    for g in case_data.GeoID.unique():
+        print('Predicting for', g)
+        #Get data for g
+        g_case_data = case_data[case_data.GeoID == g]
+        g_ips = past_ips_df[past_ips_df.GeoID == g]
+        #Drop cols to avoid duplicates
+        g_case_data = g_case_data.drop(columns=['CountryName', 'RegionName', 'GeoID'])
+        gdf = pd.merge(g_case_data,g_ips,on='Date',how='left')
+        #Get ip costs for g
+        g_ip_costs = ip_costs[ip_costs.GeoID == g][prescriptor_cols[:-1]].values[0]
+
+        #Check the timelag to the last known date
+
+        last_known_date = gdf.Date.max()
+        #It may be that the start date is much ahead of the last known date, where input will have to be predicted
+        # Start predicting from start_date, unless there's a gap since last known date
+        current_date = min(last_known_date + np.timedelta64(1, 'D'), start_date)
+        #Select everything from df up tp current date
+        gdf = gdf[gdf['Date']<current_date]
+        gdf = gdf.reset_index()
+
+        #Check if enough data to predict
+        if len(gdf)<lookback_days:
+            print('Not enough data for',g)
+            #Should add zeros here
+            continue
+
+        #Start and end dates
+        current_date=pd.to_datetime(start_date, format='%Y-%m-%d')+ np.timedelta64(lookback_days, 'D')
+
+        #Should do this for all 10 prescriptor models
+        #Prescribe while end date is not passed
+         #This consists of the 12 NPIs averaged over the past 21 days and the median smoothed cases per 100'000 population in that period
+        X_g = gdf[prescriptor_cols].values
+        X_ind = np.average(X_g[-lookback_days:,:],axis=0)
+        X_ind[-1] = np.median(X_g[-lookback_days:,12],axis=0)
+        pdb.set_trace()
+        while current_date <= end_date:
+
+            #Get prescriptions and scale with weights
+            prev_ip = X_ind[:,:12]*ip_weights
+            #Get cases in last period
+            prev_cases = X_ind[:,12]
+            #Multiply prev ip with the 2 prescr weight layers of the individual
+            prescr = prev_ip*individual[:,0,0]*individual[:,0,1]
+            #Add the case focus
+            prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
+            #Now the prescr can't really increase based only on the prescr
+            #The cases will have to be high for the ips to increase
+            #Perhaps this is not such a bad thing
+            #Make sure the prescr don't exceeed the npi maxvals
+            prescr = np.minimum(prescr,ip_maxvals)
+            X_ind[:,:12]=prescr
+            #Distribute the prescriptions in the forecast period
+            #I choose to keep these stable over a three week period as changing them
+            #on e.g. a daily or weekly basis in various degrees will not only make them
+            #hard to follow but also confuse the public
+            #Generate the predictions
+            #Repeat the array for each region
+            future_action_sequence = []
+            previous_action_sequence = []
+            for ri in range(prescr.shape[0]):
+                future_action_sequence.append(np.tile(prescr[ri,:],[21,1]))
+                previous_action_sequence.append(np.tile(prev_ip[ri,:],[21,1]))
+
+            #time
+            #tic = time.clock()
+            pred_new_cases, pred_output = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,populations)
+            #toc = time.clock()
+            #print(np.round(toc-tic,2))
+            #preds have shape n_regions x forecast_days
+            #Update X_context_ind
+            X_context_ind = np.copy(pred_output)
+            #Update new cases and toatl cases
+            X_new_cases_ind = np.copy(pred_new_cases)
+            #Get cumulative cases
+            X_total_cases_ind = np.cumsum(np.concatenate((np.expand_dims(X_total_cases_ind[:,-1],axis=1),X_new_cases_ind),axis=1),axis=1)[:,1:]
+            median_case_preds = np.median(pred_new_cases,axis=1)/(populations/100000)
+
+            #Update X_ind with preds
+            X_ind[:,12]=median_case_preds
 
     # Save to a csv file
     # prescription_df.to_csv(output_file_path, index=False)
