@@ -170,6 +170,8 @@ def load_inp_data(start_date,lookback_days,ip_costs):
 
     #Get inp data for prescriptor
     data = data[DATA_COLUMNS]
+    #Fill nans
+    data[DATA_COLUMNS[4:]] = data[DATA_COLUMNS[4:]].fillna(0)
     data = data[(data.Date >= start_date) & (data.Date <= (pd.to_datetime(start_date, format='%Y-%m-%d') + np.timedelta64(lookback_days-1, 'D')))]
 
     #They predict percent change in new cases
@@ -229,7 +231,7 @@ def setup_nsga3(NOBJ, NDIM, P, BOUND_LOW, BOUND_UP, CXPB, MUTPB, start_date, loo
     '''
     #Number of models in the pareto front
     '''
-    H = 10 #factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
+    H = 20 #factorial(NOBJ + P - 1) / (factorial(P) * factorial(NOBJ - 1))
 
 
     '''

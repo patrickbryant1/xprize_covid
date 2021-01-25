@@ -160,6 +160,8 @@ def load_inp_data(start_date,lookback_days):
     #Normalize cases for prescriptor
     data['smoothed_cases']=data['smoothed_cases']/(data['population']/100000)
 
+    if data[data.columns[4:]].isnull().any().sum()>0:
+        pdb.set_trace()
     return data, ip_maxvals
 
 def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost_file, output_file_path):
@@ -175,11 +177,14 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
                             parse_dates=['Date'],
                             encoding="ISO-8859-1",
                             error_bad_lines=False)
+
     # Restrict it to dates before the start_date
     past_ips_df = past_ips_df[past_ips_df['Date'] <= start_date]
     past_ips_df['GeoID'] = np.where(past_ips_df["RegionName"].isnull(),
                                   past_ips_df["CountryName"],
                                   past_ips_df["CountryName"] + ' / ' + past_ips_df["RegionName"])
+    #Fill NaNs
+    past_ips_df[past_ips_df.columns[3:]] = past_ips_df[past_ips_df.columns[3:]].fillna(0)
     #Load the IP costs
     ip_costs = pd.read_csv(path_to_cost_file,
                             encoding="ISO-8859-1",
@@ -188,6 +193,8 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
     ip_costs['GeoID'] = np.where(ip_costs["RegionName"].isnull(),
                                   ip_costs["CountryName"],
                                   ip_costs["CountryName"] + ' / ' + ip_costs["RegionName"])
+
+
     #Prescriptor parameters
     lookback_days = 21
     forecast_days = 21
@@ -214,7 +221,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
     for out_col in OUTPUT_COLS:
         out_df[out_col]=''
 
-
+    ########NOTE - need to fix so that prescriptions can be made for dates before start date if dates are missing
     #Go through each region and prescribe
     prescr_dfs = []
     for g in case_data.GeoID.unique():
@@ -229,7 +236,6 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
         g_ip_costs = ip_costs[ip_costs.GeoID == g][prescriptor_cols[:-1]].values[0]
 
         #Check the timelag to the last known date
-
         last_known_date = gdf.Date.max()
         #It may be that the start date is much ahead of the last known date, where input will have to be predicted
         # Start predicting from start_date, unless there's a gap since last known date
@@ -273,7 +279,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
 
         #Create prescr
         #Num prescriptors, num pred days, num NPIs
-        prescr_g = np.zeros((n_inds,(end_date-start_date).days,12))
+        prescr_g = np.zeros((n_inds,(end_date-start_date).days+1,12))
         while current_date <= end_date:
             #Get prescriptions and scale with weights
             prev_ip = X_ind[:,:12].copy()
@@ -329,10 +335,8 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
                 #Days to add
                 days_to_add = days_for_pred.days-days_in
                 for pi in range(n_inds):
-                    try:
-                        prescr_g[pi,days_in:days_in+days_to_add,:]=np.tile(prescr[pi,:],[days_to_add,1])
-                    except:
-                        pdb.set_trace()
+                    prescr_g[pi,days_in:days_in+days_to_add,:]=np.tile(prescr[pi,:],[days_to_add,1])
+
             else:
                 print(current_date.strftime('%Y-%m-%d'),"- Skipped (intermediate missing daily cases)")
 
@@ -347,6 +351,10 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             prescr_g_df['RegionName']=gdf.RegionName.values[0]
             prescr_g_df[OUTPUT_COLS[2:]]=prescr_g[pi,:,:] #The first two cols are country and region names
             prescr_g_df['PrescriptionIndex']=pi+1
+
+            #Check if nans
+            if prescr_g_df[prescr_g_df.columns[3:-1]].isna().any().sum()>0:
+                pdb.set_trace()
             #save
             prescr_dfs.append(prescr_g_df)
 
@@ -354,7 +362,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
     #Save to a csv file
     prescription_df.to_csv(output_file_path, index=False)
     print('Prescriptions saved to', output_file_path)
-    pdb.set_trace()
+
     return None
 
 
@@ -364,6 +372,7 @@ def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_t
     '''
     new_new_cases = []
     curr_total_cases = initial_total_cases
+
     for days_ahead in range(ratios.shape[1]): #each ratio will contain predictions for a region
         prev_pct_infected = curr_total_cases / pop_sizes
 
@@ -376,6 +385,7 @@ def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_t
         curr_total_cases += new_cases
         # Update prev_new_cases_list for next iteration of the loop
         prev_new_cases = np.concatenate((prev_new_cases,np.expand_dims(new_cases,axis=1)),axis=1)
+
 
     return prev_new_cases[:,-ratios.shape[1]:]
 
@@ -397,6 +407,8 @@ def roll_out_predictions(predictor, context_input, action_input, future_action_s
         #action input  (None, 21, 12)
 
         pred = predictor.predict([context_input, action_input])
+        if pred[np.isnan(pred)].shape[0]>0:
+            pdb.set_trace()
         pred_output[:,d] = pred[:,0]
         #Add the new action input according to the predictions
         action_input[:,-d+1,:] = future_action_sequence[:,d,:]
