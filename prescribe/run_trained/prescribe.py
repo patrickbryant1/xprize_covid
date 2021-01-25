@@ -242,10 +242,16 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
         X_g = gdf[prescriptor_cols].values
         X_ind = np.average(X_g[-lookback_days:,:],axis=0)
         X_ind[-1] = np.median(X_g[-lookback_days:,12],axis=0)
-        X_ind = np.tile(X_ind,[2,1])
+
+        #Get the input for the xprize predictor
+        X_context_ind = gdf['PredictionRatio'].values[-lookback_days:]
+        X_total_cases_ind = gdf['ConfirmedCases'].values[-lookback_days:]
+        X_new_cases_ind = gdf['SmoothNewCases'].values[-lookback_days:]
+        g_population = gdf['population'].values[0]
+
         #Should do this for all 10 prescriptor models - can run simultaneously
         individual = prescriptor_weights[0]
-        individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS)))
+        individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS))
 
         while current_date <= end_date:
 
@@ -270,13 +276,14 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             #hard to follow but also confuse the public
             #Generate the predictions
             #Repeat the array for each prescritpr (individual)
-            future_action_sequence = np.tile(prescr[ri,:],[21,1]))
-            previous_action_sequence = np.tile(prev_ip[ri,:],[21,1]))
+            future_action_sequence = np.tile(prescr,[21,1])
+            previous_action_sequence = np.tile(prev_ip,[21,1])
 
             #time
             #tic = time.clock()
+
+            pred_new_cases, pred_output = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,g_population)
             pdb.set_trace()
-            pred_new_cases, pred_output = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,populations)
             #toc = time.clock()
             #print(np.round(toc-tic,2))
             #preds have shape n_regions x forecast_days
@@ -321,13 +328,14 @@ def roll_out_predictions(predictor, context_input, action_input, future_action_s
     '''The predictions happen in steps of one day, why they have to be rolled out day by day.
     They also have to be converted to daily cases as some kind of ratios are predicted
     '''
-    context_column = 'PredictionRatio'
-    outcome_column = 'PredictionRatio'
+
+    pdb.set_trace()
     #Expand inp dims for NN
     context_input = np.expand_dims(context_input,axis=2)
     WINDOW_SIZE = 7
     nb_roll_out_days = future_action_sequence.shape[1]
     pred_output = np.zeros((future_action_sequence.shape[0],nb_roll_out_days))
+
     for d in range(nb_roll_out_days):
 
         #context input: (None, 21, 1)
