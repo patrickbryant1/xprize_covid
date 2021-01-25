@@ -236,49 +236,62 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
         #Start and end dates
         current_date=pd.to_datetime(start_date, format='%Y-%m-%d')+ np.timedelta64(lookback_days, 'D')
 
-
+        #Number of models
+        n_inds = 10
         #Prescribe while end date is not passed
         #This consists of the 12 NPIs averaged over the past 21 days and the median smoothed cases per 100'000 population in that period
         X_g = gdf[prescriptor_cols].values
         X_ind = np.average(X_g[-lookback_days:,:],axis=0)
         X_ind[-1] = np.median(X_g[-lookback_days:,12],axis=0)
-
         #Get the input for the xprize predictor
         X_context_ind = gdf['PredictionRatio'].values[-lookback_days:]
         X_total_cases_ind = gdf['ConfirmedCases'].values[-lookback_days:]
         X_new_cases_ind = gdf['SmoothNewCases'].values[-lookback_days:]
         g_population = gdf['population'].values[0]
 
+        #Tile
+        X_ind = np.tile(X_ind,[n_inds,1])
+        X_context_ind = np.tile(X_context_ind,[n_inds,1])
+        X_total_cases_ind = np.tile(X_total_cases_ind,[n_inds,1])
+        X_new_cases_ind = np.tile(X_new_cases_ind,[n_inds,1])
+        g_population = np.tile(g_population,[n_inds,1])
+
         #Should do this for all 10 prescriptor models - can run simultaneously
-        individual = prescriptor_weights[0]
-        individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS))
+        reshaped_inds = []
+        for ind in range(n_inds):
+            reshaped_inds.append(np.reshape(prescriptor_weights[ind],(12,NUM_WEIGHTS,NUM_LAYERS)))
+
+        individual = np.array(reshaped_inds)
 
         while current_date <= end_date:
 
             #Get prescriptions and scale with weights
-            prev_ip = X_ind[:12].copy()
+            prev_ip = X_ind[:,:12].copy()
             #Get cases in last period
-            prev_cases = X_ind[12]
+            prev_cases = X_ind[:,12]
             #Multiply prev ip with the 2 prescr weight layers of the individual
-
-            prescr = prev_ip*g_ip_costs*individual[:,0,0]*individual[:,0,1]
+            prescr = prev_ip*g_ip_costs*individual[:,:,0,0]*individual[:,:,0,1]
             #Add the case focus
-            prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
+            prescr += np.array([prev_cases]).T*individual[:,:,1,0]*individual[:,:,1,1]
             #Now the prescr can't really increase based only on the prescr
             #The cases will have to be high for the ips to increase
             #Perhaps this is not such a bad thing
             #Make sure the prescr don't exceeed the npi maxvals
-            prescr = np.minimum(prescr,ip_maxvals)
-            X_ind[:12]=prescr
+            for pi in range(prescr.shape[0]):
+                prescr[pi] = np.minimum(prescr[pi,:],ip_maxvals)
+            X_ind[:,:12]=prescr
             #Distribute the prescriptions in the forecast period
             #I choose to keep these stable over a three week period as changing them
             #on e.g. a daily or weekly basis in various degrees will not only make them
             #hard to follow but also confuse the public
             #Generate the predictions
-            #Repeat the array for each prescritpr (individual)
-            future_action_sequence = np.tile(prescr,[21,1])
-            previous_action_sequence = np.tile(prev_ip,[21,1])
-
+            #Repeat the array for each prescritor (individual)
+            future_action_sequence = []
+            previous_action_sequence = []
+            for pi in range(individual.shape[0]):
+                future_action_sequence.append(np.tile(prescr[pi,:],[21,1]))
+                previous_action_sequence.append(np.tile(prev_ip[pi,:],[21,1]))
+            pdb.set_trace()
             #time
             #tic = time.clock()
 
@@ -329,18 +342,22 @@ def roll_out_predictions(predictor, context_input, action_input, future_action_s
     They also have to be converted to daily cases as some kind of ratios are predicted
     '''
 
-    pdb.set_trace()
+
     #Expand inp dims for NN
+    pdb.set_trace()
     context_input = np.expand_dims(context_input,axis=2)
+    action_input = np.expand_dims(action_input,axis=0)
     WINDOW_SIZE = 7
-    nb_roll_out_days = future_action_sequence.shape[1]
-    pred_output = np.zeros((future_action_sequence.shape[0],nb_roll_out_days))
+    nb_roll_out_days = future_action_sequence.shape[0]
+    pred_output = np.zeros(nb_roll_out_days)
 
     for d in range(nb_roll_out_days):
 
         #context input: (None, 21, 1)
         #action input  (None, 21, 12)
+
         pred = predictor.predict([context_input, action_input])
+        pdb.set_trace()
         pred_output[:,d] = pred[:,0]
         #Add the new action input according to the predictions
         action_input[:,-d+1,:] = future_action_sequence[:,d,:]
@@ -354,76 +371,6 @@ def roll_out_predictions(predictor, context_input, action_input, future_action_s
 
     return pred_new_cases, pred_output
 
-
-
-def evaluate_npis(individual):
-    '''Evaluate the prescriptor by predicting the outcome using the
-    pretrained predictor.
-    '''
-    #Get copy
-    X_ind = np.copy(X_prescr_inp)
-    X_context_ind = np.copy(X_pred_context_inp)
-    X_total_cases_ind = np.copy(X_pred_total_cases)
-    X_new_cases_ind = np.copy(X_pred_new_cases)
-    #Convert to array and reshape
-    individual = np.array(individual)
-    individual = np.reshape(individual,(12,NUM_WEIGHTS,NUM_LAYERS))
-    #Prescribe and predict for n 21 day periods
-    obj1 = 0 #Cumulative preds
-    obj2 = 0 #Cumulative issued NPIs
-    #Start and end dates
-    current_date=pd.to_datetime(start_date, format='%Y-%m-%d')+ np.timedelta64(lookback_days, 'D')
-
-    for n in range(2): #2 21 day periods, which should be sufficient to observe substantial changes
-        #Get prescriptions and scale with weights
-        prev_ip = X_ind[:,:12]*ip_weights
-        #Get cases in last period
-        prev_cases = X_ind[:,12]
-        #Multiply prev ip with the 2 prescr weight layers of the individual
-        prescr = prev_ip*individual[:,0,0]*individual[:,0,1]
-        #Add the case focus
-        prescr += np.array([prev_cases]).T*individual[:,1,0]*individual[:,1,1]
-        #Now the prescr can't really increase based only on the prescr
-        #The cases will have to be high for the ips to increase
-        #Perhaps this is not such a bad thing
-        #Make sure the prescr don't exceeed the npi maxvals
-        prescr = np.minimum(prescr,ip_maxvals)
-        X_ind[:,:12]=prescr
-        #Distribute the prescriptions in the forecast period
-        #I choose to keep these stable over a three week period as changing them
-        #on e.g. a daily or weekly basis in various degrees will not only make them
-        #hard to follow but also confuse the public
-        #Generate the predictions
-        #Repeat the array for each region
-        future_action_sequence = []
-        previous_action_sequence = []
-        for ri in range(prescr.shape[0]):
-            future_action_sequence.append(np.tile(prescr[ri,:],[21,1]))
-            previous_action_sequence.append(np.tile(prev_ip[ri,:],[21,1]))
-
-        #time
-        #tic = time.clock()
-        pred_new_cases, pred_output = roll_out_predictions(predictor, X_context_ind, np.array(previous_action_sequence), np.array(future_action_sequence),X_total_cases_ind,X_new_cases_ind,populations)
-        #toc = time.clock()
-        #print(np.round(toc-tic,2))
-        #preds have shape n_regions x forecast_days
-        #Update X_context_ind
-        X_context_ind = np.copy(pred_output)
-        #Update new cases and toatl cases
-        X_new_cases_ind = np.copy(pred_new_cases)
-        #Get cumulative cases
-        X_total_cases_ind = np.cumsum(np.concatenate((np.expand_dims(X_total_cases_ind[:,-1],axis=1),X_new_cases_ind),axis=1),axis=1)[:,1:]
-        median_case_preds = np.median(pred_new_cases,axis=1)/(populations/100000)
-
-        #Update X_ind with preds
-        X_ind[:,12]=median_case_preds
-
-        #Add cases and NPI sums
-        #By adding over the total period - not only the final values will matter
-        obj1 += np.sum(median_case_preds)
-        obj2 += np.sum(prescr)
-
-    return obj1, obj2
 
 
 ##########MAIN###########
