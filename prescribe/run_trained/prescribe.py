@@ -254,7 +254,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
         X_context_ind = np.tile(X_context_ind,[n_inds,1])
         X_total_cases_ind = np.tile(X_total_cases_ind,[n_inds,1])
         X_new_cases_ind = np.tile(X_new_cases_ind,[n_inds,1])
-        g_population = np.tile(g_population,[n_inds,1])
+        g_population = np.tile(g_population,n_inds)
 
         #Should do this for all 10 prescriptor models - can run simultaneously
         reshaped_inds = []
@@ -291,7 +291,6 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             for pi in range(individual.shape[0]):
                 future_action_sequence.append(np.tile(prescr[pi,:],[21,1]))
                 previous_action_sequence.append(np.tile(prev_ip[pi,:],[21,1]))
-            pdb.set_trace()
             #time
             #tic = time.clock()
 
@@ -344,12 +343,10 @@ def roll_out_predictions(predictor, context_input, action_input, future_action_s
 
 
     #Expand inp dims for NN
-    pdb.set_trace()
     context_input = np.expand_dims(context_input,axis=2)
-    action_input = np.expand_dims(action_input,axis=0)
     WINDOW_SIZE = 7
-    nb_roll_out_days = future_action_sequence.shape[0]
-    pred_output = np.zeros(nb_roll_out_days)
+    nb_roll_out_days = future_action_sequence.shape[1]
+    pred_output = np.zeros((future_action_sequence.shape[0],nb_roll_out_days))
 
     for d in range(nb_roll_out_days):
 
@@ -357,7 +354,6 @@ def roll_out_predictions(predictor, context_input, action_input, future_action_s
         #action input  (None, 21, 12)
 
         pred = predictor.predict([context_input, action_input])
-        pdb.set_trace()
         pred_output[:,d] = pred[:,0]
         #Add the new action input according to the predictions
         action_input[:,-d+1,:] = future_action_sequence[:,d,:]
