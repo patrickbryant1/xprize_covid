@@ -29,16 +29,19 @@ def select_top10(total_front,selected_front,population,outdir):
     for i in range(len(total_front)):
         plt.scatter(total_front[i,0], total_front[i,1], c="b")
         plt.text(total_front[i,0], total_front[i,1],str(i), fontsize=12)
-        if i in selected_front:
-            plt.scatter(total_front[i,0], total_front[i,1], c="r")
+
+    #Plot the selected front
+    plt.scatter(total_front[selected_front,0], total_front[selected_front,1], c="r",label='Selected models')
 
     plt.xlabel('Cases')
     plt.ylabel('Stringency')
     plt.title('Pareto front')
+    plt.legend()
+    plt.tight_layout()
     plt.savefig(outdir+'sel_front.png',dpi=300)
     plt.close()
-    pdb.set_trace()
 
+    #Save the selected front
     sel_pop = population[selected_front]
     np.save(outdir+'selected_population.npy',sel_pop)
 
@@ -50,4 +53,3 @@ total_front = np.load(args.total_front[0],allow_pickle=True)
 selected_front = np.array(args.selected_front[0].split(','),dtype='int32')
 outdir = args.outdir[0]
 select_top10(total_front,selected_front,population,outdir)
-pdb.set_trace()

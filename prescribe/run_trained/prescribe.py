@@ -90,7 +90,7 @@ def load_model():
     predictor.load_weights(MODEL_WEIGHTS_FILE)
 
     #Save
-    prescriptor_weights = np.load('./prescr_weights/population.npy',allow_pickle=True)
+    prescriptor_weights = np.load('./prescr_weights/selected_population.npy',allow_pickle=True)
 
     return predictor, prescriptor_weights
 
