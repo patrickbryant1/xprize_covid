@@ -86,11 +86,11 @@ def load_model():
                                 lstm_size=LSTM_SIZE,
                                 nb_lookback_days=NB_LOOKBACK_DAYS)
     # Fixed weights for the standard predictor.
-    MODEL_WEIGHTS_FILE = './trained_model_weights.h5'
+    MODEL_WEIGHTS_FILE = '/home/xprize/work/trained_model_weights.h5'
     predictor.load_weights(MODEL_WEIGHTS_FILE)
 
     #Save
-    prescriptor_weights = np.load('./prescr_weights/selected_population.npy',allow_pickle=True)
+    prescriptor_weights = np.load('/home/xprize/work/prescr_weights/selected_population.npy',allow_pickle=True)
 
     return predictor, prescriptor_weights
 
@@ -125,7 +125,7 @@ def load_inp_data(start_date,lookback_days):
 
     ip_maxvals = np.array([*IP_MAX_VALUES.values()])
     #Preprocessed data
-    DATA_FILE = '../../data/adjusted_data.csv'
+    DATA_FILE = '/home/xprize/work/data/adjusted_data.csv'
     data = pd.read_csv(DATA_FILE,
                         parse_dates=['Date'],
                         encoding="ISO-8859-1",
@@ -185,6 +185,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
                                   past_ips_df["CountryName"] + ' / ' + past_ips_df["RegionName"])
     #Fill NaNs
     past_ips_df[past_ips_df.columns[3:]] = past_ips_df[past_ips_df.columns[3:]].fillna(0)
+
     #Load the IP costs
     ip_costs = pd.read_csv(path_to_cost_file,
                             encoding="ISO-8859-1",
@@ -221,14 +222,19 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
     for out_col in OUTPUT_COLS:
         out_df[out_col]=''
 
+
     ########NOTE - need to fix so that prescriptions can be made for dates before start date if dates are missing
     #Go through each region and prescribe
     prescr_dfs = []
-    for g in case_data.GeoID.unique():
-        print('Predicting for', g)
+    for g in past_ips_df.GeoID.unique():
+        print('Prescribing for', g)
         #Get data for g
         g_case_data = case_data[case_data.GeoID == g]
         g_ips = past_ips_df[past_ips_df.GeoID == g]
+        #Check that there is ip data for g
+        if len(g_ips)<1:
+            print(g,'no ip data')
+            continue
         #Drop cols to avoid duplicates
         g_case_data = g_case_data.drop(columns=['CountryName', 'RegionName', 'GeoID'])
         gdf = pd.merge(g_case_data,g_ips,on='Date',how='left')
@@ -335,7 +341,7 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
                 #Days to add
                 days_to_add = days_for_pred.days-days_in
                 for pi in range(n_inds):
-                    if days_in<0: #Have to assign start from 0
+                    if days_in<0:
                         prescr_g[pi,0:days_in+days_to_add,:]=np.tile(prescr[pi,:],[days_in+days_to_add,1])
                     else:
                         prescr_g[pi,days_in:days_in+days_to_add,:]=np.tile(prescr[pi,:],[days_to_add,1])
