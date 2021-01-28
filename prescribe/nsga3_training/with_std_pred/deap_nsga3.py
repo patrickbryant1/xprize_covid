@@ -356,7 +356,7 @@ def evaluate_npis(individual):
     #Start and end dates
     current_date=pd.to_datetime(start_date, format='%Y-%m-%d')+ np.timedelta64(lookback_days, 'D')
 
-    for n in range(4): #2 21 day periods, which should be sufficient to observe substantial changes
+    for n in range(4): #4 21 day periods, which should be sufficient to observe substantial changes. 90 days = 4x21=84
         #Get prescriptions and scale with weights
         prev_ip = X_ind[:,:12].copy()
         #Get cases in last period
