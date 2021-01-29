@@ -349,13 +349,14 @@ def prescribe(start_date_str, end_date_str, path_to_prior_ips_file, path_to_cost
             current_date = current_date + np.timedelta64(forecast_days, 'D')
 
         #Create a df of prescriptions
+        #Add the last prescription
+        prescr_g[:,-1,:] = prescr_g[:,-2,:]
         for pi in range(n_inds):
             prescr_g_df = out_df.copy()
             prescr_g_df['CountryName']=gdf.CountryName.values[0]
             prescr_g_df['RegionName']=gdf.RegionName.values[0]
             prescr_g_df[OUTPUT_COLS[2:]]=prescr_g[pi,:,:] #The first two cols are country and region names
             prescr_g_df['PrescriptionIndex']=pi+1
-
             #Check if nans
             if prescr_g_df[prescr_g_df.columns[3:-1]].isna().any().sum()>0:
                 pdb.set_trace()
