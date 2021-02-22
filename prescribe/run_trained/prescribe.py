@@ -376,7 +376,7 @@ def convert_ratios_to_total_cases(ratios, window_size, prev_new_cases, initial_t
     '''Convert the ratios to get the case number output
     '''
     new_new_cases = []
-    curr_total_cases = initial_total_cases
+    curr_total_cases =np.array(initial_total_cases,dtype='float32')
 
     for days_ahead in range(ratios.shape[1]): #each ratio will contain predictions for a region
         prev_pct_infected = curr_total_cases / pop_sizes
